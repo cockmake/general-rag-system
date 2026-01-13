@@ -3,7 +3,7 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-Apache%202.0-blue)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.6-brightgreen)
 ![Vue.js](https://img.shields.io/badge/Vue.js-3.x-42b883)
 ![Python](https://img.shields.io/badge/Python-3.8+-3776ab)
@@ -373,20 +373,44 @@ docker-compose up -d
 - [后端开发文档](./rag-server/README.md)
 - [LLM服务文档](./rag-llm/README.md)
 - [安全配置指南](./SECURITY.md)
-
-## 🤝 贡献指南
-
-欢迎贡献代码、报告问题或提出建议！
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
+- [贡献指南](./CONTRIBUTING.md)
 
 ## 📄 开源协议
 
-本项目采用 MIT 协议开源，详见 [LICENSE](./LICENSE) 文件。
+本项目采用 [Apache License 2.0](./LICENSE) 协议开源。
+
+### 主要权限
+
+- ✅ 商业使用
+- ✅ 修改和分发
+- ✅ 专利授权
+- ✅ 私有使用
+
+### 主要限制
+
+- ⚠️ 必须保留版权声明
+- ⚠️ 必须声明修改内容
+- ⚠️ 必须包含 LICENSE 副本
+- ❌ 不提供责任担保
+
+详细信息请参阅 [LICENSE](./LICENSE) 文件。
+
+## 🤝 贡献指南
+
+我们欢迎所有形式的贡献！在提交 Pull Request 之前，请：
+
+1. 阅读我们的 [贡献指南](./CONTRIBUTING.md)
+2. 确保代码符合项目规范
+3. 添加必要的测试和文档
+4. 遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范
+
+### 快速开始贡献
+
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'feat: add some amazing feature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 开启 Pull Request
 
 ## 🙋 常见问题
 
@@ -430,6 +454,8 @@ A: 当前支持：
 
 **⭐ 如果这个项目对你有帮助，请给一个 Star！**
 
-Made with ❤️ by Your Name/Team
+Made with ❤️ by General RAG System Contributors
+
+[Apache License 2.0](./LICENSE) © 2026
 
 </div>
