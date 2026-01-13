@@ -37,6 +37,7 @@ rag-llm/*.zip
 rag-llm/model_config.json
 rag-llm/*_example.py
 rag-llm/t.py
+rag-llm/main.py
 
 # Logs
 *.log
