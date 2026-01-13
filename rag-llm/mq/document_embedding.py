@@ -1,0 +1,182 @@
+import asyncio
+import json
+import logging
+import os
+import traceback
+
+from aio_pika.abc import AbstractIncomingMessage
+from langchain_core.documents import Document
+from langchain_milvus import Milvus
+
+import utils
+from minio_utils import minio_client
+from mq.connection import rabbit_async_client
+from utils import get_embedding_instance
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+class DocumentEmbeddingConsumer:
+    async def on_receive_message(self, message: AbstractIncomingMessage):
+        async with message.process():
+            try:
+                body = message.body.decode()
+                logger.info(f"Received document processing task: {body}")
+                data = json.loads(body)
+
+                document_id = data.get("documentId")
+                kb_id = data.get("kbId")
+                user_id = data.get("userId")
+                file_path = data.get("filePath")
+                file_name = data.get("fileName")
+                bucket_name = data.get("bucketName")
+
+                # Download file
+                response = await minio_client.get_object(bucket_name, file_path)
+                if not response:
+                    raise Exception("Failed to download file from MinIO")
+
+                tmp_path = os.path.join('./temp', file_path)
+                parent_dir = os.path.dirname(tmp_path)
+                if not os.path.exists(parent_dir):
+                    os.makedirs(parent_dir)
+
+                suffix = os.path.splitext(file_path)[1]
+
+                minio_byte = await response.read()
+
+                def write_temp_file():
+                    with open(tmp_path, "wb") as f:
+                        f.write(minio_byte)
+
+                await asyncio.to_thread(write_temp_file)
+
+                vector_store = None
+                try:
+                    if suffix.lower() == ".pdf":
+                        # chunk_overlap=0 可确保不重复
+                        texts = await asyncio.to_thread(utils.pdf_split, tmp_path, 1000, 0)
+                        splits = [Document(page_content=t) for t in texts]
+                    elif suffix.lower() == ".txt":
+                        def split_txt():
+                            with open(tmp_path, "r", encoding="utf-8") as f:
+                                return [Document(page_content=t) for t in utils.plain_text_split(f.read())]
+                        splits = await asyncio.to_thread(split_txt)
+                    elif suffix.lower() == ".md":
+                        with open(tmp_path, "r", encoding="utf-8") as f:
+                            splits = await asyncio.to_thread(utils.markdown_split, f.read())
+                    elif suffix.lower() == ".json":
+                        def split_json():
+                            with open(tmp_path, "r", encoding="utf-8") as f:
+                                json_data = json.load(f)
+                                return [Document(page_content=json.dumps(item)) for item in utils.json_split(json_data)]
+
+                        splits = await asyncio.to_thread(split_json)
+                    elif suffix.lower() in [".py", ".java", ".js", ".ts", ".vue", ".html", ".rb"]:
+                        def split_code(lang):
+                            with open(tmp_path, "r", encoding="utf-8") as f:
+                                return [Document(page_content=t) for t in utils.code_split(f.read(), lang)]
+
+                        lang_map = {
+                            ".py": "python", ".java": "java", ".js": "js", ".ts": "js", ".vue": "js",
+                            ".html": "html", ".rb": "ruby"
+                        }
+                        splits = await asyncio.to_thread(split_code, lang_map[suffix.lower()])
+                    elif suffix.lower() in [".xml", ".yml", ".yaml", ".sh", ".css", ".scss"]:
+                        def split_plain():
+                            with open(tmp_path, "r", encoding="utf-8") as f:
+                                return [Document(page_content=t) for t in utils.plain_text_split(f.read())]
+
+                        splits = await asyncio.to_thread(split_plain)
+                    else:
+                        logger.warning(f"Unsupported file type: {suffix}")
+                        return
+
+                    logger.info(f"Document {document_id} split into {len(splits)} chunks.")
+                    for doc in splits:
+                        doc.metadata["documentId"] = document_id
+                    # Embed and store
+                    milvus_uri = os.environ.get("MILVUS_URI")
+                    milvus_token = os.environ.get("MILVUS_TOKEN")
+                    db_name = f"group_{user_id // 10000}"
+                    collection_name = f"kb_{kb_id}"
+                    # Create vector store
+                    embedding_config = {
+                        'name': 'text-embedding-v4',
+                        'provider': 'qwen'
+                    }
+                    embeddings = get_embedding_instance(embedding_config)
+                    vector_store = Milvus(
+                        embedding_function=embeddings,
+                        connection_args={
+                            "uri": milvus_uri,
+                            "token": milvus_token,
+                            "db_name": db_name
+                        },
+                        collection_name=collection_name,
+                        auto_id=True,
+                    )
+                    max_batch = 10
+
+                    def store_documents_batch():
+                        all_ids = []
+                        for i in range(0, len(splits), max_batch):
+                            batch_ids = vector_store.add_documents(
+                                splits[i:i + max_batch]
+                            )
+                            all_ids.extend(batch_ids)
+                        return all_ids
+
+                    ids = await asyncio.to_thread(store_documents_batch)
+
+                    logger.info(f"Document {document_id} processed and stored with {len(ids)} chunks.")
+                    chunks_data = []
+                    for i, (doc, vector_id) in enumerate(zip(splits, ids)):
+                        chunks_data.append({
+                            "chunkIndex": i,
+                            "text": doc.page_content,
+                            "tokenLength": len(doc.page_content),
+                            "vectorId": str(vector_id),
+                            "metadata": {}
+                        })
+                    # Send success message
+                    response_message = {
+                        "documentId": document_id,
+                        "status": "success",
+                        "message": "Document processed successfully",
+                        "chunksCount": len(splits),
+                        "chunks": chunks_data
+                    }
+                    await rabbit_async_client.publish(
+                        exchange_name="server.interact.llm.exchange",
+                        routing_key="rag.document.complete.key",
+                        message=response_message
+                    )
+                except Exception as e:
+                    logger.error(f"Error during embedding or storage: {e}")
+                    error_stack = traceback.format_exc()
+                    logger.error(error_stack)
+                finally:
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+                    if vector_store:
+                        await vector_store.aclient.close()
+            except Exception as e:
+                logger.error(f"Error processing document: {e}")
+                error_stack = traceback.format_exc()
+                logger.error(error_stack)
+                response_message = {
+                    "documentId": document_id,
+                    "status": "failed",
+                    "message": str(e)
+                }
+                await rabbit_async_client.publish(
+                    exchange_name="server.interact.llm.exchange",
+                    routing_key="rag.document.complete.key",
+                    message=response_message
+                )
+
+
+document_embedding_consumer = DocumentEmbeddingConsumer()

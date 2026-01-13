@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rag.ragserver.mapper.AuditLogsMapper">
+
+    <resultMap id="BaseResultMap" type="com.rag.ragserver.domain.AuditLogs">
+            <id property="id" column="id" />
+            <result property="userId" column="user_id" />
+            <result property="action" column="action" />
+            <result property="targetType" column="target_type" />
+            <result property="targetId" column="target_id" />
+            <result property="detail" column="detail" />
+            <result property="createdAt" column="created_at" />
+            <result property="status" column="status" />
+            <result property="errorMessage" column="error_message" />
+            <result property="duration" column="duration" />
+            <result property="displayMessage" column="display_message" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,user_id,action,target_type,target_id,detail,
+        created_at,status,error_message,duration,display_message
+    </sql>
+</mapper>

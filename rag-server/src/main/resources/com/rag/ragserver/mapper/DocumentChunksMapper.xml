@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rag.ragserver.mapper.DocumentChunksMapper">
+
+    <resultMap id="BaseResultMap" type="com.rag.ragserver.domain.DocumentChunks">
+            <id property="id" column="id" />
+            <result property="documentId" column="document_id" />
+            <result property="kbId" column="kb_id" />
+            <result property="chunkIndex" column="chunk_index" />
+            <result property="text" column="text" />
+            <result property="tokenLength" column="token_length" />
+            <result property="vectorId" column="vector_id" />
+            <result property="metadata" column="metadata" />
+            <result property="createdAt" column="created_at" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,document_id,kb_id,chunk_index,text,token_length,
+        vector_id,metadata,created_at
+    </sql>
+</mapper>

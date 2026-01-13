@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rag.ragserver.mapper.DocumentsMapper">
+
+    <resultMap id="BaseResultMap" type="com.rag.ragserver.domain.Documents">
+            <id property="id" column="id" />
+            <result property="kbId" column="kb_id" />
+            <result property="filePath" column="file_path" />
+            <result property="fileName" column="file_name" />
+            <result property="mimeType" column="mime_type" />
+            <result property="fileSize" column="file_size" />
+            <result property="uploaderId" column="uploader_id" />
+            <result property="status" column="status" />
+            <result property="checksum" column="checksum" />
+            <result property="createdAt" column="created_at" />
+            <result property="updatedAt" column="updated_at" />
+            <result property="isDeleted" column="is_deleted" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,kb_id,file_path,file_name,mime_type,file_size,
+        uploader_id,status,checksum,created_at,updated_at,
+        is_deleted
+    </sql>
+</mapper>

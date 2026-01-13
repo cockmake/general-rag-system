@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rag.ragserver.mapper.ModelPermissionsMapper">
+
+    <resultMap id="BaseResultMap" type="com.rag.ragserver.domain.ModelPermissions">
+            <id property="id" column="id" />
+            <result property="roleId" column="role_id" />
+            <result property="modelId" column="model_id" />
+            <result property="maxTokens" column="max_tokens" />
+            <result property="qpsLimit" column="qps_limit" />
+            <result property="dailyTokenLimit" column="daily_token_limit" />
+            <result property="createdAt" column="created_at" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,role_id,model_id,max_tokens,qps_limit,daily_token_limit,
+        created_at
+    </sql>
+    <select id="selectAvailableModelsByUserId" resultType="com.rag.ragserver.domain.model.vo.AvailableModelVO" parameterType="long">
+        SELECT m.id                 AS modelId,
+               m.name               AS modelName,
+               m.provider           AS provider,
+               m.max_context_tokens AS maxContextTokens,
+
+               mp.max_tokens        AS maxTokens,
+               mp.qps_limit         AS qpsLimit,
+               mp.daily_token_limit AS dailyTokenLimit
+
+        FROM users u
+                 JOIN roles r
+                      ON u.role_id = r.id
+                 JOIN model_permissions mp
+                      ON mp.role_id = r.id
+                 JOIN models m
+                      ON m.id = mp.model_id
+
+        WHERE u.id = #{userId}
+          AND u.status = 'active'
+          AND u.is_deleted = 0
+          AND m.enabled = 1
+
+        ORDER BY m.name ASC
+    </select>
+    <select id="selectModelPermissionByRoleIdAndModelId" resultType="com.rag.ragserver.domain.model.vo.ModelPermission">
+        SELECT m.id                 AS id,
+               m.name               AS name,
+               m.provider           AS provider,
+               m.metadata           AS metadata,
+               mp.max_tokens        AS maxContextTokens,
+               mp.qps_limit         AS qpsLimit,
+               mp.daily_token_limit AS dailyTokenLimit
+        FROM model_permissions mp
+                 JOIN models m
+                      ON mp.model_id = m.id AND m.enabled = 1 AND m.id = #{modelId}
+        WHERE mp.role_id = #{roleId}
+        LIMIT 1
+    </select>
+
+</mapper>

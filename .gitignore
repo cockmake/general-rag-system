@@ -1,0 +1,47 @@
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend (rag-client)
+rag-client/node_modules/
+rag-client/dist/
+rag-client/.env.local
+rag-client/.env.*.local
+
+# Backend (rag-server)
+rag-server/target/
+rag-server/.mvn/
+rag-server/mvnw
+rag-server/mvnw.cmd
+rag-server/HELP.md
+rag-server/src/main/resources/application-dev.yml
+rag-server/src/main/resources/application-prod.yml
+rag-server/src/main/resources/application-*.yml
+*.log
+
+# Python (rag-llm)
+rag-llm/__pycache__/
+rag-llm/.pytest_cache/
+rag-llm/*.pyc
+rag-llm/.env
+rag-llm/venv/
+rag-llm/temp/
+rag-llm/*.zip
+rag-llm/model_config.json
+
+# Logs
+*.log
+logs/
+
+# Sensitive files
+*.env
+*.key
+*.pem
+config/secrets.yaml

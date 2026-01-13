@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rag.ragserver.mapper.QuerySessionsMapper">
+
+    <resultMap id="BaseResultMap" type="com.rag.ragserver.domain.QuerySessions">
+            <id property="id" column="id" />
+            <result property="userId" column="user_id" />
+            <result property="sessionKey" column="session_key" />
+            <result property="lastActiveAt" column="last_active_at" />
+            <result property="createdAt" column="created_at" />
+            <result property="workspaceId" column="workspace_id" />
+            <result property="isDeleted" column="is_deleted" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,user_id,session_key,last_active_at,created_at,workspace_id,
+        is_deleted
+    </sql>
+</mapper>

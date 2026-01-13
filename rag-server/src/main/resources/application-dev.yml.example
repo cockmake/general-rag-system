@@ -1,0 +1,61 @@
+mysql:
+  username: root
+  password: your_mysql_password
+  host: localhost
+  port: 3306
+  database: general_rag
+jwt:
+  secret: your_jwt_secret_key_at_least_32_characters
+llm:
+  host: localhost
+  port: 8848
+
+minio:
+  endpoint: http://localhost:9000
+  bucketName: files
+  accessKey: your_minio_access_key
+  secretKey: your_minio_secret_key
+spring:
+  rabbitmq:
+    username: your_rabbitmq_username
+    password: your_rabbitmq_password
+    host: localhost
+    port: 5672
+    listener:
+      simple:
+        acknowledge-mode: auto
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000ms
+          multiplier: 1.0
+          max-interval: 10000ms
+  redis:
+    host: localhost
+    port: 6379
+    password: your_redis_password
+    lettuce:
+      pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 5
+  mail:
+    host: smtp.163.com
+    username: your_email@163.com
+    password: your_email_authorization_code
+    protocol: smtp
+    port: 465
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            enable: true
+milvus:
+  host: localhost
+  port: 19530
+  uri: http://${milvus.host}:${milvus.port}
+  token: your_milvus_username:your_milvus_password

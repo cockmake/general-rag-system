@@ -1,0 +1,14 @@
+aio_pika
+aiohttp
+fastapi
+fitz
+langchain
+langchain_community
+langchain_core
+langchain_milvus
+langchain_text_splitters
+langgraph
+miniopy_async
+Pillow
+pydantic
+pytesseract

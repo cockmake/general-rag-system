@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rag.ragserver.mapper.ModelsMapper">
+
+    <resultMap id="BaseResultMap" type="com.rag.ragserver.domain.Models">
+            <id property="id" column="id" />
+            <result property="name" column="name" />
+            <result property="provider" column="provider" />
+            <result property="maxContextTokens" column="max_context_tokens" />
+            <result property="enabled" column="enabled" />
+            <result property="metadata" column="metadata" />
+            <result property="createdAt" column="created_at" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,name,provider,max_context_tokens,enabled,metadata,
+        created_at
+    </sql>
+</mapper>

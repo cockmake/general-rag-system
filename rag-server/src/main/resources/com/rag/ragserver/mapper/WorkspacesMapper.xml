@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rag.ragserver.mapper.WorkspacesMapper">
+
+    <resultMap id="BaseResultMap" type="com.rag.ragserver.domain.Workspaces">
+            <id property="id" column="id" />
+            <result property="name" column="name" />
+            <result property="ownerUserId" column="owner_user_id" />
+            <result property="description" column="description" />
+            <result property="createdAt" column="created_at" />
+            <result property="isDeleted" column="is_deleted" />
+            <result property="canEdit" column="can_edit" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,name,owner_user_id,description,created_at,is_deleted
+    </sql>
+    <select id="selectWorkspacesByUserId" resultType="com.rag.ragserver.domain.Workspaces">
+        SELECT DISTINCT w.*
+        FROM workspaces w
+                 LEFT JOIN workspace_members wm
+                           ON wm.user_id = #{userId} AND w.id = wm.workspace_id AND wm.is_deleted = 0
+        WHERE w.is_deleted = 0
+        ORDER BY w.created_at DESC
+    </select>
+</mapper>

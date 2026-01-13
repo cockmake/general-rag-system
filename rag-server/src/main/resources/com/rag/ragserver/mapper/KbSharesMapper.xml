@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rag.ragserver.mapper.KbSharesMapper">
+
+    <resultMap id="BaseResultMap" type="com.rag.ragserver.domain.KbShares">
+            <id property="id" column="id" />
+            <result property="kbId" column="kb_id" />
+            <result property="userId" column="user_id" />
+            <result property="grantedBy" column="granted_by" />
+            <result property="grantedAt" column="granted_at" />
+            <result property="isDeleted" column="is_deleted" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,kb_id,user_id,granted_by,granted_at,is_deleted
+    </sql>
+</mapper>
