@@ -18,7 +18,7 @@ from langchain_milvus import Milvus
 from pydantic import BaseModel, Field
 
 from aiohttp_utils import rerank
-from utils import get_llm_instance, get_embedding_instance
+from utils import get_llm_instance, get_embedding_instance, get_structured_data_instance
 
 logger = logging.getLogger(__name__)
 
@@ -75,13 +75,12 @@ class RAGService:
 请生成3-5个不同角度的查询。"""
 
         llm = get_llm_instance(model_info, temperature=0.3)
-        structured_llm = llm.with_structured_output(MultiQueryList)
-
+        structured_agent = get_structured_data_instance(llm, MultiQueryList)
         # 使用异步调用
-        result = await structured_llm.ainvoke([{"role": "system", "content": system_prompt}])
+        result = await structured_agent.ainvoke({"messages": [{"role": "user", "content": system_prompt}]})
 
-        logger.info(f"生成的多角度查询: {result.queries}")
-        return result.queries
+        logger.info(f"生成的多角度查询: {result['structured_response'].queries}")
+        return result['structured_response'].queries
 
     async def parallel_retrieve(
             self,
@@ -432,103 +431,6 @@ class RAGService:
                     "type": "content",
                     "payload": content
                 }
-
-    async def stream_rag_response(
-            self,
-            question: str,
-            history: list,
-            model_info: dict,
-            kb_id: Optional[int] = None,
-            user_id: Optional[int] = None,
-            system_prompt: Optional[str] = None
-    ) -> AsyncGenerator[str, None]:
-        """
-        流式RAG响应生成器
-        
-        Args:
-            question: 用户问题
-            history: 对话历史（LangChain消息格式）
-            model_info: 模型配置信息
-            kb_id: 知识库ID（可选）
-            user_id: 用户ID（可选）
-            system_prompt: 自定义系统提示词（可选）
-            
-        Yields:
-            流式响应内容
-        """
-        context = "无相关文档"
-        relevant_docs = []
-
-        # 如果有知识库，执行RAG流程
-        if kb_id and user_id:
-            try:
-                # 1. 生成多角度查询
-                logger.info("开始生成多角度查询...")
-                query_list = await self.generate_multi_queries(question, history, model_info)
-
-                # 2. 并行检索
-                logger.info("开始并行检索...")
-                all_docs = await self.parallel_retrieve(query_list, user_id, kb_id, top_k=10)
-
-                # 3. Rerank文档重排序
-                if all_docs:
-                    logger.info("开始Rerank文档重排序...")
-                    relevant_docs = await self.parallel_grade_documents(
-                        all_docs,
-                        question,
-                        top_n=10,
-                        score_threshold=0.35  # 应用斩杀线，过滤低相关性文档
-                    )
-
-                # 4. 构建上下文
-                if relevant_docs:
-                    context = "\n\n".join([f"[文档{i + 1}] {doc.page_content}" for i, doc in enumerate(relevant_docs)])
-
-            except Exception as e:
-                logger.error(f"RAG流程出错: {e}")
-                context = f"检索过程出错: {str(e)}"
-
-        # 构建系统提示词
-        if system_prompt:
-            final_system_prompt = f"""{system_prompt}
-
-参考文档：
-{context}"""
-        else:
-            final_system_prompt = f"""你是一个专业的AI助手。基于提供的文档和对话历史回答用户问题。
-
-要求：
-1. 优先使用提供的文档中的信息
-2. 如果文档不足以完整回答，结合对话历史进行推理或明确说明
-3. 保持对话连贯，考虑历史上下文
-4. 用清晰、简洁的语言回答
-
-参考文档：
-{context}"""
-
-        # 构建对话消息
-        conversation = [{"role": "system", "content": final_system_prompt}]
-
-        # 添加历史对话（最近5轮）
-        recent_history = history[-10:] if len(history) > 10 else history
-        for msg in recent_history:
-            if isinstance(msg, HumanMessage):
-                conversation.append({"role": "user", "content": msg.content})
-            elif isinstance(msg, AIMessage):
-                conversation.append({"role": "assistant", "content": msg.content})
-
-        # 添加当前问题
-        conversation.append({"role": "user", "content": question})
-
-        # 获取LLM实例并流式生成
-        llm = get_llm_instance(model_info)
-
-        # 使用异步流式生成
-        async for chunk in llm.astream(conversation):
-            content = chunk.content
-            if content:
-                yield content
-
 
 # 全局RAG服务实例
 rag_service = RAGService()

@@ -22,6 +22,7 @@
         SELECT m.id                 AS modelId,
                m.name               AS modelName,
                m.provider           AS provider,
+               m.kb_supported       AS kbSupported,
                m.max_context_tokens AS maxContextTokens,
 
                mp.max_tokens        AS maxTokens,

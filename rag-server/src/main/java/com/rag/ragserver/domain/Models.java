@@ -49,6 +49,10 @@ public class Models {
      * 创建时间
      */
     private Date createdAt;
+    /**
+     * 该模型是否支持知识库选择
+     */
+    private Integer kbSupported;
 
     @Override
     public boolean equals(Object that) {

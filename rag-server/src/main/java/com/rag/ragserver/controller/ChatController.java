@@ -311,9 +311,8 @@ public class ChatController {
                 .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {
                 })
                 .doOnSubscribe(a -> updateMessageStatus(sessionId, currentUserMessageId, "generating"))
-                .doOnCancel(() -> {
-                })
                 .doOnError(e -> updateMessageStatus(sessionId, currentUserMessageId, "pending"))
+                .doOnCancel(() -> updateMessageStatus(sessionId, currentUserMessageId, "pending"))
                 .concatMap(event -> processStreamEvent(event, sb, ragProcessList, objectMapper, usageInfo))
                 .concatWith(saveCompletedMessage(sessionId, userId, chatStream, currentUserMessageId, sb, ragProcessList, objectMapper, usageInfo));
     }

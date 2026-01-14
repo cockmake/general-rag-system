@@ -6,6 +6,7 @@ from functools import lru_cache
 
 import fitz  # PyMuPDF
 from PIL import Image
+from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langchain.embeddings import init_embeddings
 from langchain_community.document_loaders import PyMuPDFLoader
@@ -68,6 +69,7 @@ def get_llm_instance(model_info: dict, temperature: float = None):
         model_provider=settings['model_provider'] if "model_provider" in settings else None
     )
 
+
 def get_embedding_instance(embedding_info: dict):
     """根据嵌入模型信息加载配置并初始化 Embedding"""
     provider = embedding_info.get("provider")
@@ -99,6 +101,13 @@ def get_embedding_instance(embedding_info: dict):
         provider=settings['provider'] if "provider" in settings else None,
         dimensions=settings['dimensions'] if "dimensions" in settings else None,
         check_embedding_ctx_length=settings.get('check_embedding_ctx_length', False)
+    )
+
+
+def get_structured_data_instance(llm, data_type):
+    return create_agent(
+        model=llm,
+        response_format=data_type
     )
 
 

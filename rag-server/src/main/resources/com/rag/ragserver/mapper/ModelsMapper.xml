@@ -12,10 +12,11 @@
             <result property="enabled" column="enabled" />
             <result property="metadata" column="metadata" />
             <result property="createdAt" column="created_at" />
+            <result property="kbSupported" column="kb_supported" />
     </resultMap>
 
     <sql id="Base_Column_List">
         id,name,provider,max_context_tokens,enabled,metadata,
-        created_at
+        created_at,kb_supported
     </sql>
 </mapper>

@@ -28,11 +28,7 @@ const isKbSupported = computed(() => {
   if (!selectedModel.value) return false
   const modelObj = models.value.find(m => m.modelId === selectedModel.value)
   if (!modelObj) return false
-  const model = modelObj.modelName
-  return model === 'deepseek-chat' ||
-      /^doubao-seed-.*$/.test(model) ||
-      model === 'gpt-5-mini' ||
-      model === 'qwen3-max'
+  return modelObj.kbSupported || false
 })
 
 watch(selectedModel, () => {
