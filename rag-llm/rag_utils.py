@@ -74,7 +74,7 @@ class RAGService:
 
 请生成3-5个不同角度的查询。"""
 
-        llm = get_llm_instance(model_info, temperature=0.3)
+        llm = get_llm_instance(model_info)
         structured_agent = get_structured_data_instance(llm, MultiQueryList)
         # 使用异步调用
         result = await structured_agent.ainvoke({"messages": [{"role": "user", "content": system_prompt}]})

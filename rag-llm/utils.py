@@ -7,9 +7,12 @@ from functools import lru_cache
 import fitz  # PyMuPDF
 from PIL import Image
 from langchain.agents import create_agent
+from langchain.agents.middleware import ModelRetryMiddleware
+from langchain.agents.structured_output import ToolStrategy, ProviderStrategy
 from langchain.chat_models import init_chat_model
 from langchain.embeddings import init_embeddings
 from langchain_community.document_loaders import PyMuPDFLoader
+from langchain_core.language_models import BaseChatModel
 from langchain_text_splitters import (
     Language,
     RecursiveCharacterTextSplitter,
@@ -66,7 +69,9 @@ def get_llm_instance(model_info: dict, temperature: float = None):
         api_key=api_key,
         base_url=base_url,
         temperature=temperature if temperature is not None else temperature,
-        model_provider=settings['model_provider'] if "model_provider" in settings else None
+        model_provider=settings['model_provider'] if "model_provider" in settings else None,
+        timeout=30,
+        max_retries=2,
     )
 
 
@@ -104,10 +109,23 @@ def get_embedding_instance(embedding_info: dict):
     )
 
 
-def get_structured_data_instance(llm, data_type):
+def custom_structured_data_strategy(model_name: str, data_type):
+    if model_name.startswith("mimo") or model_name == "deepseek-reasoner":
+        return ToolStrategy(data_type)
+    return ProviderStrategy(data_type)
+
+
+def get_structured_data_instance(llm: BaseChatModel, data_type):
     return create_agent(
         model=llm,
-        response_format=data_type
+        response_format=custom_structured_data_strategy(llm.configurable_fields().model_name, data_type),
+        middleware=[
+            ModelRetryMiddleware(
+                max_retries=2,
+                backoff_factor=2.0,
+                initial_delay=1.0,
+            ),
+        ],
     )
 
 

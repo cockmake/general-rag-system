@@ -31,7 +31,7 @@ async def stream_generator(model_instance, messages):
                 "payload": json.dumps(content, ensure_ascii=False)
             }
             yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-    
+
     end_time = time.time()
     latency_ms = int((end_time - start_time) * 1000)  # Calculate latency
 
@@ -68,46 +68,37 @@ async def rag_stream_generator(
     rag_process_data = []
     start_time = time.time()  # Start timing
 
-    try:
-        async for item in rag_service.stream_rag_response_with_process(
-                question=question,
-                history=history,
-                model_info=model_info,
-                kb_id=kb_id,
-                user_id=user_id,
-                system_prompt=system_prompt,
-                top_k=12,
-                top_n=8,
-                score_threshold=0.35
-        ):
-            if item["type"] == "process":
-                # 检索过程信息
-                rag_process_data.append(item["payload"])
-                # 对payload进行json.dumps包裹，防止特殊字符导致JSON解析错误
-                process_data = {
-                    "type": "process",
-                    "payload": json.dumps(item["payload"], ensure_ascii=False)
+    async for item in rag_service.stream_rag_response_with_process(
+            question=question,
+            history=history,
+            model_info=model_info,
+            kb_id=kb_id,
+            user_id=user_id,
+            system_prompt=system_prompt,
+            top_k=12,
+            top_n=8,
+            score_threshold=0.35
+    ):
+        if item["type"] == "process":
+            # 检索过程信息
+            rag_process_data.append(item["payload"])
+            # 对payload进行json.dumps包裹，防止特殊字符导致JSON解析错误
+            process_data = {
+                "type": "process",
+                "payload": json.dumps(item["payload"], ensure_ascii=False)
+            }
+            yield f"data: {json.dumps(process_data, ensure_ascii=False)}\n\n"
+        elif item["type"] == "content":
+            # 答案内容
+            content = item["payload"]
+            if content:
+                full_content += content
+                # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
+                data = {
+                    "type": "content",
+                    "payload": json.dumps(content, ensure_ascii=False)
                 }
-                yield f"data: {json.dumps(process_data, ensure_ascii=False)}\n\n"
-            elif item["type"] == "content":
-                # 答案内容
-                content = item["payload"]
-                if content:
-                    full_content += content
-                    # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
-                    data = {
-                        "type": "content",
-                        "payload": json.dumps(content, ensure_ascii=False)
-                    }
-                    yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-    except Exception as e:
-        logger.error(f"RAG stream error: {e}")
-        error_data = {
-            "type": "error",
-            "payload": str(e)
-        }
-        yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
     # 发送RAG过程汇总
     if rag_process_data:

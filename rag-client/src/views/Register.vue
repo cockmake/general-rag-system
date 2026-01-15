@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import md5 from 'crypto-js/md5'
 import commonApi from '@/api/commonApi'
+import AuthLayout from '@/layouts/AuthLayout.vue';
 
 const router = useRouter()
 const loading = ref(false)
@@ -77,15 +78,19 @@ const goToLogin = () => {
 </script>
 
 <template>
-  <div class="register-page">
-    <div class="register-card">
-      <h2 class="title">RAG 系统注册</h2>
+  <AuthLayout>
+    <div class="register-wrapper">
+      <div class="auth-header">
+        <h2 class="title">创建账号</h2>
+        <p class="subtitle">注册 RAG 系统，开启智能知识库之旅</p>
+      </div>
 
       <a-form
         :model="formState"
         :rules="rules"
         layout="vertical"
         @finish="onRegister"
+        class="auth-form"
       >
         <a-form-item label="账号" name="username">
           <a-input
@@ -143,32 +148,39 @@ const goToLogin = () => {
         </a-form-item>
         
         <div class="footer-actions">
-          <a @click="goToLogin">已有账号？去登录</a>
+          <span class="text-gray">已有账号？</span>
+          <a @click="goToLogin">立即登录</a>
         </div>
       </a-form>
     </div>
-  </div>
+  </AuthLayout>
 </template>
 
 <style scoped>
-.register-page {
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f5f7fa;
+.register-wrapper {
+  width: 100%;
+  max-width: 400px;
+  padding: 0 24px;
 }
 
-.register-card {
-  width: 400px;
-  padding: 32px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+.auth-header {
+  margin-bottom: 24px;
+  text-align: center;
 }
 
 .title {
-  text-align: center;
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.subtitle {
+  color: #666;
+  font-size: 14px;
+}
+
+.auth-form {
   margin-bottom: 24px;
 }
 
@@ -184,5 +196,11 @@ const goToLogin = () => {
 .footer-actions {
   text-align: center;
   margin-top: 16px;
+  font-size: 14px;
+}
+
+.text-gray {
+  color: #999;
+  margin-right: 8px;
 }
 </style>

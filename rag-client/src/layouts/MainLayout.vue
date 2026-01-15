@@ -10,7 +10,8 @@ import {
   LogoutOutlined, 
   UserOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined
+  MenuUnfoldOutlined,
+  GithubOutlined
 } from '@ant-design/icons-vue';
 // 引入本地静态资源 URL
 import lightThemeUrl from '@/assets/github-markdown.min.css?url';
@@ -199,6 +200,14 @@ const go = (path) => {
                 {{ themeStore.isDark ? '切换亮色' : '切换暗色' }}
               </a-button>
               
+              <!-- GitHub 开源地址 -->
+              <a-button type="text" href="https://github.com/cockmake/general-rag-system" target="_blank" title="GitHub 开源地址">
+                <template #icon>
+                  <github-outlined />
+                </template>
+                GitHub 开源地址
+              </a-button>
+
               <!-- 退出登录 -->
               <a-button type="text" danger @click.stop="handleLogout" title="退出登录">
                 <template #icon>

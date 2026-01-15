@@ -5,6 +5,8 @@ import {message} from 'ant-design-vue'
 
 import {useUserStore} from '@/stores/user'
 import md5 from 'crypto-js/md5';
+import AuthLayout from '@/layouts/AuthLayout.vue';
+import { GithubOutlined } from '@ant-design/icons-vue';
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -58,15 +60,19 @@ const onLogin = async () => {
 </script>
 
 <template>
-  <div class="login-page">
-    <div class="login-card">
-      <h2 class="title">RAG 系统登录</h2>
+  <AuthLayout>
+    <div class="login-wrapper">
+      <div class="auth-header">
+        <h2 class="title">欢迎回来</h2>
+        <p class="subtitle">登录您的账号以继续</p>
+      </div>
 
       <a-form
           :model="formState"
           :rules="rules"
           layout="vertical"
           @finish="onLogin"
+          class="auth-form"
       >
         <a-form-item label="账号" name="username">
           <a-input
@@ -98,43 +104,74 @@ const onLogin = async () => {
       </a-form>
 
       <div class="footer-actions">
-        <a @click="router.push('/register')">没有账号？去注册</a>
+        <span class="text-gray">还没有账号？</span>
+        <a style="cursor: pointer" @click="router.push('/register')">立即注册</a>
+      </div>
+      
+      <div class="github-link">
+        <a href="https://github.com/cockmake/general-rag-system" target="_blank">
+          <github-outlined /> GitHub 开源地址
+        </a>
       </div>
     </div>
-  </div>
+  </AuthLayout>
 </template>
 
 <style scoped>
-.footer-actions {
+.login-wrapper {
+  width: 100%;
+  max-width: 360px;
+  padding: 0 24px;
+}
+
+.auth-header {
+  margin-bottom: 32px;
   text-align: center;
-  margin-top: 16px;
-}
-
-.login-page {
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f5f7fa;
-}
-
-.login-card {
-  width: 360px;
-  padding: 32px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
 }
 
 .title {
-  text-align: center;
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.subtitle {
+  color: #666;
+  font-size: 14px;
+}
+
+.auth-form {
   margin-bottom: 24px;
 }
 
-.hint {
-  margin-top: 12px;
+.footer-actions {
   text-align: center;
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.text-gray {
   color: #999;
-  font-size: 12px;
+  margin-right: 8px;
+}
+
+.github-link {
+  text-align: center;
+  margin-top: 24px;
+}
+
+.github-link a {
+  color: #666;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  transition: color 0.3s;
+}
+
+.github-link a:hover {
+  color: #1677ff;
 }
 </style>
