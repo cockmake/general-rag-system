@@ -1,4 +1,5 @@
 import asyncio
+import io
 import json
 import logging
 import os
@@ -7,6 +8,8 @@ import traceback
 from aio_pika.abc import AbstractIncomingMessage
 from langchain_core.documents import Document
 from langchain_milvus import Milvus
+from PIL import Image
+import pytesseract
 
 import utils
 from minio_utils import minio_client
@@ -47,17 +50,20 @@ class DocumentEmbeddingConsumer:
 
                 minio_byte = await response.read()
 
-                def write_temp_file():
-                    with open(tmp_path, "wb") as f:
-                        f.write(minio_byte)
+                # Only write to disk if not an image (images processed in-memory)
+                is_image = suffix.lower() in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]
+                if not is_image:
+                    def write_temp_file():
+                        with open(tmp_path, "wb") as f:
+                            f.write(minio_byte)
 
-                await asyncio.to_thread(write_temp_file)
+                    await asyncio.to_thread(write_temp_file)
 
                 vector_store = None
                 try:
                     if suffix.lower() == ".pdf":
                         # chunk_overlap=0 可确保不重复
-                        texts = await asyncio.to_thread(utils.pdf_split, tmp_path, 1000, 0)
+                        texts = await asyncio.to_thread(utils.pdf_split, tmp_path, 1000, 100)
                         splits = [Document(page_content=t) for t in texts]
                     elif suffix.lower() == ".txt":
                         def split_txt():
@@ -90,6 +96,13 @@ class DocumentEmbeddingConsumer:
                                 return [Document(page_content=t) for t in utils.plain_text_split(f.read())]
 
                         splits = await asyncio.to_thread(split_plain)
+                    elif suffix.lower() in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]:
+                        def process_image():
+                            # Process image directly from bytes
+                            texts = utils.image_split(io.BytesIO(minio_byte))
+                            return [Document(page_content=t) for t in texts]
+
+                        splits = await asyncio.to_thread(process_image)
                     else:
                         logger.warning(f"Unsupported file type: {suffix}")
                         return

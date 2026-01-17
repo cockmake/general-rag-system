@@ -8,7 +8,6 @@ import fitz  # PyMuPDF
 from PIL import Image
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRetryMiddleware
-from langchain.agents.structured_output import ToolStrategy, ProviderStrategy
 from langchain.chat_models import init_chat_model
 from langchain.embeddings import init_embeddings
 from langchain_community.document_loaders import PyMuPDFLoader
@@ -109,16 +108,10 @@ def get_embedding_instance(embedding_info: dict):
     )
 
 
-def custom_structured_data_strategy(model_name: str, data_type):
-    if model_name.startswith("mimo") or model_name == "deepseek-reasoner":
-        return ToolStrategy(data_type)
-    return ProviderStrategy(data_type)
-
-
 def get_structured_data_instance(llm: BaseChatModel, data_type):
     return create_agent(
         model=llm,
-        response_format=custom_structured_data_strategy(llm.configurable_fields().model_name, data_type),
+        response_format=data_type,
         middleware=[
             ModelRetryMiddleware(
                 max_retries=2,
@@ -213,7 +206,8 @@ def _extract_text_with_ocr(pdf_path: str, language: str = 'chi_sim+eng'):
 
 def pdf_split(
         file_path: str, chunk_size: int = 1000, chunk_overlap: int = 0,
-        ocr_language: str = 'chi_sim+eng', text_threshold: int = 50
+        text_threshold: int = 20,
+        ocr_language: str = 'chi_sim+eng',
 ):
     """
     对PDF进行完美划分：全文合并后切分，解决跨页段落问题。
@@ -262,3 +256,23 @@ def pdf_split(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap
     )
+
+
+def image_split(
+        file_input, min_length: int = 20, chunk_size: int = 1000, chunk_overlap: int = 200,
+        lang: str = 'chi_sim+eng'
+):
+    if not TESSERACT_AVAILABLE:
+        raise ImportError("pytesseract not installed")
+
+    image = Image.open(file_input)
+    try:
+        text = pytesseract.image_to_string(image, lang=lang)
+    except Exception:
+        text = pytesseract.image_to_string(image)
+
+    text = text.replace('\n', '')
+    if len(text.strip()) < min_length:
+        raise ValueError(f"Recognized text length ({len(text.strip())}) is less than minimum required ({min_length})")
+
+    return plain_text_split(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)

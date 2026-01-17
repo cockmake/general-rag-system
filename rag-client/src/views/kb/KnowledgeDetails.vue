@@ -46,7 +46,7 @@ const invitedUsersModalVisible = ref(false);
 const invitedUsers = ref([]);
 const loadingInvitedUsers = ref(false);
 
-const acceptExtensions = ".md,.txt,.pdf,.json,.py,.java,.js,.ts,.vue,.html,.xml,.yml,.sh,.rb,.css,.scss";
+const acceptExtensions = ".md,.txt,.pdf,.json,.py,.java,.js,.ts,.vue,.html,.xml,.yml,.sh,.rb,.css,.scss,.jpg,.jpeg,.png,.gif,.bmp,.webp";
 
 const invitedUsersColumns = [
   {title: '用户名', dataIndex: 'username', key: 'username'},
@@ -130,7 +130,7 @@ const handlePreview = async (record) => {
     } else if (fileName.endsWith('.md')) {
       previewType.value = 'markdown';
       previewContent.value = await blob.text();
-    } else if (fileName.match(/\.(jpeg|jpg|png|gif)$/)) {
+    } else if (fileName.match(/\.(jpeg|jpg|png|gif|bmp|webp)$/)) {
         previewType.value = 'image';
         previewContent.value = window.URL.createObjectURL(blob);
     } else {
