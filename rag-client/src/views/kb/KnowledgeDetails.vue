@@ -1,5 +1,5 @@
 <script setup>
-import {onMounted, ref, computed} from "vue";
+import {onMounted, ref, computed, watch} from "vue";
 import VuePdfEmbed from 'vue-pdf-embed';
 import 'vue-pdf-embed/dist/styles/annotationLayer.css';
 import 'vue-pdf-embed/dist/styles/textLayer.css';
@@ -7,17 +7,58 @@ import md from "@/utils/markdown.js";
 import {useRoute} from "vue-router";
 import {message} from "ant-design-vue";
 import { LoadingOutlined } from '@ant-design/icons-vue';
-import {deleteDocument, previewDocument, listDocuments, uploadDocument, renameDocument, listChunks, inviteUserToKb, getInvitedUsers, removeInvitedUser, fetchAvailableKbs} from "@/api/kbApi.js";
+import {deleteDocument, previewDocument, listDocuments, uploadDocument, renameDocument, listChunks, inviteUserToKb, getInvitedUsers, removeInvitedUser, fetchAvailableKbs, updateKb} from "@/api/kbApi.js";
+import { useUserStore } from "@/stores/user";
 
 const route = useRoute();
+const userStore = useUserStore();
 const kbId = route.params.kbId;
 const fileList = ref([]);
 const uploading = ref(false);
 const currentKb = ref(null);
 
+// 判断是否是拥有者
+const isOwner = computed(() => {
+  return currentKb.value && currentKb.value.ownerUserId === userStore.userId;
+});
+
+// Settings related refs
+const settingsModalVisible = ref(false);
+const settingsForm = ref({
+  name: '',
+  description: '',
+  systemPrompt: ''
+});
+const settingsSubmitting = ref(false);
+
+const openSettingsModal = () => {
+  if (currentKb.value) {
+    settingsForm.value = {
+      name: currentKb.value.name,
+      description: currentKb.value.description,
+      systemPrompt: currentKb.value.systemPrompt || ''
+    };
+    settingsModalVisible.value = true;
+  }
+};
+
+const handleSettingsSubmit = async () => {
+  settingsSubmitting.value = true;
+  try {
+    await updateKb(kbId, settingsForm.value);
+    message.success('更新成功');
+    settingsModalVisible.value = false;
+    fetchKbInfo(); // Refresh info
+  } catch (e) {
+    console.error('Update failed', e);
+  } finally {
+    settingsSubmitting.value = false;
+  }
+};
+
 // 判断是否是私有知识库且是拥有者
 const canInvite = computed(() => {
-  return currentKb.value && currentKb.value.visibility === 'private';
+  return currentKb.value && currentKb.value.visibility === 'private' && isOwner.value;
 });
 
 // Preview related refs
@@ -45,6 +86,17 @@ const inviteSubmitting = ref(false);
 const invitedUsersModalVisible = ref(false);
 const invitedUsers = ref([]);
 const loadingInvitedUsers = ref(false);
+
+// Upload progress related refs
+const uploadProgressModalVisible = ref(false);
+const uploadProgressList = ref([]);
+const activeUploadsCount = ref(0);
+
+watch(uploadProgressModalVisible, (val) => {
+  if (!val && activeUploadsCount.value === 0) {
+    uploadProgressList.value = [];
+  }
+});
 
 const acceptExtensions = ".md,.txt,.pdf,.json,.py,.java,.js,.ts,.vue,.html,.xml,.yml,.sh,.rb,.css,.scss,.jpg,.jpeg,.png,.gif,.bmp,.webp";
 
@@ -99,19 +151,58 @@ const beforeUpload = (file) => {
 
 const customRequest = async (options) => {
   const { file, onSuccess, onError } = options;
+  
+  // Initialize file in progress list
+  const fileItem = {
+    uid: file.uid,
+    name: file.name,
+    status: 'uploading',
+    percent: 0,
+    error: null
+  };
+  
+  // Add to list
+  uploadProgressList.value.push(fileItem);
+  uploadProgressModalVisible.value = true;
+  activeUploadsCount.value++;
+  uploading.value = true;
+
   const formData = new FormData();
   formData.append('files', file);
 
   try {
-    uploading.value = true;
-    await uploadDocument(kbId, formData);
+    await uploadDocument(kbId, formData, {
+      onUploadProgress: (progressEvent) => {
+        const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        const item = uploadProgressList.value.find(item => item.uid === file.uid);
+        if (item) {
+          item.percent = percent;
+        }
+      }
+    });
+    
+    // Success
+    const item = uploadProgressList.value.find(item => item.uid === file.uid);
+    if (item) {
+      item.status = 'done';
+      item.percent = 100;
+    }
     message.success(`${file.name} 上传成功`);
     onSuccess(null, file);
     fetchDocuments();
   } catch (err) {
+    // Error
+    const item = uploadProgressList.value.find(item => item.uid === file.uid);
+    if (item) {
+      item.status = 'error';
+      item.error = err.message || '上传失败';
+    }
     onError(err);
   } finally {
-    uploading.value = false;
+    activeUploadsCount.value--;
+    if (activeUploadsCount.value === 0) {
+      uploading.value = false;
+    }
   }
 };
 
@@ -322,6 +413,9 @@ onMounted(() => {
     <div style="margin-bottom: 16px; display: flex; justify-content: space-between;">
       <h2>📄 文档管理 - {{ currentKb ? currentKb.name : '' }}</h2>
       <div style="display: flex; gap: 8px;">
+        <a-button v-if="isOwner" @click="openSettingsModal">
+          ⚙️ 设置
+        </a-button>
         <a-button v-if="canInvite" @click="showInvitedUsersModal">
           👥 查看被邀请用户
         </a-button>
@@ -375,6 +469,30 @@ onMounted(() => {
       @ok="handleRename"
     >
       <a-input v-model:value="newFileName" placeholder="请输入新文件名" />
+    </a-modal>
+
+    <!-- 设置对话框 -->
+    <a-modal
+        v-model:visible="settingsModalVisible"
+        title="知识库设置"
+        :confirm-loading="settingsSubmitting"
+        @ok="handleSettingsSubmit"
+        width="600px"
+    >
+      <a-form :model="settingsForm" layout="vertical">
+        <a-form-item label="知识库名称" required>
+          <a-input v-model:value="settingsForm.name" placeholder="请输入知识库名称"/>
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-textarea v-model:value="settingsForm.description" placeholder="请输入描述" :rows="2"/>
+        </a-form-item>
+        <a-form-item label="系统提示词">
+            <template #help>
+                设置该知识库在对话时的默认系统提示词，用于控制 AI 的回答风格和行为。
+            </template>
+          <a-textarea v-model:value="settingsForm.systemPrompt" placeholder="请输入系统提示词" :rows="6"/>
+        </a-form-item>
+      </a-form>
     </a-modal>
 
     <a-modal
@@ -483,6 +601,33 @@ onMounted(() => {
           </template>
         </template>
       </a-table>
+    </a-modal>
+
+    <!-- 上传进度对话框 -->
+    <a-modal
+        v-model:visible="uploadProgressModalVisible"
+        title="上传进度"
+        :footer="null"
+        :maskClosable="false" 
+        width="600px"
+    >
+      <div style="max-height: 400px; overflow-y: auto;">
+        <a-list :data-source="uploadProgressList" item-layout="horizontal">
+          <template #renderItem="{ item }">
+            <a-list-item>
+               <a-list-item-meta :title="item.name">
+                  <template #description>
+                     <a-progress :percent="item.percent" :status="item.status === 'error' ? 'exception' : (item.status === 'done' ? 'success' : 'active')" />
+                     <div v-if="item.status === 'error'" style="color: red">{{ item.error }}</div>
+                  </template>
+               </a-list-item-meta>
+            </a-list-item>
+          </template>
+        </a-list>
+      </div>
+      <div style="text-align: right; margin-top: 16px;">
+        <a-button @click="uploadProgressModalVisible = false">关闭</a-button>
+      </div>
     </a-modal>
   </div>
 </template>

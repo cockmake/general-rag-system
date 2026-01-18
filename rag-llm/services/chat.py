@@ -182,6 +182,10 @@ async def chat_stream(
     kb_id = options.get('kbId')
     system_prompt = options.get('systemPrompt')
 
+
+    # history最多包含10轮对话，即10*2+1=21条消息（包含当前用户问题）
+    if len(history) > 21:
+        history = history[-21:]
     # 构建LangChain消息列表（不包含最后一条用户消息）
     langchain_messages = build_langchain_messages(history[:-1] if history else [])
 

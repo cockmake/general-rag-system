@@ -8,8 +8,6 @@ import traceback
 from aio_pika.abc import AbstractIncomingMessage
 from langchain_core.documents import Document
 from langchain_milvus import Milvus
-from PIL import Image
-import pytesseract
 
 import utils
 from minio_utils import minio_client
@@ -22,6 +20,18 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentEmbeddingConsumer:
+    async def error_message_sender(self, document_id: int, error_msg: str):
+        response_message = {
+            "documentId": document_id,
+            "status": "failed",
+            "message": error_msg
+        }
+        await rabbit_async_client.publish(
+            exchange_name="server.interact.llm.exchange",
+            routing_key="rag.document.complete.key",
+            message=response_message
+        )
+
     async def on_receive_message(self, message: AbstractIncomingMessage):
         async with message.process():
             try:
@@ -69,6 +79,7 @@ class DocumentEmbeddingConsumer:
                         def split_txt():
                             with open(tmp_path, "r", encoding="utf-8") as f:
                                 return [Document(page_content=t) for t in utils.plain_text_split(f.read())]
+
                         splits = await asyncio.to_thread(split_txt)
                     elif suffix.lower() == ".md":
                         with open(tmp_path, "r", encoding="utf-8") as f:
@@ -171,25 +182,15 @@ class DocumentEmbeddingConsumer:
                     logger.error(f"Error during embedding or storage: {e}")
                     error_stack = traceback.format_exc()
                     logger.error(error_stack)
+                    await self.error_message_sender(document_id, str(e))
                 finally:
                     if os.path.exists(tmp_path):
                         os.remove(tmp_path)
-                    if vector_store:
-                        await vector_store.aclient.close()
             except Exception as e:
                 logger.error(f"Error processing document: {e}")
                 error_stack = traceback.format_exc()
                 logger.error(error_stack)
-                response_message = {
-                    "documentId": document_id,
-                    "status": "failed",
-                    "message": str(e)
-                }
-                await rabbit_async_client.publish(
-                    exchange_name="server.interact.llm.exchange",
-                    routing_key="rag.document.complete.key",
-                    message=response_message
-                )
+                await self.error_message_sender(document_id, str(e))
 
 
 document_embedding_consumer = DocumentEmbeddingConsumer()

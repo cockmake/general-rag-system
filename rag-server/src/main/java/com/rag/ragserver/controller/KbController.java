@@ -11,6 +11,7 @@ import com.rag.ragserver.domain.Users;
 import com.rag.ragserver.domain.kb.vo.KbShareUserVO;
 import com.rag.ragserver.dto.KbCreateDTO;
 import com.rag.ragserver.dto.KbInviteDTO;
+import com.rag.ragserver.dto.KbUpdateDTO;
 import com.rag.ragserver.exception.BusinessException;
 import com.rag.ragserver.service.DocumentChunksService;
 import com.rag.ragserver.service.DocumentsService;
@@ -77,6 +78,31 @@ public class KbController {
         } else {
             throw new BusinessException(400, "知识库删除失败");
         }
+    }
+
+    @PutMapping("/{kbId}")
+    public R<Void> updateKnowledgeBase(@PathVariable Long kbId, @RequestBody KbUpdateDTO kbUpdateDTO) {
+        Long userId = (Long) request.getAttribute("userId");
+        KnowledgeBases kb = kbService.getById(kbId);
+        if (kb == null) {
+            throw new BusinessException(404, "知识库不存在");
+        }
+        if (!kb.getOwnerUserId().equals(userId)) {
+            throw new BusinessException(403, "没有权限修改知识库配置");
+        }
+        
+        if (kbUpdateDTO.getName() != null) {
+            kb.setName(kbUpdateDTO.getName().trim());
+        }
+        if (kbUpdateDTO.getDescription() != null) {
+            kb.setDescription(kbUpdateDTO.getDescription().trim());
+        }
+        if (kbUpdateDTO.getSystemPrompt() != null) {
+            kb.setSystemPrompt(kbUpdateDTO.getSystemPrompt().trim());
+        }
+        
+        kbService.updateById(kb);
+        return R.success();
     }
 
     @GetMapping("/{kbId}/documents")

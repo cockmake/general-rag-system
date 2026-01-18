@@ -2,6 +2,7 @@ import io
 import json
 import logging
 import os
+import re
 from functools import lru_cache
 
 import fitz  # PyMuPDF
@@ -16,7 +17,7 @@ from langchain_text_splitters import (
     Language,
     RecursiveCharacterTextSplitter,
     RecursiveJsonSplitter,
-    ExperimentalMarkdownSyntaxTextSplitter
+    MarkdownHeaderTextSplitter
 )
 
 logger = logging.getLogger(__name__)
@@ -127,12 +128,13 @@ def markdown_split(markdown_text: str, headers_to_split_on: list = None):
         headers_to_split_on = [
             ("#", "Header 1"),
             ("##", "Header 2"),
-            ("###", "Header 3"),
-            ("####", "Header 4")
+            # ("###", "Header 3")
         ]
-    markdown_splitter = ExperimentalMarkdownSyntaxTextSplitter(
-        headers_to_split_on=headers_to_split_on
+    markdown_splitter = MarkdownHeaderTextSplitter(
+        headers_to_split_on=headers_to_split_on,
+        strip_headers=False
     )
+    # markdown_text = markdown_text.replace('\n\n', '\n')
     return markdown_splitter.split_text(markdown_text)
 
 
@@ -155,6 +157,8 @@ def plain_text_split(
         separators: list = None, force_split: bool = False,
         add_start_index: bool = True
 ):
+    pattern = r'(?<=[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef])\s+(?=[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef])'
+    plain_text = re.sub(pattern, '', plain_text)
     if separators is None:
         separators = ["\n\n", "\n", "。", "！", "？", "，", " "]
     if force_split:
@@ -243,6 +247,7 @@ def pdf_split(
             # 放到线程中执行以避免阻塞
             # text = _extract_text_with_ocr(file_path, ocr_language)
             text = _extract_text_with_ocr(file_path, ocr_language)
+            text = text.replace('\n', '')
             logger.info(f"OCR识别完成，提取文本长度: {len(text)}")
         except Exception as e:
             logger.error(f"OCR识别失败: {str(e)}")

@@ -15,14 +15,18 @@ export function deleteKb(kbId) {
     return commonApi.delete(`/kb/${kbId}`)
 }
 
+export function updateKb(kbId, data) {
+    return commonApi.put(`/kb/${kbId}`, data)
+}
+
 // 列出文件
 export function listDocuments(kbId) {
     return commonApi.get(`/kb/${kbId}/documents`)
 }
 
 // 上传文件
-export function uploadDocument(kbId, formData) {
-    return commonApi.upload(`/kb/${kbId}/documents`, formData)
+export function uploadDocument(kbId, formData, config = {}) {
+    return commonApi.upload(`/kb/${kbId}/documents`, formData, config)
 }
 
 // 预览文件 (返回 Blob)

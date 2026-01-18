@@ -1,5 +1,6 @@
 package com.rag.ragserver.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.rag.ragserver.common.R;
 import com.rag.ragserver.domain.Roles;
 import com.rag.ragserver.domain.Users;
@@ -20,9 +21,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+
 import com.rag.ragserver.dto.RegisterRequest;
 import com.rag.ragserver.dto.SendCodeRequest;
 import com.rag.ragserver.service.EmailService;
+
 import javax.validation.Valid;
 
 @Slf4j
@@ -36,6 +39,7 @@ public class UserController {
     private final JwtUtils jwtUtils;
     private final StringRedisTemplate redisTemplate;
     private final EmailService emailService;
+
     @GetMapping("/test")
     public R<String> test() {
         return R.success("UserController is working!");
@@ -52,7 +56,7 @@ public class UserController {
 
         String code = String.valueOf((int) ((Math.random() * 9 + 1) * 100000));
         redisTemplate.opsForValue().set("register:code:" + email, code, 5, TimeUnit.MINUTES);
-        
+
         emailService.sendVerificationCode(email, code);
         return R.success("验证码已发送");
     }
@@ -81,24 +85,27 @@ public class UserController {
         user.setEmail(email);
         user.setStatus("active");
         user.setRoleId(2); // Default role, assuming 2 is user
-        
+
         usersService.save(user);
-        
+
         // Initialize workspace
         workspacesService.validateAndFixUserWorkspace(user.getId());
-        
+
         redisTemplate.delete("register:code:" + email);
-        
+
         return R.success("注册成功");
     }
 
     @PostMapping("/login")
     public R<Map<String, Object>> login(@RequestBody LoginRequest request) {
 
-        Users user = usersService.lambdaQuery()
-                .eq(Users::getUsername, request.getUsername())
-                .eq(Users::getPwd, request.getPassword())
-                .one();
+        LambdaQueryWrapper<Users> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.and(w -> w.eq(Users::getUsername, request.getUsername())
+                        .or()
+                        .eq(Users::getEmail, request.getUsername()))
+                .eq(Users::getPwd, request.getPassword());
+
+        Users user = usersService.getOne(queryWrapper);
 
         if (user == null) {
             throw new BusinessException(400, "用户名或密码错误");
