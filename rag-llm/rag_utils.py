@@ -59,14 +59,14 @@ class RAGService:
                 for m in recent_history
             ])
 
-        system_prompt = f"""你是一个查询优化专家。你的任务是根据用户的问题，从不同角度生成3-5个查询，以便全面检索相关信息。
+        system_prompt = f"""你是一个查询优化专家。你的任务是根据用户的问题，从不同角度生成4-6个查询，涵盖中英文，以便全面检索相关信息。
 
 生成策略：
 1. 理解问题的核心意图，结合对话历史解析代词和上下文
-2. 从不同语义角度拆解问题（如：定义、应用、对比、原理等）
-3. 生成的查询应该互补，覆盖问题的不同方面
-4. 每个查询应简洁明确，适合向量检索
-5. 扩展相关概念和同义词
+2. 提取问题中的关键实体、专业术语、错误码或具体名称，保留在查询中以利于关键词匹配
+3. 从不同语义角度拆解问题（如：定义、应用、对比、原理等）
+4. 生成的查询应该互补，覆盖问题的不同方面
+5. 查询应简洁明确，兼顾向量检索（语义）和关键词检索（精确），多个关键词间请用空格分隔
 
 {'对话历史：\n' + history_context if history_context else '无对话历史'}
 
@@ -138,32 +138,129 @@ class RAGService:
                 logger.warning(f"无法连接到知识库: {kb_id}")
                 return []
 
+            # 1. 向量检索器 (大幅提高Top-K以增加候选集)
             retriever = vector_store.as_retriever(search_kwargs={"k": top_k})
 
-            # 定义单个查询的异步检索函数
-            async def retrieve_single(query: str) -> list[Document]:
+            # 定义单个查询的异步检索函数（向量检索）
+            async def retrieve_vector(query: str) -> list[Document]:
                 try:
                     return await retriever.ainvoke(query)
                 except Exception as e:
-                    logger.error(f"检索出错: {e}")
+                    logger.error(f"向量检索出错: {e}")
                     return []
 
-            # 并行检索所有查询
-            tasks = [retrieve_single(query) for query in query_list]
+            # 定义关键词检索函数（基于Milvus scalar filtering）
+            async def retrieve_keyword(query: str) -> list[Document]:
+                """
+                使用 text like '%keyword%' 进行模糊匹配
+                注意：Milvus 的 like 性能较差，仅适合短关键词或作为辅助召回
+                """
+                # 简单的关键词提取策略：如果查询较短，直接用；否则按空格切分取最长的词
+                keywords = []
+                if len(query) < 10:
+                    keywords.append(query)
+                else:
+                    # 简单分词，取长度大于2的词
+                    words = [w for w in query.split() if len(w) >= 2]
+                    keywords.extend(words)
+                if not keywords:
+                    return []
+
+                docs = []
+                try:
+                    # 获取集合对象
+                    # langchain_milvus.Milvus 实例通常有 col 或 collection 属性
+                    col = getattr(vector_store, "col", getattr(vector_store, "collection", None))
+                    if not col:
+                        logger.error("无法获取 Milvus 集合对象")
+                        return []
+
+                    for kw in keywords:
+                        # 转义特殊字符
+                        safe_kw = kw.replace("'", "\\'").replace('"', '\\"')
+                        # 构造表达式: text 字段包含关键词
+                        # 注意：字段名默认为 'text'，如果 schema 不同需调整
+                        expr = f'text like "%{safe_kw}%"'
+                        
+                        # 使用 run_in_executor 避免阻塞
+                        res = await asyncio.get_running_loop().run_in_executor(
+                            None,
+                            lambda: col.query(
+                                expr=expr,
+                                output_fields=["text", "pk", "documentId"], # 确保获取必要字段
+                                limit=5  # 限制关键词召回数量，避免过多
+                            )
+                        )
+                        
+                        # 转换为 Document 对象
+                        for item in res:
+                            content = item.pop('text', '')
+                            # 移除 milvus 内部字段
+                            if 'pk' in item:
+                                pk = item['pk']
+                            else:
+                                pk = str(item.get('id', ''))
+                            
+                            docs.append(Document(
+                                page_content=content,
+                                metadata={**item, 'pk': pk, 'retrieval_source': 'keyword'}
+                            ))
+                            
+                except Exception as e:
+                    # 关键词检索失败不影响主流程
+                    logger.warning(f"关键词检索失败: {e}")
+                
+                return docs
+
+            # 并行执行所有检索任务
+            tasks = []
+            for query in query_list:
+                tasks.append(retrieve_vector(query))
+                # 对每个查询也尝试关键词检索
+                tasks.append(retrieve_keyword(query))
+            
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # 去重汇总
+            # 统计不同来源的文档数量
+            count_vector = 0
+            count_keyword = 0
+
+            vector_docs = []
+            keyword_docs = []
+
+            # 分类收集
             for result in results:
                 if isinstance(result, Exception):
                     logger.error(f"检索任务失败: {result}")
                     continue
                 for doc in result:
-                    pk = doc.metadata['pk']
+                    source = doc.metadata.get('retrieval_source', 'vector')
+                    if source == 'keyword':
+                        keyword_docs.append(doc)
+                    else:
+                        vector_docs.append(doc)
+            
+            # 优先处理向量检索结果
+            for doc in vector_docs:
+                pk = doc.metadata.get('pk') or doc.metadata.get('id')
+                if pk:
+                    pk = str(pk)
                     if pk not in doc_set:
                         doc_set.add(pk)
                         all_docs.append(doc)
+                        count_vector += 1
+            
+            # 再处理关键词检索结果（补充）
+            for doc in keyword_docs:
+                pk = doc.metadata.get('pk') or doc.metadata.get('id')
+                if pk:
+                    pk = str(pk)
+                    if pk not in doc_set:
+                        doc_set.add(pk)
+                        all_docs.append(doc)
+                        count_keyword += 1
 
-            logger.info(f"并行检索完成，去重后共 {len(all_docs)} 个文档")
+            logger.info(f"最终去重后共 {len(all_docs)} 个文档 (向量召回: {count_vector}, 关键词召回: {count_keyword})")
 
         finally:
             # 清理连接
@@ -317,7 +414,7 @@ class RAGService:
                         "title": "检索知识库",
                         "description": f"检索到 {len(all_docs)} 个候选文档",
                         "status": "completed",
-                        "content": "\n\n---\n\n".join(retrieval_content) if retrieval_content else "暂无检索结果"
+                        # "content": f"检索到 {len(all_docs)} 个候选文档",
                     }
                 }
 

@@ -75,9 +75,9 @@ async def rag_stream_generator(
             kb_id=kb_id,
             user_id=user_id,
             system_prompt=system_prompt,
-            top_k=12,
-            top_n=8,
-            score_threshold=0.35
+            top_k=15,
+            top_n=15,
+            score_threshold=0.4
     ):
         if item["type"] == "process":
             # 检索过程信息
@@ -183,9 +183,9 @@ async def chat_stream(
     system_prompt = options.get('systemPrompt')
 
 
-    # history最多包含10轮对话，即10*2+1=21条消息（包含当前用户问题）
-    if len(history) > 21:
-        history = history[-21:]
+    # history最多包含6轮对话，即6*2+1=13条消息（包含当前用户问题）
+    if len(history) > 13:
+        history = history[-13:]
     # 构建LangChain消息列表（不包含最后一条用户消息）
     langchain_messages = build_langchain_messages(history[:-1] if history else [])
 
