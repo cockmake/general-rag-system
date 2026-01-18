@@ -98,6 +98,15 @@ watch(uploadProgressModalVisible, (val) => {
   }
 });
 
+const systemPromptPlaceholder = `你是一个专业的AI助手。基于提供的文档和对话历史回答用户问题。
+
+要求：
+1. 提供的文档中的信息可供参考
+2. 如果文档不足以完整回答，结合对话历史和已有知识回答或直接明确说明
+3. 保持对话连贯，考虑历史上下文
+4. 用清晰、简洁的语言回答
+5. 文件为切片信息，编排可能较乱，你需要提取相关信息`;
+
 const acceptExtensions = ".md,.txt,.pdf,.json,.py,.java,.js,.ts,.vue,.html,.xml,.yml,.sh,.rb,.css,.scss,.jpg,.jpeg,.png,.gif,.bmp,.webp";
 
 const invitedUsersColumns = [
@@ -490,7 +499,7 @@ onMounted(() => {
             <template #help>
                 设置该知识库在对话时的默认系统提示词，用于控制 AI 的回答风格和行为。
             </template>
-          <a-textarea v-model:value="settingsForm.systemPrompt" placeholder="请输入系统提示词" :rows="6"/>
+          <a-textarea v-model:value="settingsForm.systemPrompt" :placeholder="systemPromptPlaceholder" :rows="6"/>
         </a-form-item>
       </a-form>
     </a-modal>
