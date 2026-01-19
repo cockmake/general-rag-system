@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__)
 # ============= Pydantic Models =============
 class MultiQueryList(BaseModel):
     """多角度查询列表"""
-    queries: list[str] = Field(description="从不同角度生成的查询列表，3-5个查询")
+    queries: list[str] = Field(description="从不同角度生成的查询列表")
+    grade_query: str = Field(description="用于文档评分的查询，应该是结合上下文、解决指代消歧后的完整问题")
     reasoning: str = Field(description="生成这些查询的原因")
 
 
@@ -38,7 +39,7 @@ class RAGService:
             question: str,
             history: list,
             model_info: dict
-    ) -> list[str]:
+    ) -> tuple[list[str], str]:
         """
         生成多角度查询
         
@@ -48,7 +49,7 @@ class RAGService:
             model_info: 模型配置信息
             
         Returns:
-            多角度查询列表
+            (多角度查询列表, 评分用查询)
         """
         # 构建对话历史（最近5轮，即10条消息）
         history_context = ""
@@ -68,11 +69,14 @@ class RAGService:
 4. 生成的查询应该互补，覆盖问题的不同方面
 5. 查询应简洁明确，兼顾向量检索（语义）和关键词检索（精确），多个关键词间请用空格分隔
 
+另外，请额外生成一个'grade_query'，它是对用户当前问题的完整重写（指代消歧后），用于后续的文档相关性评分。
+例如：如果用户说“继续”，grade_query 应该是上一轮话题的延续描述，如"关于XXX的进一步详细说明"。
+
 {'对话历史：\n' + history_context if history_context else '无对话历史'}
 
 当前问题：{question}
 
-请生成3-5个不同角度的查询。"""
+请生成3-5个不同角度的查询，以及一个grade_query。"""
 
         llm = get_llm_instance(model_info)
         structured_agent = get_structured_data_instance(llm, MultiQueryList)
@@ -80,7 +84,8 @@ class RAGService:
         result = await structured_agent.ainvoke({"messages": [{"role": "user", "content": system_prompt}]})
 
         logger.info(f"生成的多角度查询: {result['structured_response'].queries}")
-        return result['structured_response'].queries
+        logger.info(f"生成的评分查询(grade_query): {result['structured_response'].grade_query}")
+        return result['structured_response'].queries, result['structured_response'].grade_query
 
     async def parallel_retrieve(
             self,
@@ -375,7 +380,7 @@ class RAGService:
                 }
 
                 logger.info("开始生成多角度查询...")
-                query_list = await self.generate_multi_queries(question, history, model_info)
+                query_list, grade_query = await self.generate_multi_queries(question, history, model_info)
 
                 yield {
                     "type": "process",
@@ -384,7 +389,7 @@ class RAGService:
                         "title": "生成多角度查询",
                         "description": f"已生成 {len(query_list)} 个检索查询",
                         "status": "completed",
-                        "content": "\n".join([f"- {q}" for q in query_list])
+                        "content": "\n".join([f"- {q}" for q in query_list] + [f"\n**评分查询(Grade Query):** {grade_query}"])
                     }
                 }
 
@@ -413,8 +418,7 @@ class RAGService:
                         "step": "retrieval",
                         "title": "检索知识库",
                         "description": f"检索到 {len(all_docs)} 个候选文档",
-                        "status": "completed",
-                        # "content": f"检索到 {len(all_docs)} 个候选文档",
+                        "status": "completed"
                     }
                 }
 
@@ -433,7 +437,7 @@ class RAGService:
                     logger.info("开始Rerank文档重排序...")
                     relevant_docs = await self.parallel_grade_documents(
                         all_docs,
-                        question,
+                        grade_query,
                         top_n=top_n,
                         score_threshold=score_threshold
                     )
