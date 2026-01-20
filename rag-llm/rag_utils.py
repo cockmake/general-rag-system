@@ -340,19 +340,14 @@ class RAGService:
 
         # 按documentId分组
         docs_by_id = {}
-        no_id_docs = []
         for doc in docs:
             # 优先使用 metadata 中的 documentId，如果没有则跳过
             doc_id = doc.metadata.get('documentId')
-            if doc_id is None:
-                no_id_docs.append(doc)
-                continue
             if doc_id not in docs_by_id:
                 docs_by_id[doc_id] = []
             docs_by_id[doc_id].append(doc)
 
         merged_results = []
-        merged_results.extend(no_id_docs)
 
         # 对每组进行排序和合并
         for doc_id, group in docs_by_id.items():
@@ -394,11 +389,32 @@ class RAGService:
                     overlap_found = False
                     # 限制最大检测长度，提高性能，通常重叠在 100-200 字符
                     max_overlap_check = min(len(text1), len(text2), 500)
-                    for k in range(max_overlap_check, 10, -1):
-                        if text1.endswith(text2[:k]):
-                            current_merged_doc.page_content = text1 + text2[k:]
-                            overlap_found = True
-                            break
+                    min_overlap = 10
+
+                    if max_overlap_check >= min_overlap:
+                        # 优化算法：使用 find 替代枚举
+                        # 取 text2 的前缀作为种子（长度为 min_overlap）
+                        seed = text2[:min_overlap]
+                        
+                        # 在 text1 的末尾区域搜索种子
+                        # 搜索范围从 len(text1) - max_overlap_check 开始
+                        start_search = len(text1) - max_overlap_check
+                        search_region = text1[start_search:]
+                        
+                        # 在区域内查找种子
+                        pos = search_region.find(seed)
+                        while pos != -1:
+                            # 计算在 text1 中的绝对位置
+                            abs_pos = start_search + pos
+                            # 潜在的重叠部分是 text1[abs_pos:]
+                            # 检查 text2 是否以这段文本开头
+                            potential_overlap = text1[abs_pos:]
+                            if text2.startswith(potential_overlap):
+                                current_merged_doc.page_content = text1 + text2[len(potential_overlap):]
+                                overlap_found = True
+                                break
+                            # 继续查找下一个匹配
+                            pos = search_region.find(seed, pos + 1)
 
                     if not overlap_found:
                         current_merged_doc.page_content = text1 + text2 # 直接拼接
@@ -430,11 +446,12 @@ class RAGService:
             user_id: Optional[int] = None,
             system_prompt: Optional[str] = None,
             top_k: int = 15,
-            top_n: int = 15,
 
             grade_top_n: int = 50,
 
-            grade_score_threshold: float = 0.35
+            grade_score_threshold: float = 0.35,
+
+            top_n: int = 10,
     ) -> AsyncGenerator[dict, None]:
         """
         带过程信息的流式RAG响应生成器
