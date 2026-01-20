@@ -302,8 +302,11 @@ class RAGService:
             return []
 
         try:
-            # 提取文档内容
-            doc_contents = [doc.page_content for doc in documents]
+            # 提取文档内容，并添加文件名作为前缀以辅助Rerank模型判断上下文
+            doc_contents = [
+                f"[{doc.metadata.get('fileName', '文件')}] {doc.page_content}"
+                for doc in documents
+            ]
 
             # 使用rerank进行文档排序，应用斩杀线
             rerank_result = await rerank(
@@ -568,7 +571,10 @@ class RAGService:
                     # 最终应用 top_n 限制
                     merged_docs = merged_docs[:top_n]
 
-                    context = "\n\n".join([f"[文档{i + 1}]: {doc.page_content}" for i, doc in enumerate(merged_docs)])
+                    context = "\n\n".join([
+                        f"[文档{i + 1}] (来源: {doc.metadata.get('fileName', '未知文件')}): {doc.page_content}" 
+                        for i, doc in enumerate(merged_docs)
+                    ])
 
                 yield {
                     "type": "process",
@@ -578,7 +584,7 @@ class RAGService:
                         "description": f"基于检索和评分结果构建回答上下文，共 {len(merged_docs)} 个文档",
                         "status": "completed",
                         "content": "\n\n---\n\n".join(
-                            [f"[相关性：{doc.metadata["rerank_score"]:.3f}][文档{i + 1}]: {doc.page_content}"
+                            [f"[相关性：{doc.metadata.get('rerank_score', 0):.3f}] [来源: {doc.metadata.get('fileName', '未知')}] [文档{i + 1}]: {doc.page_content}"
                              for i, doc in enumerate(merged_docs)]) if merged_docs else "无相关文档"
                     }
                 }
