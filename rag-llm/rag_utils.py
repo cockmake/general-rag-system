@@ -180,16 +180,21 @@ class RAGService:
                         logger.error("无法获取 Milvus 集合对象")
                         return []
 
-                    # 检查 fileName 字段是否存在，防止旧版本 collection 报错
+                    # 检查 fileName 和 chunkIndex 字段是否存在，防止旧版本 collection 报错
                     has_filename = False
+                    has_chunkindex = False
                     try:
                         if hasattr(col, 'schema') and hasattr(col.schema, 'fields'):
-                            has_filename = any(field.name == 'fileName' for field in col.schema.fields)
+                            fields = col.schema.fields
+                            has_filename = any(field.name == 'fileName' for field in fields)
+                            has_chunkindex = any(field.name == 'chunkIndex' for field in fields)
                     except Exception as e:
                         logger.warning(f"检查 schema 失败: {e}")
 
                     # 准备输出字段
-                    query_output_fields = ["text", "pk", "documentId", "chunkIndex"]
+                    query_output_fields = ["text", "pk", "documentId"]
+                    if has_chunkindex:
+                        query_output_fields.append("chunkIndex")
                     if has_filename:
                         query_output_fields.append("fileName")
 
