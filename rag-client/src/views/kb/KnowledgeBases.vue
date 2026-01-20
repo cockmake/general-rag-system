@@ -3,10 +3,12 @@ import {onMounted, ref} from 'vue';
 import {useRouter} from 'vue-router';
 import {message, Modal, theme} from 'ant-design-vue';
 import {createKb, deleteKb, fetchAvailableKbs} from "@/api/kbApi.js";
+import {useUserStore} from '@/stores/user';
 
 const {useToken} = theme;
 const {token} = useToken();
 const router = useRouter();
+const userStore = useUserStore();
 
 const isModalVisible = ref(false);
 const formState = ref({
@@ -105,7 +107,7 @@ const handleDelete = (id) => {
           <a-list-item>
             <a-card hoverable @click="goToDetail(item.id)" class="kb-card">
               <template #actions>
-                <a-button type="text" danger @click.stop="handleDelete(item.id)">删除</a-button>
+                <a-button type="text" danger v-if="item.ownerUserId === userStore.userId" @click.stop="handleDelete(item.id)">删除</a-button>
               </template>
               <a-card-meta :title="item.name" :description="item.description || '暂无描述'">
                 <template #avatar>
@@ -126,6 +128,9 @@ const handleDelete = (id) => {
         <template #renderItem="{ item }">
           <a-list-item>
             <a-card hoverable @click="goToDetail(item.id)" class="kb-card">
+              <template #actions>
+                <a-button type="text" danger v-if="item.ownerUserId === userStore.userId" @click.stop="handleDelete(item.id)">删除</a-button>
+              </template>
               <a-card-meta :title="item.name" :description="item.description || '暂无描述'">
                 <template #avatar>
                   <a-avatar style="background-color: #52c41a">共</a-avatar>
@@ -146,6 +151,9 @@ const handleDelete = (id) => {
         <template #renderItem="{ item }">
           <a-list-item>
             <a-card hoverable @click="goToDetail(item.id)" class="kb-card">
+              <template #actions>
+                <a-button type="text" danger v-if="item.ownerUserId === userStore.userId" @click.stop="handleDelete(item.id)">删除</a-button>
+              </template>
               <a-card-meta :title="item.name" :description="item.description || '暂无描述'">
                 <template #avatar>
                   <a-avatar style="background-color: #faad14">公</a-avatar>
