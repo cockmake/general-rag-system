@@ -13,6 +13,7 @@ import io.milvus.v2.common.DataType;
 import io.milvus.v2.common.IndexParam;
 import io.milvus.v2.service.collection.request.AddFieldReq;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
+import io.milvus.v2.service.collection.request.DropCollectionReq;
 import io.milvus.v2.service.collection.request.HasCollectionReq;
 import io.milvus.v2.service.database.request.CreateDatabaseReq;
 import io.milvus.v2.service.database.response.ListDatabasesResp;
@@ -76,7 +77,7 @@ public class KnowledgeBasesServiceImpl extends ServiceImpl<KnowledgeBasesMapper,
         kbList.forEach(kb -> {
             if (workspaceId != null && workspaceId.equals(kb.getWorkspaceId())) {
                 result.get("shared").add(kb);
-            }else if ("public".equals(kb.getVisibility())) {
+            } else if ("public".equals(kb.getVisibility())) {
                 result.get("public").add(kb);
             } else if (userId.equals(kb.getOwnerUserId())) {
                 result.get("private").add(kb);
@@ -201,6 +202,54 @@ public class KnowledgeBasesServiceImpl extends ServiceImpl<KnowledgeBasesMapper,
         }
 
         return kb;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteKnowledgeBase(Long kbId, Long userId) {
+        // 1. 验证知识库是否存在且属于该用户
+        LambdaQueryWrapper<KnowledgeBases> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(KnowledgeBases::getId, kbId)
+                .eq(KnowledgeBases::getOwnerUserId, userId);
+        KnowledgeBases kb = this.getOne(queryWrapper);
+
+        if (kb == null) {
+            throw new BusinessException(404, "知识库不存在或无权删除");
+        }
+
+        // 2. 删除 Milvus 中的集合
+        long groupId = userId / 10000;
+        String dbName = "group_" + groupId;
+        String collectionName = "kb_" + kbId;
+
+        try {
+            // 检查集合是否存在
+            boolean hasCollection = milvusClientV2.hasCollection(
+                    HasCollectionReq.builder()
+                            .databaseName(dbName)
+                            .collectionName(collectionName)
+                            .build()
+            );
+
+            if (hasCollection) {
+                milvusClientV2.dropCollection(
+                        DropCollectionReq.builder()
+                                .databaseName(dbName)
+                                .collectionName(collectionName)
+                                .build()
+                );
+                log.info("Dropped Milvus collection: db={}, collection={}", dbName, collectionName);
+                // 3. 删除数据库记录
+                boolean removed = this.removeById(kbId);
+                if (!removed) {
+                    throw new BusinessException(500, "知识库删除失败");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to drop Milvus collection: db={}, collection={}, error={}",
+                    dbName, collectionName, e.getMessage());
+            // 继续执行数据库删除，避免造成数据残留
+        }
     }
 }
 

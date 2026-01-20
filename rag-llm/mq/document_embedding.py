@@ -53,7 +53,7 @@ class DocumentEmbeddingConsumer:
                 tmp_path = os.path.join('./temp', file_path)
                 parent_dir = os.path.dirname(tmp_path)
                 if not os.path.exists(parent_dir):
-                    os.makedirs(parent_dir)
+                    os.makedirs(parent_dir, exist_ok=True)
 
                 suffix = os.path.splitext(file_path)[1]
 

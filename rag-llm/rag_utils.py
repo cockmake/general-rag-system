@@ -196,6 +196,7 @@ class RAGService:
                     if has_chunkindex:
                         query_output_fields.append("chunkIndex")
                     if has_filename:
+                        logger.info(f"包含文件名检索")
                         query_output_fields.append("fileName")
 
                     for kw in keywords:

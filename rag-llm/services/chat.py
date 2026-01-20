@@ -78,7 +78,7 @@ async def rag_stream_generator(
             top_k=15,
 
             grade_top_n=30,
-            grade_score_threshold=0.35,
+            grade_score_threshold=0.4,
 
             top_n=10,
     ):

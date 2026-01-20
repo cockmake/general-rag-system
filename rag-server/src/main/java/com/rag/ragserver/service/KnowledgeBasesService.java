@@ -18,4 +18,9 @@ public interface KnowledgeBasesService extends IService<KnowledgeBases> {
      * 创建知识库，同时在 Milvus 中创建对应的数据库和集合
      */
     KnowledgeBases createKnowledgeBase(KnowledgeBases kb);
+
+    /**
+     * 删除知识库，同时删除 Milvus 中对应的集合
+     */
+    void deleteKnowledgeBase(Long kbId, Long userId);
 }

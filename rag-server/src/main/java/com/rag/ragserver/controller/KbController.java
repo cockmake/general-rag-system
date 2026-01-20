@@ -69,15 +69,8 @@ public class KbController {
     @DeleteMapping("/{kbId}")
     public R<Void> deleteKnowledgeBase(@PathVariable Long kbId) {
         Long userId = (Long) request.getAttribute("userId");
-        LambdaQueryWrapper<KnowledgeBases> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(KnowledgeBases::getId, kbId)
-                .eq(KnowledgeBases::getOwnerUserId, userId);
-        boolean b = kbService.remove(queryWrapper);
-        if (b) {
-            return R.success();
-        } else {
-            throw new BusinessException(400, "知识库删除失败");
-        }
+        kbService.deleteKnowledgeBase(kbId, userId);
+        return R.success();
     }
 
     @PutMapping("/{kbId}")
