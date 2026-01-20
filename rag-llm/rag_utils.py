@@ -304,7 +304,7 @@ class RAGService:
         try:
             # 提取文档内容，并添加文件名作为前缀以辅助Rerank模型判断上下文
             doc_contents = [
-                f"[{doc.metadata.get('fileName', '文件')}] {doc.page_content}"
+                f"[来源：{doc.metadata.get('fileName', '未命名文件')}] {doc.page_content}"
                 for doc in documents
             ]
 
@@ -362,10 +362,10 @@ class RAGService:
                     group_with_index.append(doc)
                 else:
                     group_without_index.append(doc)
-            
+
             # 无chunkIndex的直接加入结果
             merged_results.extend(group_without_index)
-            
+
             if not group_with_index:
                 continue
 
@@ -378,7 +378,7 @@ class RAGService:
 
             for i in range(1, len(group_with_index)):
                 next_doc = group_with_index[i]
-                
+
                 last_chunk_idx = current_merged_doc.metadata.get('last_chunk_index')
                 curr_chunk_idx = next_doc.metadata.get('chunkIndex')
 
@@ -398,12 +398,12 @@ class RAGService:
                         # 优化算法：使用 find 替代枚举
                         # 取 text2 的前缀作为种子（长度为 min_overlap）
                         seed = text2[:min_overlap]
-                        
+
                         # 在 text1 的末尾区域搜索种子
                         # 搜索范围从 len(text1) - max_overlap_check 开始
                         start_search = len(text1) - max_overlap_check
                         search_region = text1[start_search:]
-                        
+
                         # 在区域内查找种子
                         pos = search_region.find(seed)
                         while pos != -1:
@@ -420,12 +420,13 @@ class RAGService:
                             pos = search_region.find(seed, pos + 1)
 
                     if not overlap_found:
-                        current_merged_doc.page_content = text1 + text2 # 直接拼接
+                        current_merged_doc.page_content = text1 + text2  # 直接拼接
 
                     # 更新元数据
                     current_merged_doc.metadata['last_chunk_index'] = curr_chunk_idx
                     # 更新分数为两者的最大值
-                    current_merged_doc.metadata['rerank_score'] = max(current_merged_doc.metadata.get('rerank_score', 0), next_doc.metadata.get('rerank_score', 0))
+                    current_merged_doc.metadata['rerank_score'] = max(
+                        current_merged_doc.metadata.get('rerank_score', 0), next_doc.metadata.get('rerank_score', 0))
 
                 else:
                     # 不连续，保存当前，开始新的
@@ -565,6 +566,15 @@ class RAGService:
                 # 4. 构建上下文
                 merged_docs = []
                 if graded_docs:
+                    yield {
+                        "type": "process",
+                        "payload": {
+                            "step": "reformat",
+                            "title": "构建上下文",
+                            "description": f"正在合并文档切片...",
+                            "status": "running"
+                        }
+                    }
                     # 合并同一文档的连续切片（在 top_n 截断前进行，以保证完整性）
                     merged_docs = self.merge_consecutive_chunks(graded_docs)
 
@@ -572,7 +582,7 @@ class RAGService:
                     merged_docs = merged_docs[:top_n]
 
                     context = "\n\n".join([
-                        f"[文档{i + 1}] (来源: {doc.metadata.get('fileName', '未知文件')}): {doc.page_content}" 
+                        f"[文档{i + 1}] (来源: {doc.metadata.get('fileName', '未命名文件')}): {doc.page_content}"
                         for i, doc in enumerate(merged_docs)
                     ])
 
@@ -584,8 +594,11 @@ class RAGService:
                         "description": f"基于检索和评分结果构建回答上下文，共 {len(merged_docs)} 个文档",
                         "status": "completed",
                         "content": "\n\n---\n\n".join(
-                            [f"[相关性：{doc.metadata.get('rerank_score', 0):.3f}] [来源: {doc.metadata.get('fileName', '未知')}] [文档{i + 1}]: {doc.page_content}"
-                             for i, doc in enumerate(merged_docs)]) if merged_docs else "无相关文档"
+                            [
+                                f"[文档{i + 1}] [相关性：{doc.metadata.get('rerank_score', 0):.3f}] [来源: {doc.metadata.get('fileName', '未命名文件')}]: {doc.page_content}"
+                                for i, doc in enumerate(merged_docs)
+                            ]
+                        ) if merged_docs else "无相关文档"
                     }
                 }
 
