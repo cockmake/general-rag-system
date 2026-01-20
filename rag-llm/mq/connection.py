@@ -6,6 +6,8 @@ from typing import Optional, Callable, Awaitable, Any, Union, Dict
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
 
+logger = logging.getLogger(__name__)
+
 
 class AsyncRabbitMQError(Exception):
     """自定义 RabbitMQ 客户端异常"""
@@ -54,7 +56,7 @@ class AsyncRabbitMQClient:
             )
             self.channel = await self.connection.channel()
             await self.channel.set_qos(prefetch_count=self.prefetch_count)
-            logging.info("Connected to RabbitMQ server.")
+            logger.info("Connected to RabbitMQ server.")
         except Exception as e:
             raise AsyncRabbitMQError(f"Failed to connect to RabbitMQ: {e}")
         return self
@@ -69,19 +71,19 @@ class AsyncRabbitMQClient:
         """异步上下文管理器退出时关闭连接"""
         await self.close()
         if exc_type:
-            logging.error(f"Exception occurred: {exc_val}")
+            logger.error(f"Exception occurred: {exc_val}")
 
     async def close(self):
         """异步关闭通道和连接"""
         try:
             if self.channel and not self.channel.is_closed:
                 await self.channel.close()
-                logging.info("RabbitMQ channel closed.")
+                logger.info("RabbitMQ channel closed.")
             if self.connection and not self.connection.is_closed:
                 await self.connection.close()
-                logging.info("RabbitMQ connection closed.")
+                logger.info("RabbitMQ connection closed.")
         except Exception as e:
-            logging.error(f"Error closing RabbitMQ connection/channel: {e}")
+            logger.error(f"Error closing RabbitMQ connection/channel: {e}")
             # 记录错误，但允许程序继续
 
     async def consume(
@@ -94,14 +96,14 @@ class AsyncRabbitMQClient:
         if not self.channel:
             raise AsyncRabbitMQError("Channel is not available.")
         try:
-            logging.info(f"Starting consuming messages from queue '{queue_name}'...")
+            logger.info(f"Starting consuming messages from queue '{queue_name}'...")
             # 开始消费，consume 会在后台运行
             # callback 必须是一个 async 函数
             queue = await self.channel.get_queue(queue_name)
             await queue.consume(callback, no_ack=no_ack)
-            logging.info(f"Consumer set up for queue '{queue_name}'. Waiting for messages.")
+            logger.info(f"Consumer set up for queue '{queue_name}'. Waiting for messages.")
         except Exception as e:
-            logging.error(f"Error starting consumer for queue '{queue_name}': {e}")
+            logger.error(f"Error starting consumer for queue '{queue_name}': {e}")
             raise AsyncRabbitMQError(f"Error starting consumer: {e}") from e
 
     async def publish(
@@ -125,7 +127,7 @@ class AsyncRabbitMQClient:
             raise TypeError("Message must be dict, list, str, or bytes")
 
         try:
-            logging.info(f"Publishing message to exchange '{exchange_name}' with routing key '{routing_key}'...")
+            logger.info(f"Publishing message to exchange '{exchange_name}' with routing key '{routing_key}'...")
             exchange = await self.channel.get_exchange(exchange_name)
             await exchange.publish(
                 aio_pika.Message(
@@ -134,9 +136,9 @@ class AsyncRabbitMQClient:
                 ),
                 routing_key=routing_key
             )
-            logging.info(f"Message published to exchange '{exchange_name}' with routing key '{routing_key}'.")
+            logger.info(f"Message published to exchange '{exchange_name}' with routing key '{routing_key}'.")
         except Exception as e:
-            logging.error(f"Error publishing message: {e}")
+            logger.error(f"Error publishing message: {e}")
             raise AsyncRabbitMQError(f"Error publishing message: {e}") from e
 
 

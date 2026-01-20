@@ -22,7 +22,9 @@ os.environ["MILVUS_TOKEN"] = "make:make5211314"
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    filename='run.log',
+    encoding='utf-8'
 )
 
 from fastapi import FastAPI

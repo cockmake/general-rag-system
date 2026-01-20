@@ -1,6 +1,9 @@
+import logging
 import os
 
 from miniopy_async import Minio
+
+logger = logging.getLogger(__name__)
 
 
 class MinioClient:
@@ -25,7 +28,7 @@ class MinioClient:
         try:
             return await self.client.get_object(bucket_name, object_name)
         except Exception as e:
-            print(f"Error getting object {object_name} from bucket {bucket_name}: {e}")
+            logger.error(f"Error getting object {object_name} from bucket {bucket_name}: {e}")
             return None
 
 

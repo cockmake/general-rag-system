@@ -8,11 +8,13 @@ from mq.connection import rabbit_async_client
 from mq.document_embedding import document_embedding_consumer
 from mq.session_name import session_name_generator
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
-    logging.info("初始化进程")
-    logging.info("Initializing RabbitMQ client and consumer...")
+    logger.info("初始化进程")
+    logger.info("Initializing RabbitMQ client and consumer...")
     consume_background_tasks = []
     
     # 手动连接而不是使用 async with，避免过早关闭连接
@@ -39,8 +41,8 @@ async def app_lifespan(app: FastAPI):
         )
         yield
     finally:
-        logging.info("进程结束")
-        logging.info("Shutting down RabbitMQ client and consumer...")
+        logger.info("进程结束")
+        logger.info("Shutting down RabbitMQ client and consumer...")
         # 先取消任务
         for task in consume_background_tasks:
             task.cancel()

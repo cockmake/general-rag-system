@@ -15,7 +15,6 @@ from mq.connection import rabbit_async_client
 from utils import get_embedding_instance
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

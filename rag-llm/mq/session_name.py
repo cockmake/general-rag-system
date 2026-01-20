@@ -2,6 +2,8 @@ import json
 import logging
 
 from aio_pika.abc import AbstractIncomingMessage
+
+logger = logging.getLogger(__name__)
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from mq.connection import rabbit_async_client
@@ -29,7 +31,7 @@ class SessionNameGenerator:
             response = await llm.ainvoke(messages)
             return response.content.strip()
         except Exception as e:
-            logging.error(f"Error generating session name: {e}")
+            logger.error(f"Error generating session name: {e}")
             return "新的对话"
 
     async def on_receive_message(self, message: AbstractIncomingMessage):
@@ -41,7 +43,7 @@ class SessionNameGenerator:
             try:
                 body = message.body.decode()
                 data = json.loads(body)
-                logging.info(f"Received session name generation request: {body}")
+                logger.info(f"Received session name generation request: {body}")
                 user_id = data.get("userId")
                 session_id = data.get("sessionId")
                 # 兼容不同的字段名，假设 Java 端发送的是 content 或 message
@@ -61,16 +63,16 @@ class SessionNameGenerator:
                 # 发送回 Java 端监听的 Exchange 和 Routing Key
                 # Exchange: session.name.generate.exchange
                 # Routing Key: session.name.generate.consumer.key
-                logging.info(f"Publishing generated session name: {response_data}")
+                logger.info(f"Publishing generated session name: {response_data}")
                 await rabbit_async_client.publish(
                     exchange_name="server.interact.llm.exchange",
                     routing_key="session.name.generate.consumer.key",
                     message=response_data
                 )
             except json.JSONDecodeError | KeyError | TypeError:
-                logging.error("Failed to decode JSON message body")
+                logger.error("Failed to decode JSON message body")
             except Exception as e:
-                logging.error(f"Unexpected error in session name consumer: {e}")
+                logger.error(f"Unexpected error in session name consumer: {e}")
                 raise e
 
 
