@@ -180,19 +180,35 @@ class RAGService:
                         logger.error("无法获取 Milvus 集合对象")
                         return []
 
+                    # 检查 fileName 字段是否存在，防止旧版本 collection 报错
+                    has_filename = False
+                    try:
+                        if hasattr(col, 'schema') and hasattr(col.schema, 'fields'):
+                            has_filename = any(field.name == 'fileName' for field in col.schema.fields)
+                    except Exception as e:
+                        logger.warning(f"检查 schema 失败: {e}")
+
+                    # 准备输出字段
+                    query_output_fields = ["text", "pk", "documentId", "chunkIndex"]
+                    if has_filename:
+                        query_output_fields.append("fileName")
+
                     for kw in keywords:
                         # 转义特殊字符
                         safe_kw = kw.replace("'", "\\'").replace('"', '\\"')
+                        
                         # 构造表达式: text 字段包含关键词 或 fileName 包含关键词
-                        # 注意：字段名默认为 'text'，如果 schema 不同需调整
-                        expr = f'text like "%{safe_kw}%" or fileName like "%{safe_kw}%"'
+                        if has_filename:
+                            expr = f'text like "%{safe_kw}%" or fileName like "%{safe_kw}%"'
+                        else:
+                            expr = f'text like "%{safe_kw}%"'
 
                         # 使用 run_in_executor 避免阻塞
                         res = await asyncio.get_running_loop().run_in_executor(
                             None,
                             lambda: col.query(
                                 expr=expr,
-                                output_fields=["text", "pk", "documentId", "chunkIndex", "fileName"],  # 确保获取必要字段
+                                output_fields=query_output_fields,  # 确保获取必要字段
                                 limit=5  # 限制关键词召回数量，避免过多
                             )
                         )
@@ -502,7 +518,7 @@ class RAGService:
                         "description": f"已生成 {len(query_list)} 个检索查询",
                         "status": "completed",
                         "content": "\n".join(
-                            [f"- {q}" for q in query_list] + [f"\n**评分查询: ** {grade_query}"])
+                            [f"- {q}" for q in query_list] + [f"\n评分查询: {grade_query}"])
                     }
                 }
 

@@ -78,9 +78,9 @@ async def rag_stream_generator(
             top_k=15,
 
             grade_top_n=30,
-            grade_score_threshold=0.4,
+            grade_score_threshold=0.35,
 
-            top_n=15,
+            top_n=10,
     ):
         if item["type"] == "process":
             # 检索过程信息
