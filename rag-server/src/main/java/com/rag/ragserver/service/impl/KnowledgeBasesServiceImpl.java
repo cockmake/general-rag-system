@@ -146,6 +146,19 @@ public class KnowledgeBasesServiceImpl extends ServiceImpl<KnowledgeBasesMapper,
                             .dataType(DataType.Int64)
                             .build()
             );
+            schema.addField(
+                    AddFieldReq.builder()
+                            .fieldName("chunkIndex")
+                            .dataType(DataType.Int64)
+                            .build()
+            );
+            schema.addField(
+                    AddFieldReq.builder()
+                            .fieldName("fileName")
+                            .dataType(DataType.VarChar)
+                            .maxLength(1024)
+                            .build()
+            );
             // 创建索引
             List<IndexParam> indexParams = new ArrayList<>();
             indexParams.add(
@@ -165,6 +178,12 @@ public class KnowledgeBasesServiceImpl extends ServiceImpl<KnowledgeBasesMapper,
                     IndexParam.builder()
                             .fieldName("documentId")
                             .indexType(IndexParam.IndexType.STL_SORT)
+                            .build()
+            );
+            indexParams.add(
+                    IndexParam.builder()
+                            .fieldName("fileName")
+                            .indexType(IndexParam.IndexType.INVERTED)
                             .build()
             );
             milvusClientV2.createCollection(

@@ -183,20 +183,20 @@ class RAGService:
                     for kw in keywords:
                         # 转义特殊字符
                         safe_kw = kw.replace("'", "\\'").replace('"', '\\"')
-                        # 构造表达式: text 字段包含关键词
+                        # 构造表达式: text 字段包含关键词 或 fileName 包含关键词
                         # 注意：字段名默认为 'text'，如果 schema 不同需调整
-                        expr = f'text like "%{safe_kw}%"'
-                        
+                        expr = f'text like "%{safe_kw}%" or fileName like "%{safe_kw}%"'
+
                         # 使用 run_in_executor 避免阻塞
                         res = await asyncio.get_running_loop().run_in_executor(
                             None,
                             lambda: col.query(
                                 expr=expr,
-                                output_fields=["text", "pk", "documentId"], # 确保获取必要字段
+                                output_fields=["text", "pk", "documentId", "chunkIndex", "fileName"],  # 确保获取必要字段
                                 limit=5  # 限制关键词召回数量，避免过多
                             )
                         )
-                        
+
                         # 转换为 Document 对象
                         for item in res:
                             content = item.pop('text', '')
@@ -205,16 +205,16 @@ class RAGService:
                                 pk = item['pk']
                             else:
                                 pk = str(item.get('id', ''))
-                            
+
                             docs.append(Document(
                                 page_content=content,
                                 metadata={**item, 'pk': pk, 'retrieval_source': 'keyword'}
                             ))
-                            
+
                 except Exception as e:
                     # 关键词检索失败不影响主流程
                     logger.warning(f"关键词检索失败: {e}")
-                
+
                 return docs
 
             # 并行执行所有检索任务
@@ -223,7 +223,7 @@ class RAGService:
                 tasks.append(retrieve_vector(query))
                 # 对每个查询也尝试关键词检索
                 tasks.append(retrieve_keyword(query))
-            
+
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # 统计不同来源的文档数量
@@ -244,7 +244,7 @@ class RAGService:
                         keyword_docs.append(doc)
                     else:
                         vector_docs.append(doc)
-            
+
             # 优先处理向量检索结果
             for doc in vector_docs:
                 pk = doc.metadata.get('pk') or doc.metadata.get('id')
@@ -254,7 +254,7 @@ class RAGService:
                         doc_set.add(pk)
                         all_docs.append(doc)
                         count_vector += 1
-            
+
             # 再处理关键词检索结果（补充）
             for doc in keyword_docs:
                 pk = doc.metadata.get('pk') or doc.metadata.get('id')
@@ -333,6 +333,94 @@ class RAGService:
             # 出错时返回原始文档列表（兜底策略）
             return documents[:top_n] if len(documents) > top_n else documents
 
+    def merge_consecutive_chunks(self, docs: list[Document]) -> list[Document]:
+        """合并同一文档的连续切片，去除重叠部分"""
+        if not docs:
+            return []
+
+        # 按documentId分组
+        docs_by_id = {}
+        no_id_docs = []
+        for doc in docs:
+            # 优先使用 metadata 中的 documentId，如果没有则跳过
+            doc_id = doc.metadata.get('documentId')
+            if doc_id is None:
+                no_id_docs.append(doc)
+                continue
+            if doc_id not in docs_by_id:
+                docs_by_id[doc_id] = []
+            docs_by_id[doc_id].append(doc)
+
+        merged_results = []
+        merged_results.extend(no_id_docs)
+
+        # 对每组进行排序和合并
+        for doc_id, group in docs_by_id.items():
+            # 区分有chunkIndex和无chunkIndex的文档
+            group_with_index = []
+            group_without_index = []
+            for doc in group:
+                if 'chunkIndex' in doc.metadata and doc.metadata['chunkIndex'] is not None:
+                    group_with_index.append(doc)
+                else:
+                    group_without_index.append(doc)
+            
+            # 无chunkIndex的直接加入结果
+            merged_results.extend(group_without_index)
+            
+            if not group_with_index:
+                continue
+
+            # 按 chunkIndex 排序
+            group_with_index.sort(key=lambda x: x.metadata.get('chunkIndex'))
+
+            current_merged_doc = group_with_index[0]
+            # 初始化 last_chunk_index
+            current_merged_doc.metadata['last_chunk_index'] = current_merged_doc.metadata.get('chunkIndex')
+
+            for i in range(1, len(group_with_index)):
+                next_doc = group_with_index[i]
+                
+                last_chunk_idx = current_merged_doc.metadata.get('last_chunk_index')
+                curr_chunk_idx = next_doc.metadata.get('chunkIndex')
+
+                if last_chunk_idx is not None and curr_chunk_idx is not None and curr_chunk_idx == last_chunk_idx + 1:
+                    # 连续切片，进行合并
+                    text1 = current_merged_doc.page_content
+                    text2 = next_doc.page_content
+
+                    # 尝试去除重叠
+                    # 寻找 text1 的后缀与 text2 的前缀的最长匹配
+                    overlap_found = False
+                    # 限制最大检测长度，提高性能，通常重叠在 100-200 字符
+                    max_overlap_check = min(len(text1), len(text2), 500)
+                    for k in range(max_overlap_check, 10, -1):
+                        if text1.endswith(text2[:k]):
+                            current_merged_doc.page_content = text1 + text2[k:]
+                            overlap_found = True
+                            break
+
+                    if not overlap_found:
+                        current_merged_doc.page_content = text1 + text2 # 直接拼接
+
+                    # 更新元数据
+                    current_merged_doc.metadata['last_chunk_index'] = curr_chunk_idx
+                    # 更新分数为两者的最大值
+                    current_merged_doc.metadata['rerank_score'] = max(current_merged_doc.metadata.get('rerank_score', 0), next_doc.metadata.get('rerank_score', 0))
+
+                else:
+                    # 不连续，保存当前，开始新的
+                    merged_results.append(current_merged_doc)
+                    current_merged_doc = next_doc
+                    current_merged_doc.metadata['last_chunk_index'] = current_merged_doc.metadata.get('chunkIndex')
+
+            merged_results.append(current_merged_doc)
+
+        # 重新按 rerank_score 排序
+        merged_results.sort(key=lambda x: x.metadata.get('rerank_score', 0), reverse=True)
+
+        return merged_results
+
     async def stream_rag_response_with_process(
             self,
             question: str,
@@ -341,9 +429,12 @@ class RAGService:
             kb_id: Optional[int] = None,
             user_id: Optional[int] = None,
             system_prompt: Optional[str] = None,
-            top_k: int = 10,
-            top_n: int = 5,
-            score_threshold: float = 0.35
+            top_k: int = 15,
+            top_n: int = 15,
+
+            grade_top_n: int = 50,
+
+            grade_score_threshold: float = 0.35
     ) -> AsyncGenerator[dict, None]:
         """
         带过程信息的流式RAG响应生成器
@@ -357,13 +448,13 @@ class RAGService:
             system_prompt: 自定义系统提示词（可选）
             top_k: 每个查询检索的文档数量
             top_n: Rerank后返回的文档数量
-            score_threshold: Rerank相关性分数阈值
+            grade_top_n: Rerank评分时考虑的文档数量
+            grade_score_threshold: Rerank相关性分数阈值
             
         Yields:
             包含type和payload的字典，type可以是"process"或"content"
         """
         context = "无相关文档"
-        relevant_docs = []
 
         # 如果有知识库，执行RAG流程
         if kb_id and user_id:
@@ -389,7 +480,8 @@ class RAGService:
                         "title": "生成多角度查询",
                         "description": f"已生成 {len(query_list)} 个检索查询",
                         "status": "completed",
-                        "content": "\n".join([f"- {q}" for q in query_list] + [f"\n**评分查询(Grade Query):** {grade_query}"])
+                        "content": "\n".join(
+                            [f"- {q}" for q in query_list] + [f"\n**评分查询: ** {grade_query}"])
                     }
                 }
 
@@ -407,11 +499,6 @@ class RAGService:
                 logger.info("开始并行检索...")
                 all_docs = await self.parallel_retrieve(query_list, user_id, kb_id, top_k=top_k)
 
-                # 构建完整的检索文档内容
-                retrieval_content = []
-                for i, doc in enumerate(all_docs):
-                    retrieval_content.append(f"**【文档 {i + 1}】**\n\n{doc.page_content}")
-
                 yield {
                     "type": "process",
                     "payload": {
@@ -423,6 +510,7 @@ class RAGService:
                 }
 
                 # 3. Rerank文档重排序
+                graded_docs = []
                 if all_docs:
                     yield {
                         "type": "process",
@@ -435,35 +523,49 @@ class RAGService:
                     }
 
                     logger.info("开始Rerank文档重排序...")
-                    relevant_docs = await self.parallel_grade_documents(
+                    # 这里的 top_n 传入较大值 (如 50)，以便获取更多候选文档用于后续拼接，
+                    # 避免因过早截断导致连续切片丢失。最终的 top_n 截断放在拼接之后。
+                    graded_docs = await self.parallel_grade_documents(
                         all_docs,
                         grade_query,
-                        top_n=top_n,
-                        score_threshold=score_threshold
+                        top_n=grade_top_n,
+                        score_threshold=grade_score_threshold
                     )
 
-                    # 构建完整的文档详细内容
-                    doc_details = []
-                    for i, doc in enumerate(relevant_docs):
-                        score = doc.metadata.get('rerank_score', 0)
-                        doc_details.append(
-                            f"**【文档 {i + 1}】相关度评分: {score:.3f}**\n\n{doc.page_content}"
-                        )
-
-                    yield {
-                        "type": "process",
-                        "payload": {
-                            "step": "rerank",
-                            "title": "评估文档相关性",
-                            "description": f"筛选出 {len(relevant_docs)} 个高相关文档",
-                            "status": "completed",
-                            "content": "\n\n---\n\n".join(doc_details)
-                        }
+                yield {
+                    "type": "process",
+                    "payload": {
+                        "step": "rerank",
+                        "title": "评估文档相关性",
+                        "description": f"筛选出 {len(graded_docs)} 个相关文档",
+                        "status": "completed"
                     }
+                }
 
                 # 4. 构建上下文
-                if relevant_docs:
-                    context = "\n\n".join([f"[文档{i + 1}] {doc.page_content}" for i, doc in enumerate(relevant_docs)])
+                merged_docs = []
+                if graded_docs:
+                    # 合并同一文档的连续切片（在 top_n 截断前进行，以保证完整性）
+                    merged_docs = self.merge_consecutive_chunks(graded_docs)
+
+                    # 最终应用 top_n 限制
+                    merged_docs = merged_docs[:top_n]
+
+                    context = "\n\n".join([f"[文档{i + 1}]: {doc.page_content}" for i, doc in enumerate(merged_docs)])
+
+                yield {
+                    "type": "process",
+                    "payload": {
+                        "step": "reformat",
+                        "title": "构建上下文",
+                        "description": f"基于检索和评分结果构建回答上下文，共 {len(merged_docs)} 个文档",
+                        "status": "completed",
+                        "content": "\n\n---\n\n".join(
+                            [f"[相关性：{doc.metadata["rerank_score"]:.3f}][文档{i + 1}]: {doc.page_content}"
+                             for i, doc in enumerate(merged_docs)]) if merged_docs else "无相关文档"
+                    }
+                }
+
 
             except Exception as e:
                 logger.error(f"RAG流程出错: {e}")
@@ -491,11 +593,13 @@ class RAGService:
 
         # 构建系统提示词
         if system_prompt:
+            logger.info("使用自定义提示词")
             final_system_prompt = f"""{system_prompt}
-
+m
 参考文档：
 {context}"""
         else:
+            logger.info("使用系统内置提示词")
             final_system_prompt = f"""你是一个专业的AI助手。基于提供的文档和对话历史回答用户问题。
 
 要求：
@@ -532,6 +636,7 @@ class RAGService:
                     "type": "content",
                     "payload": content
                 }
+
 
 # 全局RAG服务实例
 rag_service = RAGService()

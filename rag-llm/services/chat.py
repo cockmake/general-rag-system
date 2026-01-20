@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 chat_service = APIRouter(prefix="/chat", tags=["chat"])
 
-
 import time
+
 
 async def stream_generator(model_instance, messages):
     """纯LLM流式响应生成器"""
@@ -76,8 +76,11 @@ async def rag_stream_generator(
             user_id=user_id,
             system_prompt=system_prompt,
             top_k=15,
+
+            grade_top_n=30,
+            grade_score_threshold=0.4,
+
             top_n=15,
-            score_threshold=0.4
     ):
         if item["type"] == "process":
             # 检索过程信息
@@ -182,7 +185,6 @@ async def chat_stream(
     kb_id = options.get('kbId')
     system_prompt = options.get('systemPrompt')
 
-
     # history最多包含6轮对话，即6*2+1=13条消息（包含当前用户问题）
     if len(history) > 13:
         history = history[-13:]
@@ -258,7 +260,3 @@ async def chat_stream(
             stream_generator(llm, all_messages),
             media_type="text/event-stream"
         )
-
-@chat_service.get('/test')
-async def test_endpoint():
-    return {"status": "Chat service is running"}

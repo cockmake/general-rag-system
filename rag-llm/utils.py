@@ -128,7 +128,7 @@ def markdown_split(markdown_text: str, headers_to_split_on: list = None):
         headers_to_split_on = [
             ("#", "Header 1"),
             ("##", "Header 2"),
-            # ("###", "Header 3")
+            ("###", "Header 3")
         ]
     markdown_splitter = MarkdownHeaderTextSplitter(
         headers_to_split_on=headers_to_split_on,

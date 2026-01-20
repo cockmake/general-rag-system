@@ -119,8 +119,10 @@ class DocumentEmbeddingConsumer:
                         return
 
                     logger.info(f"Document {document_id} split into {len(splits)} chunks.")
-                    for doc in splits:
+                    for i, doc in enumerate(splits):
                         doc.metadata["documentId"] = document_id
+                        doc.metadata["chunkIndex"] = i
+                        doc.metadata["fileName"] = file_name
                     # Embed and store
                     milvus_uri = os.environ.get("MILVUS_URI")
                     milvus_token = os.environ.get("MILVUS_TOKEN")
