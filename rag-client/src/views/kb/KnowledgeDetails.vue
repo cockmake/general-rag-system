@@ -97,6 +97,46 @@ const uploadProgressModalVisible = ref(false);
 const uploadProgressList = ref([]);
 const activeUploadsCount = ref(0);
 
+// Download/Preview progress related refs
+const downloadProgress = ref({
+  visible: false,
+  percent: 0,
+  title: ''
+});
+
+let progressTimer = null;
+
+const startSimulatedProgress = () => {
+  downloadProgress.value.percent = 0;
+  if (progressTimer) clearInterval(progressTimer);
+  
+  progressTimer = setInterval(() => {
+    if (downloadProgress.value.percent < 99) {
+      // Slow down as it gets higher
+      // Start fast, then slow down
+      let increment = 5;
+      if (downloadProgress.value.percent > 50) increment = 2;
+      if (downloadProgress.value.percent > 80) increment = 1;
+      if (downloadProgress.value.percent > 95) {
+         // Very slow at the end, maybe stop at 99
+         if (Math.random() > 0.8) increment = 1;
+         else increment = 0;
+      }
+      
+      downloadProgress.value.percent = Math.min(99, downloadProgress.value.percent + increment);
+    }
+  }, 200);
+};
+
+const finishSimulatedProgress = () => {
+  if (progressTimer) clearInterval(progressTimer);
+  downloadProgress.value.percent = 100;
+  // Delay slightly to show 100%
+  setTimeout(() => {
+      downloadProgress.value.visible = false;
+  }, 500);
+};
+
 watch(uploadProgressModalVisible, (val) => {
   if (!val && activeUploadsCount.value === 0) {
     uploadProgressList.value = [];
@@ -222,8 +262,12 @@ const customRequest = async (options) => {
 
 // 2. 预览逻辑
 const handlePreview = async (record) => {
+  downloadProgress.value = { visible: true, percent: 0, title: '正在加载预览...' };
+  startSimulatedProgress();
   try {
     const blob = await previewDocument(kbId, record.id);
+    finishSimulatedProgress();
+
     const fileName = record.fileName ? record.fileName.toLowerCase() : '';
     previewTitle.value = record.fileName || '文件预览';
 
@@ -246,6 +290,8 @@ const handlePreview = async (record) => {
   } catch (e) {
     console.error('Preview failed', e);
     message.error('预览失败');
+    downloadProgress.value.visible = false;
+    if (progressTimer) clearInterval(progressTimer);
   }
 };
 
@@ -300,8 +346,12 @@ const handleRename = async () => {
 
 // 5. 下载逻辑
 const handleDownload = async (record) => {
+  downloadProgress.value = { visible: true, percent: 0, title: '正在准备下载...' };
+  startSimulatedProgress();
   try {
     const blob = await previewDocument(kbId, record.id);
+    finishSimulatedProgress();
+
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -314,6 +364,8 @@ const handleDownload = async (record) => {
   } catch (e) {
     console.error('Download failed', e);
     message.error('下载失败');
+    downloadProgress.value.visible = false;
+    if (progressTimer) clearInterval(progressTimer);
   }
 };
 
@@ -646,6 +698,24 @@ onMounted(() => {
       </div>
       <div style="text-align: right; margin-top: 16px;">
         <a-button @click="uploadProgressModalVisible = false">关闭</a-button>
+      </div>
+    </a-modal>
+
+    <!-- 下载/预览进度对话框 -->
+    <a-modal
+        v-model:visible="downloadProgress.visible"
+        :title="downloadProgress.title"
+        :footer="null"
+        :closable="false"
+        :maskClosable="false"
+        width="400px"
+        :centered="true"
+    >
+      <div style="padding: 24px 0; text-align: center;">
+        <a-progress :percent="downloadProgress.percent" status="active" />
+        <div style="margin-top: 16px; color: #666;">
+          正在使用魔法为你生成数据中...
+        </div>
       </div>
     </a-modal>
   </div>
