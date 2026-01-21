@@ -4,18 +4,23 @@ import VuePdfEmbed from 'vue-pdf-embed';
 import 'vue-pdf-embed/dist/styles/annotationLayer.css';
 import 'vue-pdf-embed/dist/styles/textLayer.css';
 import md from "@/utils/markdown.js";
-import {useRoute} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import {message} from "ant-design-vue";
-import { LoadingOutlined } from '@ant-design/icons-vue';
+import { LoadingOutlined, ArrowLeftOutlined } from '@ant-design/icons-vue';
 import {deleteDocument, previewDocument, listDocuments, uploadDocument, renameDocument, listChunks, inviteUserToKb, getInvitedUsers, removeInvitedUser, fetchAvailableKbs, updateKb} from "@/api/kbApi.js";
 import { useUserStore } from "@/stores/user";
 
 const route = useRoute();
+const router = useRouter();
 const userStore = useUserStore();
 const kbId = route.params.kbId;
 const fileList = ref([]);
 const uploading = ref(false);
 const currentKb = ref(null);
+
+const goBack = () => {
+  router.push('/kb');
+};
 
 // 判断是否是拥有者
 const isOwner = computed(() => {
@@ -419,8 +424,13 @@ onMounted(() => {
 
 <template>
   <div style="padding: 24px">
-    <div style="margin-bottom: 16px; display: flex; justify-content: space-between;">
-      <h2>📄 文档管理 - {{ currentKb ? currentKb.name : '' }}</h2>
+    <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <a-button @click="goBack" type="text" shape="circle">
+          <template #icon><arrow-left-outlined /></template>
+        </a-button>
+        <h2 style="margin: 0">📄 文档管理 - {{ currentKb ? currentKb.name : '' }}</h2>
+      </div>
       <div style="display: flex; gap: 8px;">
         <a-button v-if="isOwner" @click="openSettingsModal">
           ⚙️ 设置
