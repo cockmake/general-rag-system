@@ -32,7 +32,6 @@ const loadData = async () => {
   isLoading.value = true;
   try {
     const data = await fetchAvailableKbs();
-    console.log(data)
     // 确保后端返回的是 Map 结构，如果后端直接返回 data，则直接赋值
     // 如果后端包裹在 result.data 中，请根据实际情况调整
     if (data) {

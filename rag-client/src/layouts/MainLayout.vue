@@ -473,6 +473,7 @@ const go = (path) => {
   .mobile-menu-btn {
     display: block;
     left: 16px;
+    top: 80px;
   }
   
   .sidebar-overlay {

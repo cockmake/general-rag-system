@@ -124,8 +124,8 @@ onBeforeRouteLeave((to, from, next) => {
                     cancel-text="取消"
                     @confirm="handleDelete(item.sessionId)"
                   >
-                    <Button type="text" danger size="small">
-                      <DeleteOutlined /> 删除
+                    <Button type="text" danger size="small" class="delete-btn">
+                      <DeleteOutlined /> <span class="delete-text">删除</span>
                     </Button>
                   </a-popconfirm>
                  </template>
@@ -220,5 +220,39 @@ onBeforeRouteLeave((to, from, next) => {
   font-weight: bold;
   border-radius: 2px;
   padding: 0 2px;
+}
+
+@media (max-width: 768px) {
+  .search-page-container {
+    padding: 12px;
+  }
+  
+  .search-results-list {
+    padding: 0 12px;
+  }
+
+  :deep(.ant-list-item) {
+    flex-direction: column;
+    align-items: flex-start;
+    position: relative;
+    padding-bottom: 32px;
+  }
+
+  :deep(.ant-list-item-action) {
+    margin-left: 0;
+    margin-top: 8px;
+    position: absolute;
+    bottom: 8px;
+    right: 0;
+    width: auto;
+  }
+
+  :deep(.ant-list-item-meta) {
+    width: 100%;
+  }
+
+  .delete-text {
+    display: none;
+  }
 }
 </style>
