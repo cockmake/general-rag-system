@@ -107,8 +107,8 @@ onMounted(() => {
     </div>
 
     <!-- 核心统计卡片 -->
-    <a-row :gutter="16">
-      <a-col :span="6">
+    <a-row :gutter="[16, 16]">
+      <a-col :xs="12" :sm="12" :md="6">
         <a-card>
           <div class="stat">
             <div class="label">知识库</div>
@@ -117,7 +117,7 @@ onMounted(() => {
         </a-card>
       </a-col>
 
-      <a-col :span="6">
+      <a-col :xs="12" :sm="12" :md="6">
         <a-card>
           <div class="stat">
             <div class="label">文档数</div>
@@ -126,7 +126,7 @@ onMounted(() => {
         </a-card>
       </a-col>
 
-      <a-col :span="6">
+      <a-col :xs="12" :sm="12" :md="6">
         <a-card>
           <div class="stat">
             <div class="label">对话数</div>
@@ -135,7 +135,7 @@ onMounted(() => {
         </a-card>
       </a-col>
 
-      <a-col :span="6">
+      <a-col :xs="12" :sm="12" :md="6">
         <a-card>
           <div class="stat">
             <div class="label">今日消耗Token</div>
@@ -193,5 +193,19 @@ onMounted(() => {
   font-size: 28px;
   font-weight: bold;
   margin-top: 8px;
+}
+
+@media screen and (max-width: 576px) {
+  .dashboard-page {
+    padding: 12px;
+  }
+  
+  .header {
+    margin-bottom: 16px;
+  }
+  
+  .stat .value {
+    font-size: 20px;
+  }
 }
 </style>

@@ -21,6 +21,7 @@ import com.rag.ragserver.service.KnowledgeBasesService;
 import com.rag.ragserver.service.UsersService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -51,7 +52,7 @@ public class KbController {
     }
 
     @PostMapping
-    public R<KnowledgeBases> createKnowledgeBase(@RequestBody KbCreateDTO kbCreateDTO) {
+    public R<KnowledgeBases> createKnowledgeBase(@RequestBody @Validated KbCreateDTO kbCreateDTO) {
         Long userId = (Long) request.getAttribute("userId");
         Long workspaceId = (Long) request.getAttribute("workspaceId");
         KnowledgeBases kb = new KnowledgeBases();
