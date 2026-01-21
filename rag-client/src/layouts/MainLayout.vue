@@ -1,5 +1,5 @@
 <script setup>
-import {ref, watch, computed} from 'vue'
+import {ref, watch, computed, onMounted, onUnmounted} from 'vue'
 import {useRouter, useRoute} from 'vue-router'
 import SessionList from '@/components/SessionList.vue'
 import {useThemeStore} from '@/stores/theme'
@@ -26,6 +26,7 @@ const userStore = useUserStore();
 const currentWorkspace = ref(null)
 const isFooterExpanded = ref(false) // 控制底部区域展开/收起
 const collapsed = ref(false) // 控制侧边栏收起/展开
+const isMobile = ref(false)
 
 // 加载当前工作空间信息
 const loadCurrentWorkspace = async () => {
@@ -36,6 +37,20 @@ const loadCurrentWorkspace = async () => {
     console.error('加载工作空间失败:', error)
   }
 }
+
+const checkIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+onMounted(() => {
+  checkIsMobile()
+  window.addEventListener('resize', checkIsMobile)
+  loadCurrentWorkspace()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkIsMobile)
+})
 
 // 计算用户显示名称
 const userDisplayName = computed(() => {
@@ -109,8 +124,8 @@ watch(
     {immediate: true}
 )
 
-// 初始化加载工作空间信息
-loadCurrentWorkspace()
+// 初始化加载工作空间信息（移至 onMounted）
+// loadCurrentWorkspace()
 
 const go = (path) => {
   router.push(path)
@@ -129,7 +144,7 @@ const go = (path) => {
     <a-layout-sider 
       v-model:collapsed="collapsed"
       :width="240" 
-      :collapsed-width="64"
+      :collapsed-width="isMobile ? 0 : 64"
       :theme="themeStore.isDark ? 'dark' : 'light'" 
       style="position: fixed; left: 0; top: 0; bottom: 0; height: 100vh; z-index: 100;"
       collapsible
@@ -254,7 +269,7 @@ const go = (path) => {
       </div>
     </a-layout-sider>
 
-    <a-layout :style="{ marginLeft: collapsed ? '64px' : '240px', transition: 'margin-left 0.2s' }">
+    <a-layout :style="{ marginLeft: isMobile ? '0px' : (collapsed ? '64px' : '240px'), transition: 'margin-left 0.2s' }">
       <!-- 移动端展开按钮 -->
       <a-button 
         v-if="collapsed"
@@ -457,6 +472,7 @@ const go = (path) => {
 @media (max-width: 768px) {
   .mobile-menu-btn {
     display: block;
+    left: 16px;
   }
   
   .sidebar-overlay {

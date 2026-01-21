@@ -102,7 +102,7 @@ const handleDelete = (id) => {
 
     <div class="kb-section">
       <h3><span role="img" aria-label="user">👤</span> 我创建的知识库</h3>
-      <a-list :grid="{ gutter: 16, column: 4 }" :data-source="kbMap.private" :loading="isLoading">
+      <a-list :grid="{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 3, xl: 4, xxl: 5 }" :data-source="kbMap.private" :loading="isLoading">
         <template #renderItem="{ item }">
           <a-list-item>
             <a-card hoverable @click="goToDetail(item.id)" class="kb-card">
@@ -124,7 +124,7 @@ const handleDelete = (id) => {
 
     <div class="kb-section">
       <h3><span role="img" aria-label="team">🏢</span> 工作空间共享</h3>
-      <a-list :grid="{ gutter: 16, column: 4 }" :data-source="kbMap.shared" :loading="isLoading">
+      <a-list :grid="{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 3, xl: 4, xxl: 5 }" :data-source="kbMap.shared" :loading="isLoading">
         <template #renderItem="{ item }">
           <a-list-item>
             <a-card hoverable @click="goToDetail(item.id)" class="kb-card">
@@ -147,7 +147,7 @@ const handleDelete = (id) => {
 
     <div class="kb-section">
       <h3><span role="img" aria-label="globe">🌍</span> 公共知识库</h3>
-      <a-list :grid="{ gutter: 16, column: 4 }" :data-source="kbMap.public" :loading="isLoading">
+      <a-list :grid="{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 3, xl: 4, xxl: 5 }" :data-source="kbMap.public" :loading="isLoading">
         <template #renderItem="{ item }">
           <a-list-item>
             <a-card hoverable @click="goToDetail(item.id)" class="kb-card">
@@ -169,7 +169,7 @@ const handleDelete = (id) => {
 
     <div class="kb-section">
       <h3><span role="img" aria-label="invited">📧</span> 受邀访问的知识库</h3>
-      <a-list :grid="{ gutter: 16, column: 4 }" :data-source="kbMap.invited" :loading="isLoading">
+      <a-list :grid="{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 3, xl: 4, xxl: 5 }" :data-source="kbMap.invited" :loading="isLoading">
         <template #renderItem="{ item }">
           <a-list-item>
             <a-card hoverable @click="goToDetail(item.id)" class="kb-card">
@@ -184,7 +184,7 @@ const handleDelete = (id) => {
       </a-list>
     </div>
 
-    <a-modal v-model:visible="isModalVisible" title="新建知识库" @ok="handleCreate" style="min-width: 380px">
+    <a-modal v-model:visible="isModalVisible" title="新建知识库" @ok="handleCreate" class="create-kb-modal">
       <a-form layout="vertical">
         <a-form-item label="名称" required>
           <a-input v-model:value="formState.name" placeholder="请输入知识库名称"/>
@@ -218,5 +218,16 @@ const handleDelete = (id) => {
 .kb-card {
   /* 统一卡片高度，防止描述长短不一导致不对齐 */
   height: 100%;
+}
+
+.create-kb-modal {
+  min-width: 380px;
+}
+
+@media (max-width: 768px) {
+  .create-kb-modal {
+    min-width: auto;
+    width: 90% !important;
+  }
 }
 </style>

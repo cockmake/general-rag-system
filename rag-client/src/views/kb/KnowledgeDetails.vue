@@ -1,5 +1,6 @@
 <script setup>
 import {onMounted, ref, computed, watch} from "vue";
+import {onUnmounted} from "vue";
 import VuePdfEmbed from 'vue-pdf-embed';
 import 'vue-pdf-embed/dist/styles/annotationLayer.css';
 import 'vue-pdf-embed/dist/styles/textLayer.css';
@@ -468,30 +469,45 @@ const handleRemoveInvitedUser = async (record) => {
   }
 };
 
+const isMobile = ref(false)
+
+const checkIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
 onMounted(() => {
+  checkIsMobile()
+  window.addEventListener('resize', checkIsMobile)
   fetchKbInfo();
   fetchDocuments();
 });
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkIsMobile)
+})
 </script>
 
 <template>
   <div style="padding: 24px">
-    <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-      <div style="display: flex; align-items: center; gap: 16px;">
+    <div class="kb-header">
+      <div class="kb-title-container">
         <a-button @click="goBack" type="text" shape="circle">
           <template #icon><arrow-left-outlined /></template>
         </a-button>
-        <h2 style="margin: 0">📄 文档管理 - {{ currentKb ? currentKb.name : '' }}</h2>
+        <h2 class="kb-title">📄 文档管理 - {{ currentKb ? currentKb.name : '' }}</h2>
       </div>
-      <div style="display: flex; gap: 8px;">
+      <div class="kb-actions">
         <a-button v-if="isOwner" @click="openSettingsModal">
-          ⚙️ 设置
+          <span v-if="!isMobile">⚙️ 设置</span>
+          <span v-else>⚙️</span>
         </a-button>
         <a-button v-if="canInvite" @click="showInvitedUsersModal">
-          👥 查看被邀请用户
+          <span v-if="!isMobile">👥 查看被邀请用户</span>
+          <span v-else>👥</span>
         </a-button>
         <a-button v-if="canInvite" @click="showInviteModal">
-          📧 邀请用户
+          <span v-if="!isMobile">📧 邀请用户</span>
+          <span v-else>📧</span>
         </a-button>
         <a-upload
             :customRequest="customRequest"
@@ -500,13 +516,14 @@ onMounted(() => {
             :before-upload="beforeUpload"
             multiple>
           <a-button type="primary" :loading="uploading">
-            ⬆️ 上传文档
+            <span v-if="!isMobile">⬆️ 上传文档</span>
+            <span v-else>⬆️</span>
           </a-button>
         </a-upload>
       </div>
     </div>
 
-    <a-table :columns="columns" :data-source="fileList" row-key="id">
+    <a-table :columns="columns" :data-source="fileList" row-key="id" :scroll="{ x: 800 }">
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'fileSize'">
           {{ (record.fileSize / (1024 * 1024)).toFixed(2) }} MB
@@ -576,10 +593,11 @@ onMounted(() => {
     <a-modal
       v-model:visible="previewVisible"
       :title="previewTitle"
-      width="800px"
+      :width="isMobile ? '100%' : '800px'"
       :footer="null"
       @cancel="handlePreviewCancel"
-      style="top: 8vh"
+      :style="isMobile ? { top: 0, margin: 0, maxWidth: '100%' } : { top: '8vh' }"
+      :bodyStyle="isMobile ? { padding: '10px', height: 'calc(100vh - 55px)', overflow: 'hidden' } : {}"
     >
       <div v-if="previewType === 'pdf'" style="max-height: 80vh; overflow-y: scroll; display: flex; flex-direction: column; align-items: center;">
          <div style="margin-bottom: 10px; display: flex; gap: 10px; align-items: center;">
@@ -606,7 +624,7 @@ onMounted(() => {
     <a-drawer
         v-model:visible="chunksDrawerVisible"
         title="切片预览"
-        width="600"
+        :width="isMobile ? '100%' : 600"
         @close="closeChunksDrawer">
       <a-list
           :loading="chunksLoading"
@@ -734,5 +752,69 @@ onMounted(() => {
 }
 .markdown-body {
     line-height: 1.6;
+}
+
+.kb-header {
+  margin-bottom: 16px; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+}
+
+.kb-title-container {
+  display: flex; 
+  align-items: center; 
+  gap: 16px;
+}
+
+.kb-title {
+  margin: 0;
+}
+
+.kb-actions {
+  display: flex; 
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .kb-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .kb-title-container {
+    width: 100%;
+  }
+  
+  .kb-title {
+    font-size: 18px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .kb-actions {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .kb-actions .ant-btn {
+    flex: 1;
+    min-width: 40px;
+    padding: 4px 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .kb-actions .ant-upload-wrapper {
+    flex: 1;
+  }
+  
+  .kb-actions .ant-upload-wrapper .ant-btn {
+    width: 100%;
+  }
 }
 </style>

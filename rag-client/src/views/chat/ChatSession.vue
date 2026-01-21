@@ -1,5 +1,5 @@
 <script setup>
-import {h, onMounted, ref, watch, nextTick, computed} from 'vue'
+import {h, onMounted, onUnmounted, ref, watch, nextTick, computed} from 'vue'
 import {
   UserOutlined,
   CopyOutlined,
@@ -306,8 +306,20 @@ const loadSession = async (newSessionId) => {
   })
 }
 
+const isMobile = ref(false)
+
+const checkIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
 onMounted(() => {
+  checkIsMobile()
+  window.addEventListener('resize', checkIsMobile)
   loadSession(sessionId.value)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkIsMobile)
 })
 
 const isKbSupported = computed(() => {
@@ -554,16 +566,16 @@ const onRetryFromAssistant = () => {
   antMessage.warning('没有找到可重试的用户消息')
 }
 
-const roles = {
+const roles = computed(() => ({
   user: {
     placement: 'end',
-    avatar: {icon: h(UserOutlined), style: userAvatar},
+    avatar: isMobile.value ? undefined : {icon: h(UserOutlined), style: userAvatar},
   },
   assistant: {
     placement: 'start',
-    avatar: {icon: h(UserOutlined), style: assistantAvatar},
+    avatar: isMobile.value ? undefined : {icon: h(UserOutlined), style: assistantAvatar},
   },
-};
+}));
 </script>
 
 <template>
@@ -710,11 +722,13 @@ const roles = {
 
                 <a-divider type="vertical" style="height: 16px; margin: 0 4px; border-left-color: rgba(0,0,0,0.1)"/>
 
-                <Tooltip :title="!isKbSupported ? '当前模型不支持知识库功能' : '请在您需要检索知识库中信息时选用'" placement="topLeft">
-                  <div class="kb-wrapper">
-                    <KbSelector class="kb-select-footer" :disabled="!isKbSupported" :bordered="false" size="small" width="180px"/>
-                  </div>
-                </Tooltip>
+                <div class="kb-wrapper">
+                  <Tooltip :title="!isKbSupported ? '当前模型不支持知识库功能' : '请在您需要检索知识库中信息时选用'" placement="topLeft">
+                    <div style="width: 100%">
+                      <KbSelector class="kb-select-footer" :disabled="!isKbSupported" :bordered="false" size="small" width="180px"/>
+                    </div>
+                  </Tooltip>
+                </div>
               </div>
               <div class="sender-actions">
                 <component :is="(loading || isGenerating || isLastUserMsgGenerating) ? LoadingButton : SendButton" type="primary" :disabled="loading || isGenerating || isLastUserMsgGenerating || !question" @click="!loading && !isGenerating && !isLastUserMsgGenerating && onSend(question)"/>
@@ -1006,6 +1020,21 @@ const roles = {
   .input-container {
     padding: 8px 16px 12px;
   }
+
+  .model-select-footer {
+    width: auto !important;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .kb-wrapper {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .kb-select-footer {
+    width: 100% !important;
+  }
 }
 
 .sender-footer {
@@ -1021,15 +1050,19 @@ const roles = {
   gap: 4px;
   align-items: center;
   flex: 1;
-  overflow: hidden;
+  overflow: scroll;
 }
 
 .model-select-footer {
   width: 180px;
 }
 
+.kb-wrapper {
+  /* Ensure it doesn't shrink to 0 on desktop if not needed, but flex:1 in mobile handles it */
+}
+
 .kb-select-footer {
-  /* KbSelector style override */
+  width: 180px; /* Default desktop width */
 }
 
 .sender-actions {

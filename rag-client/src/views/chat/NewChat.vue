@@ -95,7 +95,8 @@ const onSend = async (text) => {
                 v-model:value="selectedModel"
                 class="config-select"
                 placeholder="请选择对话模型"
-                size="large">
+                size="large"
+                style="width: 280px">
               <a-select-opt-group
                   v-for="(list, provider) in groupedModels"
                   :key="provider"
@@ -247,7 +248,7 @@ const onSend = async (text) => {
 }
 
 .config-select {
-  width: 100%;
+  /* width: 100%; removed to allow manual width control */
 }
 
 .input-section {
@@ -314,6 +315,10 @@ const onSend = async (text) => {
   .tips-section {
     flex-direction: column;
     align-items: center;
+  }
+
+  .config-select {
+    width: 100% !important;
   }
 }
 </style>
