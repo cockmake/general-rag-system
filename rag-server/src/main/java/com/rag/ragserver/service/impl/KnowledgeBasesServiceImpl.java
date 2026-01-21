@@ -100,7 +100,7 @@ public class KnowledgeBasesServiceImpl extends ServiceImpl<KnowledgeBasesMapper,
 
         Long kbId = kb.getId();
         Long userId = kb.getOwnerUserId();
-        long groupId = userId / 10000;
+        long groupId = userId / 1000;
         String dbName = "group_" + groupId;
         String collectionName = "kb_" + kbId;
 
@@ -218,7 +218,7 @@ public class KnowledgeBasesServiceImpl extends ServiceImpl<KnowledgeBasesMapper,
         }
 
         // 2. 删除 Milvus 中的集合
-        long groupId = userId / 10000;
+        long groupId = userId / 1000;
         String dbName = "group_" + groupId;
         String collectionName = "kb_" + kbId;
 

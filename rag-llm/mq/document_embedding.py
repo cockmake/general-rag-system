@@ -125,7 +125,7 @@ class DocumentEmbeddingConsumer:
                     # Embed and store
                     milvus_uri = os.environ.get("MILVUS_URI")
                     milvus_token = os.environ.get("MILVUS_TOKEN")
-                    db_name = f"group_{user_id // 10000}"
+                    db_name = f"group_{user_id // 1000}"
                     collection_name = f"kb_{kb_id}"
                     # Create vector store
                     embedding_config = {

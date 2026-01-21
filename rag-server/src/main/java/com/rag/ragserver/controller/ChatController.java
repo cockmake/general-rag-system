@@ -292,6 +292,7 @@ public class ChatController {
 
         Map<String, Object> options = new java.util.HashMap<>();
         if (kbId != null && kb != null) {
+
             options.put("userId", kb.getOwnerUserId());
             options.put("kbId", kbId);
             options.put("systemPrompt", kb.getSystemPrompt());

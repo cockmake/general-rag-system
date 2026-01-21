@@ -161,7 +161,12 @@ def plain_text_split(
     pattern = r'(?<=[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef])\s+(?=[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef])'
     plain_text = re.sub(pattern, '', plain_text)
     if separators is None:
-        separators = ["\n\n", "\n", "。", "！", "？", "，", " "]
+        separators = [
+            "\n\n", "\n",
+            "。", "！", "？",
+            ".", "!", "?",
+            "，", ",", " "
+        ]
     if force_split:
         if "" not in separators:
             separators.append("")
@@ -248,7 +253,7 @@ def pdf_split(
             # 放到线程中执行以避免阻塞
             # text = _extract_text_with_ocr(file_path, ocr_language)
             text = _extract_text_with_ocr(file_path, ocr_language)
-            text = text.replace('\n', '')
+            text = text.replace('\n', ' ')
             logger.info(f"OCR识别完成，提取文本长度: {len(text)}")
         except Exception as e:
             logger.error(f"OCR识别失败: {str(e)}")
@@ -277,7 +282,7 @@ def image_split(
     except Exception:
         text = pytesseract.image_to_string(image)
 
-    text = text.replace('\n', '')
+    text = text.replace('\n', ' ')
     if len(text.strip()) < min_length:
         raise ValueError(f"Recognized text length ({len(text.strip())}) is less than minimum required ({min_length})")
 

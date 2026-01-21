@@ -63,7 +63,7 @@ public class RabbitConsumer {
             key = "rag.document.complete.key"
     ))
     public void receiveDocumentCompleteMessage(DocumentProcessResponse response) {
-        log.info("Received DocumentProcessResponse: {}", response);
+        // log.info("Received DocumentProcessResponse: {}", response);
         if ("success".equals(response.getStatus())) {
             Documents doc = documentsService.getById(response.getDocumentId());
             if (doc != null) {

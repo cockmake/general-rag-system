@@ -336,6 +336,7 @@ watch(
 )
 
 const onSend = (text) => {
+  if (loading.value || isGenerating.value || isLastUserMsgGenerating.value) return
   question.value = ''
   // 发送新消息时重置滚动状态
   userScrolledUp.value = false
@@ -376,6 +377,11 @@ const lastUserMessage = computed(() => {
     }
   }
   return null
+})
+
+// 最后一条用户消息是否正在生成
+const isLastUserMsgGenerating = computed(() => {
+  return lastUserMessage.value?.status === 'generating'
 })
 
 // 获取最后一条助手消息
@@ -671,7 +677,7 @@ const roles = {
       <div class="input-wrapper">
         <Sender
             v-model:value="question"
-            :loading="loading || isGenerating"
+            :loading="loading || isGenerating || isLastUserMsgGenerating"
             :actions="false"
             :auto-size="{ minRows: 2, maxRows: 6 }"
             @submit="onSend"
@@ -711,7 +717,7 @@ const roles = {
                 </Tooltip>
               </div>
               <div class="sender-actions">
-                <component :is="(loading || isGenerating) ? LoadingButton : SendButton" type="primary" :disabled="loading || isGenerating || !question" @click="!loading && !isGenerating && onSend(question)"/>
+                <component :is="(loading || isGenerating || isLastUserMsgGenerating) ? LoadingButton : SendButton" type="primary" :disabled="loading || isGenerating || isLastUserMsgGenerating || !question" @click="!loading && !isGenerating && !isLastUserMsgGenerating && onSend(question)"/>
               </div>
             </div>
           </template>

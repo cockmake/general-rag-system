@@ -96,7 +96,7 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
                 }
 
                 // File organization: users/{groupId}/{kbId}/{uuid}{ext}
-                long groupId = userId % 10000;
+                long groupId = userId % 1000;
                 String objectName = String.format("users/%d/%d/%s%s", groupId, kbId, UUID.randomUUID().toString(), extension);
 
                 String contentType = file.getContentType();
@@ -157,7 +157,7 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
             throw new BusinessException(404, "删除失败，文档不存在或没有权限");
         }
 
-        long groupId = document.getUploaderId() / 10000;
+        long groupId = document.getUploaderId() / 1000;
         String dbName = "group_" + groupId;
         String collectionName = "kb_" + document.getKbId();
         try {

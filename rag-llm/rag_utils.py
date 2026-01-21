@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # ============= Pydantic Models =============
 class MultiQueryList(BaseModel):
     """多角度查询列表"""
-    queries: list[str] = Field(description="从不同角度生成的查询列表")
+    queries: list[str] = Field(description="从不同角度生成的查询列表，涵盖至少6个查询")
     grade_query: str = Field(description="用于文档评分的查询，应该是结合上下文、解决指代消歧后的完整问题")
     reasoning: str = Field(description="生成这些查询的原因")
 
@@ -42,12 +42,12 @@ class RAGService:
     ) -> tuple[list[str], str]:
         """
         生成多角度查询
-        
+
         Args:
             question: 当前用户问题
             history: 对话历史（LangChain消息格式）
             model_info: 模型配置信息
-            
+
         Returns:
             (多角度查询列表, 评分用查询)
         """
@@ -60,7 +60,7 @@ class RAGService:
                 for m in recent_history
             ])
 
-        system_prompt = f"""你是一个查询优化专家。你的任务是根据用户的问题，从不同角度生成4-6个查询，涵盖中英文，以便全面检索相关信息。
+        system_prompt = f"""你是一个查询优化专家。你的任务是根据用户的问题，从不同角度生成查询，涵盖中英文，以便全面检索相关信息。
 
 生成策略：
 1. 理解问题的核心意图，结合对话历史解析代词和上下文
@@ -108,7 +108,7 @@ class RAGService:
         """
         milvus_uri = os.environ.get("MILVUS_URI")
         milvus_token = os.environ.get("MILVUS_TOKEN")
-        db_name = f"group_{user_id // 10000}"
+        db_name = f"group_{user_id // 1000}"
         collection_name = f"kb_{kb_id}"
 
         embedding_config = {
@@ -326,7 +326,7 @@ class RAGService:
         try:
             # 提取文档内容，并添加文件名作为前缀以辅助Rerank模型判断上下文
             doc_contents = [
-                f"[来源：{doc.metadata.get('fileName', '未命名文件')}] {doc.page_content}"
+                f"{doc.page_content} [来源：{doc.metadata.get('fileName', '未命名文件')}] "
                 for doc in documents
             ]
 
@@ -604,7 +604,7 @@ class RAGService:
                     merged_docs = merged_docs[:top_n]
 
                     context = "\n\n".join([
-                        f"[文档{i + 1}] (来源: {doc.metadata.get('fileName', '未命名文件')}): {doc.page_content}"
+                        f"[文档{i + 1}]: {doc.page_content} (来源: {doc.metadata.get('fileName', '未命名文件')})"
                         for i, doc in enumerate(merged_docs)
                     ])
 
@@ -617,7 +617,7 @@ class RAGService:
                         "status": "completed",
                         "content": "\n\n---\n\n".join(
                             [
-                                f"[文档{i + 1}] [相关性：{doc.metadata.get('rerank_score', 0):.3f}] [来源: {doc.metadata.get('fileName', '未命名文件')}]: {doc.page_content}"
+                                f"[文档{i + 1}] [来源: {doc.metadata.get('fileName', '未命名文件')}] [相关性：{doc.metadata.get('rerank_score', 0):.3f}]: {doc.page_content}"
                                 for i, doc in enumerate(merged_docs)
                             ]
                         ) if merged_docs else "无相关文档"

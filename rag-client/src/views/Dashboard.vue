@@ -84,11 +84,11 @@ onMounted(() => {
         closable
       >
         <template #description>
-          <div v-if="notification.displayType === 'popup'">
+          <div v-if="notification.displayType === 'popup'" style="white-space: pre-wrap">
             <span>{{ notification.content && notification.content.length > 50 ? notification.content.substring(0, 50) + '...' : notification.content }}</span>
-            <a-button type="link" size="small" @click="notificationModalVisible = true">查看详情</a-button>
+            <a-button type="link" @click="notificationModalVisible = true">查看详情</a-button>
           </div>
-          <div v-else>
+          <div v-else style="white-space: pre-wrap">
             {{ notification.content }}
           </div>
         </template>
