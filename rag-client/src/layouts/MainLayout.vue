@@ -98,6 +98,8 @@ watch(
         selectedKeys.value = ['dashboard']
       } else if (route.path.startsWith('/kb')) {
         selectedKeys.value = ['kb']
+      } else if (route.path.startsWith('/search')) {
+        selectedKeys.value = ['search']
       } else if (route.path.startsWith('/workspaces')) {
         selectedKeys.value = ['workspaces']
       } else {
@@ -155,6 +157,7 @@ const go = (path) => {
             </template>
             Dashboard
           </a-menu-item>
+
           <a-menu-item key="kb" @click="go('/kb')">
             <template #icon>
               <span style="font-size: 16px;">📚</span>
@@ -167,12 +170,20 @@ const go = (path) => {
             </template>
             工作空间
           </a-menu-item>
+          <a-menu-item key="search" @click="go('/search')">
+            <template #icon>
+              <span style="font-size: 16px;">🔍</span>
+            </template>
+            搜索对话
+          </a-menu-item>
         </a-menu>
 
         <!-- 最近会话（独立区域） - 收起时隐藏 -->
-        <div v-if="!collapsed" class="session-wrapper scrollbar-thin">
+        <div v-if="!collapsed" class="session-wrapper">
           <div class="session-title">最近聊天</div>
-          <SessionList/>
+          <div class="session-list-container">
+            <SessionList/>
+          </div>
         </div>
 
         <!-- 底部信息区域 -->
@@ -287,15 +298,24 @@ const go = (path) => {
 .session-wrapper {
   border-top: 1px solid #f0f0f0;
   padding: 8px 4px;
-  overflow-y: auto;
+  overflow: hidden;
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .session-title {
   font-size: 12px;
   color: #999;
   padding: 4px 8px;
+  flex-shrink: 0;
+}
+
+.session-list-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden; /* Ensure SessionList's height:100% works against this */
 }
 
 .sidebar-footer {

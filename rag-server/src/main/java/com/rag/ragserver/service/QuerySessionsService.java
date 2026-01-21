@@ -7,6 +7,9 @@ import com.rag.ragserver.domain.model.vo.ModelPermission;
 import com.rag.ragserver.domain.session.vo.SessionListVO;
 import com.rag.ragserver.dto.SessionCursorQuery;
 
+import com.rag.ragserver.dto.SessionSearchResultDTO;
+import java.util.List;
+
 /**
 * @author make
 * @description 针对表【query_sessions(RAG 查询会话上下文表)】的数据库操作Service
@@ -21,4 +24,5 @@ public interface QuerySessionsService extends IService<QuerySessions> {
     );
     Boolean deleteSession(Long sessionId, Long userId, Long workspaceId);
 
+    List<SessionSearchResultDTO> searchSessions(Long userId, Long workspaceId, String keyword, int limit, int offset);
 }

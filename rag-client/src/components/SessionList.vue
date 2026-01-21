@@ -3,9 +3,9 @@ import {ref, onMounted, computed, h, watch, onUnmounted} from 'vue'
 import {useRouter, useRoute} from 'vue-router'
 import {message, Button, Typography} from 'ant-design-vue'
 import {Conversations} from 'ant-design-x-vue'
-import {CommentOutlined, ClockCircleOutlined, EditOutlined, StopOutlined, DeleteOutlined} from '@ant-design/icons-vue'
+import {CommentOutlined, ClockCircleOutlined, DeleteOutlined} from '@ant-design/icons-vue'
 import {deleteSession, fetchSessions} from '@/api/chatApi'
-import {events} from "@/events.js";
+import {events} from '@/events.js';
 
 const router = useRouter()
 const route = useRoute()
@@ -123,21 +123,23 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div>
-    <Conversations
-        :items="conversationItems"
-        :activeKey="activeKey"
-        :menu="menu"
-        :groupable="groupable"
-        :onActiveChange="handleActiveChange"
-    />
-    <Button
-        block
-        :loading="loading"
-        @click="loadData">
-      <ClockCircleOutlined/>
-      查看更多历史
-    </Button>
+  <div style='display: flex; flex-direction: column; height: 100%;'>
+    <div style='flex: 1; overflow-y: auto;'>
+      <Conversations
+          :items='conversationItems'
+          :activeKey='activeKey'
+          :menu='menu'
+          :groupable='groupable'
+          :onActiveChange='handleActiveChange'
+      />
+      <Button
+          block
+          :loading='loading'
+          @click='loadData'>
+        <ClockCircleOutlined/>
+        查看更多历史
+      </Button>
+    </div>
   </div>
 </template>
 

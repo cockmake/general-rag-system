@@ -15,8 +15,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Map;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+import com.rag.ragserver.dto.MessageSearchResultDTO;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import com.rag.ragserver.dto.SessionSearchResultDTO;
 
 /**
  * @author make
@@ -28,6 +35,77 @@ import java.util.Map;
 public class QuerySessionsServiceImpl extends ServiceImpl<QuerySessionsMapper, QuerySessions>
         implements QuerySessionsService {
     private final RabbitTemplate rabbitTemplate;
+    private final QuerySessionsMapper querySessionsMapper;
+
+    @Override
+    public List<SessionSearchResultDTO> searchSessions(Long userId, Long workspaceId, String keyword, int limit, int offset) {
+        // 1. 获取包含关键词的消息列表（分页针对消息）
+        List<MessageSearchResultDTO> messages = querySessionsMapper.searchMessages(userId, workspaceId, keyword, limit, offset);
+        
+        if (messages.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 2. 按 Session 分组并聚合，同时处理内容摘要
+        Map<Long, SessionSearchResultDTO> sessionMap = new LinkedHashMap<>();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        
+        for (MessageSearchResultDTO msg : messages) {
+            sessionMap.computeIfAbsent(msg.getSessionId(), k -> {
+                SessionSearchResultDTO dto = new SessionSearchResultDTO();
+                dto.setSessionId(msg.getSessionId());
+                dto.setSessionTitle(msg.getSessionTitle());
+                dto.setContentList(new ArrayList<>());
+                return dto;
+            });
+
+            // 提取摘要：关键词前后约100字符
+            List<String> extracted = extractSnippets(msg.getContent(), keyword);
+            String timeStr = msg.getCreatedAt() != null ? sdf.format(msg.getCreatedAt()) : "";
+            
+            for (String content : extracted) {
+                sessionMap.get(msg.getSessionId()).getContentList().add(
+                    new SessionSearchResultDTO.Snippet(content, timeStr)
+                );
+            }
+        }
+
+        return new ArrayList<>(sessionMap.values());
+    }
+
+    private List<String> extractSnippets(String content, String keyword) {
+        List<String> snippets = new ArrayList<>();
+        if (content == null || keyword == null || keyword.isEmpty()) {
+            return snippets;
+        }
+        int contextLen = 100; // 前后各100字
+
+        String lowerContent = content.toLowerCase();
+        String lowerKeyword = keyword.toLowerCase();
+        int keywordLen = keyword.length();
+        int contentLen = content.length();
+
+
+        int index = 0;
+        while ((index = lowerContent.indexOf(lowerKeyword, index)) != -1) {
+            int start = Math.max(0, index - contextLen);
+            int end = Math.min(contentLen, index + keywordLen + contextLen);
+
+            String snippet = content.substring(start, end);
+            
+            // 如果不是从头开始，加省略号
+            if (start > 0) snippet = "..." + snippet;
+            // 如果不是到尾结束，加省略号
+            if (end < contentLen) snippet = snippet + "...";
+            
+            snippets.add(snippet);
+            
+            // 移动索引，确保前进
+            index = index + contextLen / 2;
+            if (index >= contentLen) break;
+        }
+        return snippets;
+    }
 
     @Override
     public Boolean sessionNameGenerate(Long userId, Long sessionId, String firstMessage, ModelPermission modelPermission) {

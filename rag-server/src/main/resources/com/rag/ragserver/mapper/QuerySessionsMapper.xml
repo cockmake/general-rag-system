@@ -18,4 +18,30 @@
         id,user_id,session_key,last_active_at,created_at,workspace_id,
         is_deleted
     </sql>
+
+    <resultMap id="MessageSearchResultMap" type="com.rag.ragserver.dto.MessageSearchResultDTO">
+        <id property="messageId" column="message_id"/>
+        <result property="content" column="content"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="sessionTitle" column="session_key"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="searchMessages" resultMap="MessageSearchResultMap">
+        SELECT
+            m.id as message_id,
+            m.content,
+            m.created_at,
+            s.id as session_id,
+            s.session_key
+        FROM conversation_messages m
+        INNER JOIN query_sessions s ON m.session_id = s.id
+        WHERE s.user_id = #{userId}
+          AND s.workspace_id = #{workspaceId}
+          AND m.content LIKE CONCAT('%', #{keyword}, '%')
+          AND s.is_deleted = 0
+          AND m.is_deleted = 0
+        ORDER BY m.created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
 </mapper>

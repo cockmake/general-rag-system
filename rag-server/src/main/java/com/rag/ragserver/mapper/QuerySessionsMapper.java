@@ -2,6 +2,10 @@ package com.rag.ragserver.mapper;
 
 import com.rag.ragserver.domain.QuerySessions;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.rag.ragserver.dto.MessageSearchResultDTO;
+import org.apache.ibatis.annotations.Param;
+import java.util.List;
+
 
 /**
 * @author make
@@ -10,6 +14,14 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 * @Entity com.rag.ragserver.domain.QuerySessions
 */
 public interface QuerySessionsMapper extends BaseMapper<QuerySessions> {
+
+    List<MessageSearchResultDTO> searchMessages(
+        @Param("userId") Long userId, 
+        @Param("workspaceId") Long workspaceId, 
+        @Param("keyword") String keyword, 
+        @Param("limit") int limit, 
+        @Param("offset") int offset
+    );
 
 }
 

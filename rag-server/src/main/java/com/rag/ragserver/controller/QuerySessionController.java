@@ -13,7 +13,11 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import javax.servlet.http.HttpServletRequest;
-import java.util.Map;
+import com.rag.ragserver.dto.SessionSearchResultDTO;
+import java.util.List;
+
+import com.rag.ragserver.dto.SessionSearchQuery;
+import org.springframework.validation.annotation.Validated;
 
 @RestController
 @RequestMapping("/sessions")
@@ -22,6 +26,18 @@ public class QuerySessionController {
     private final QuerySessionsService querySessionsService;
     private final HttpServletRequest request;
     private final SessionTitleAwaitManager sseManager;
+
+    @PostMapping("/search")
+    public R<List<SessionSearchResultDTO>> searchSessions(
+        @RequestBody @Validated SessionSearchQuery query
+    ) {
+        Long userId = (Long) request.getAttribute("userId");
+        Long workspaceId = (Long) request.getAttribute("workspaceId");
+        
+        return R.success(
+            querySessionsService.searchSessions(userId, workspaceId, query.getKeyword(), query.getLimit(), query.getOffset())
+        );
+    }
 
     @PostMapping("/list")
     public R<SessionListVO> listSessions(

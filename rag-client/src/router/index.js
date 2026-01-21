@@ -47,6 +47,11 @@ const routes = [
                 component: () => import('@/views/chat/ChatSession.vue'),
             },
             {
+                path: 'search',
+                name: 'SearchSessions',
+                component: () => import('@/views/SearchSessions.vue')
+            },
+            {
                 path: 'workspaces',
                 name: 'WorkspaceManagement',
                 component: () => import('@/views/workspace/WorkspaceManagement.vue')

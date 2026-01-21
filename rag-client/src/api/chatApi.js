@@ -26,6 +26,12 @@ export function fetchSessions({lastActiveAt, lastId, pageSize = 20}) {
     })
 }
 
+export function searchSessions({keyword, limit, offset}) {
+    return commonApi.post('/sessions/search', {
+        keyword, limit, offset
+    })
+}
+
 export function deleteSession(sessionId) {
     return commonApi.delete(`/sessions/${sessionId}`)
 }

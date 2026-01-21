@@ -205,6 +205,7 @@ async def chat_stream(
                 break
 
         history = processed_context + [current_msg]
+    logger.info(f"保留历史对话消息数: {len(history)}")
     # 构建LangChain消息列表（不包含最后一条用户消息）
     langchain_messages = build_langchain_messages(history[:-1] if history else [])
 
