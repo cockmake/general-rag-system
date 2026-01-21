@@ -34,6 +34,7 @@ const route = useRoute()
 const sessionId = ref(route.params.sessionId)
 const messages = ref([])
 const loading = ref(false)
+const isGenerating = ref(false)
 const {token} = theme.useToken()
 const themeStore = useThemeStore();
 
@@ -215,6 +216,7 @@ const handleStreamCallbacks = (assistantMsg, userMsg = null) => {
     onError: (err) => {
       assistantMsg.content += `\n[Error: 请求发起失败！]`
       assistantMsg.loading = false
+      isGenerating.value = false
       // 错误时设置用户消息状态为pending，允许重试
       if (userMsg) {
         userMsg.status = 'pending'
@@ -224,6 +226,7 @@ const handleStreamCallbacks = (assistantMsg, userMsg = null) => {
       // 流完成时更新状态为completed
       assistantMsg.loading = false
       assistantMsg.status = 'completed'
+      isGenerating.value = false
       if (userMsg) {
         userMsg.status = 'completed'
       }
@@ -291,6 +294,7 @@ const loadSession = async (newSessionId) => {
       })
       const assistant = messages.value[messages.value.length - 1]
       const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
+      isGenerating.value = true
       startChatStream(newSessionId, selectedModel.value, null, selectedKb.value || undefined, onOpen, onMessage, onError, onClose)
     }
   }
@@ -347,6 +351,7 @@ const onSend = (text) => {
   })
   const assistant = messages.value[messages.value.length - 1]
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
+  isGenerating.value = true
   startChatStream(sessionId.value, selectedModel.value, text, isKbSupported.value ? (selectedKb.value || undefined) : undefined, onOpen, onMessage, onError, onClose)
 }
 
@@ -474,6 +479,7 @@ const confirmEdit = () => {
   const assistant = messages.value[messages.value.length - 1]
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
 
+  isGenerating.value = true
   // 调用编辑接口
   editMessageStream(
       userMsg.id,
@@ -515,6 +521,7 @@ const onRetry = (userMsgIndex) => {
   const assistant = messages.value[messages.value.length - 1]
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
 
+  isGenerating.value = true
   // 调用重试接口
   retryMessageStream(
       userMsg.id,
@@ -664,7 +671,7 @@ const roles = {
       <div class="input-wrapper">
         <Sender
             v-model:value="question"
-            :loading="loading"
+            :loading="loading || isGenerating"
             :actions="false"
             :auto-size="{ minRows: 2, maxRows: 6 }"
             @submit="onSend"
@@ -704,7 +711,7 @@ const roles = {
                 </Tooltip>
               </div>
               <div class="sender-actions">
-                <component :is="loading ? LoadingButton : SendButton" type="primary" :disabled="loading || !question" @click="!loading && onSend(question)"/>
+                <component :is="(loading || isGenerating) ? LoadingButton : SendButton" type="primary" :disabled="loading || isGenerating || !question" @click="!loading && !isGenerating && onSend(question)"/>
               </div>
             </div>
           </template>
