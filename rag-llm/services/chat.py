@@ -185,9 +185,26 @@ async def chat_stream(
     kb_id = options.get('kbId')
     system_prompt = options.get('systemPrompt')
 
-    # history最多包含6轮对话，即6*2+1=13条消息（包含当前用户问题）
-    if len(history) > 13:
-        history = history[-13:]
+    # 截断策略：保留最新用户问题，其余历史按(user, assistant)成组，总字符数<10000
+    if history:
+        current_msg = history[-1]
+        previous_msgs = history[:-1]
+
+        processed_context = []
+        current_char_count = len(current_msg.get('content', ''))
+        n = len(previous_msgs)
+
+        for i in range(n, 1, -2):
+            pair = previous_msgs[i - 2: i]
+            pair_len = sum(len(m.get('content') or "") for m in pair)
+
+            if current_char_count + pair_len < 10000:
+                current_char_count += pair_len
+                processed_context = pair + processed_context
+            else:
+                break
+
+        history = processed_context + [current_msg]
     # 构建LangChain消息列表（不包含最后一条用户消息）
     langchain_messages = build_langchain_messages(history[:-1] if history else [])
 
