@@ -68,6 +68,16 @@ const handleDelete = async (sessionId) => {
    }
 }
 
+const highlightText = (text) => {
+  if (!keyword.value || !text) return text
+  const kw = keyword.value.trim()
+  if (!kw) return text
+
+  const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escapedKw})`, 'gi');
+  return text.replace(regex, '<span class="highlight-text">$1</span>');
+}
+
 // Restore scroll position
 onMounted(() => {
   if (results.value.length > 0) {
@@ -108,9 +118,16 @@ onBeforeRouteLeave((to, from, next) => {
             <template #renderItem="{ item }">
               <List.Item>
                  <template #actions>
-                    <Button type="text" danger size="small" @click.stop="handleDelete(item.sessionId)">
+                    <a-popconfirm
+                    title="确定要删除这个会话吗？"
+                    ok-text="确定"
+                    cancel-text="取消"
+                    @confirm="handleDelete(item.sessionId)"
+                  >
+                    <Button type="text" danger size="small">
                       <DeleteOutlined /> 删除
                     </Button>
+                  </a-popconfirm>
                  </template>
                  <List.Item.Meta>
                     <template #title>
@@ -122,7 +139,7 @@ onBeforeRouteLeave((to, from, next) => {
                              <div class="snippet-header">
                                 <span class="snippet-time">{{ snippet.createdAt }}</span>
                              </div>
-                             <div class="snippet-content">{{ snippet.content }}</div>
+                             <div class="snippet-content" v-html="highlightText(snippet.content)"></div>
                           </div>
                        </div>
                     </template>
@@ -195,5 +212,13 @@ onBeforeRouteLeave((to, from, next) => {
 
 .snippet-content {
   word-break: break-word;
+}
+
+:deep(.highlight-text) {
+  background-color: #ffd591; /* orange-3 for a soft highlight */
+  color: #d4380d; /* dust-red-7 for text contrast */
+  font-weight: bold;
+  border-radius: 2px;
+  padding: 0 2px;
 }
 </style>

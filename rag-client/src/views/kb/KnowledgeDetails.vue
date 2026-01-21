@@ -529,7 +529,14 @@ onMounted(() => {
           <a-divider type="vertical"/>
           <a-button type="link" size="small" @click="openRenameModal(record)">重命名</a-button>
           <a-divider type="vertical"/>
-          <a-button type="link" danger size="small" @click="handleDelete(record)">删除</a-button>
+          <a-popconfirm
+            title="确定要删除这个文件吗？"
+            ok-text="确定"
+            cancel-text="取消"
+            @confirm="handleDelete(record)"
+          >
+            <a-button type="link" danger size="small">删除</a-button>
+          </a-popconfirm>
         </template>
       </template>
     </a-table>
