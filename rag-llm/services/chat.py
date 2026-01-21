@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage, AIMessage
 
 from rag_utils import rag_service
-from utils import get_llm_instance
+from utils import get_llm_instance, get_token_count
 
 logger = logging.getLogger(__name__)
 
@@ -185,21 +185,21 @@ async def chat_stream(
     kb_id = options.get('kbId')
     system_prompt = options.get('systemPrompt')
 
-    # 截断策略：保留最新用户问题，其余历史按(user, assistant)成组，总字符数<10000
+    # 截断策略：保留最新用户问题，其余历史按(user, assistant)成组，总token数<10000
     if history:
         current_msg = history[-1]
         previous_msgs = history[:-1]
 
         processed_context = []
-        current_char_count = len(current_msg.get('content', ''))
+        current_token_count = get_token_count(current_msg.get('content') or "")
         n = len(previous_msgs)
 
         for i in range(n, 1, -2):
             pair = previous_msgs[i - 2: i]
-            pair_len = sum(len(m.get('content') or "") for m in pair)
+            pair_tokens = sum(get_token_count(m.get('content') or "") for m in pair)
 
-            if current_char_count + pair_len < 10000:
-                current_char_count += pair_len
+            if current_token_count + pair_tokens < 10000:
+                current_token_count += pair_tokens
                 processed_context = pair + processed_context
             else:
                 break

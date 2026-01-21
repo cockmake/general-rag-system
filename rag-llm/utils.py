@@ -6,6 +6,7 @@ import re
 from functools import lru_cache
 
 import fitz  # PyMuPDF
+import tiktoken
 from PIL import Image
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRetryMiddleware
@@ -281,3 +282,13 @@ def image_split(
         raise ValueError(f"Recognized text length ({len(text.strip())}) is less than minimum required ({min_length})")
 
     return plain_text_split(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+
+
+def get_token_count(text: str, encoding_name: str = "cl100k_base") -> int:
+    """计算文本的token数量"""
+    try:
+        encoding = tiktoken.get_encoding(encoding_name)
+    except Exception:
+        # Fallback to cl100k_base if specific encoding not found
+        encoding = tiktoken.get_encoding("cl100k_base")
+    return len(encoding.encode(text))
