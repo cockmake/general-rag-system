@@ -555,42 +555,8 @@ const roles = {
 
 <template>
   <div class="chat-session-container" :class="{ 'is-dark': themeStore.isDark }">
-    <!-- 顶部配置栏 -->
-    <div class="chat-header">
-      <a-card :bordered="false" class="header-card">
-        <a-space size="middle" class="header-content">
-          <div class="config-group">
-            <span class="config-label-text">模型：</span>
-            <a-select
-                v-model:value="selectedModel"
-                class="model-select"
-                placeholder="选择模型">
-              <a-select-opt-group
-                  v-for="(list, provider) in groupedModels"
-                  :key="provider"
-                  :label="provider.toUpperCase()">
-                <a-select-option
-                    v-for="m in list"
-                    :key="m.modelId"
-                    :value="m.modelId"
-                >
-                  {{ m.modelName }}
-                </a-select-option>
-              </a-select-opt-group>
-            </a-select>
-          </div>
-
-          <a-divider type="vertical" style="height: 24px"/>
-
-          <Tooltip :title="!isKbSupported ? '当前模型不支持知识库功能' : ''" placement="bottom">
-            <div class="config-group">
-              <span class="config-label-text">知识库：</span>
-              <KbSelector class="kb-select" :disabled="!isKbSupported"/>
-            </div>
-          </Tooltip>
-        </a-space>
-      </a-card>
-    </div>
+    <!-- 顶部配置栏 removed -->
+    <!-- <div class="chat-header">...</div> -->
 
     <!-- 消息列表区域 -->
     <div class="messages-container">
@@ -699,11 +665,50 @@ const roles = {
         <Sender
             v-model:value="question"
             :loading="loading"
+            :actions="false"
             :auto-size="{ minRows: 2, maxRows: 6 }"
             @submit="onSend"
             class="chat-sender"
             placeholder="输入消息，Shift + Enter 换行，Enter 发送"
-        />
+        >
+          <template #footer="{ info: { components: { SendButton, LoadingButton } } }">
+            <div class="sender-footer">
+              <div class="sender-config">
+                <a-select
+                    v-model:value="selectedModel"
+                    class="model-select-footer"
+                    placeholder="选择模型"
+                    :bordered="false"
+                    :dropdownMatchSelectWidth="false"
+                >
+                  <a-select-opt-group
+                      v-for="(list, provider) in groupedModels"
+                      :key="provider"
+                      :label="provider.toUpperCase()">
+                    <a-select-option
+                        v-for="m in list"
+                        :key="m.modelId"
+                        :value="m.modelId"
+                    >
+                      {{ m.modelName }}
+                    </a-select-option>
+                  </a-select-opt-group>
+                </a-select>
+
+                <a-divider type="vertical" style="height: 16px; margin: 0 4px; border-left-color: rgba(0,0,0,0.1)"/>
+
+                <Tooltip :title="!isKbSupported ? '当前模型不支持知识库功能' : '请在您需要检索知识库中信息时选用'" placement="topLeft">
+                  <div class="kb-wrapper">
+                    <KbSelector class="kb-select-footer" :disabled="!isKbSupported" :bordered="false" size="small" width="180px"/>
+                  </div>
+                </Tooltip>
+              </div>
+              <div class="sender-actions">
+                <component :is="loading ? LoadingButton : SendButton" type="primary" :disabled="loading || !question" @click="!loading && onSend(question)"/>
+              </div>
+            </div>
+          </template>
+        </Sender>
       </div>
     </div>
   </div>
@@ -988,6 +993,40 @@ const roles = {
   .input-container {
     padding: 8px 16px 12px;
   }
+}
+
+.sender-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px 8px 4px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.sender-config {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex: 1;
+  overflow: hidden;
+}
+
+.model-select-footer {
+  width: 180px;
+}
+
+.kb-select-footer {
+  /* KbSelector style override */
+}
+
+.sender-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: 8px;
+}
+
+.chat-session-container.is-dark .sender-footer {
+  border-top-color: rgba(255, 255, 255, 0.1);
 }
 </style>
 

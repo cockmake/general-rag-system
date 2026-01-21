@@ -115,6 +115,7 @@ const onSend = async (text) => {
             <div class="config-label">
               <DatabaseOutlined class="config-icon" />
               <span>选择知识库</span>
+              <span style="font-size: 12px; color: #999; margin-left: 8px; font-weight: normal;">请在您需要检索知识库中信息时选用</span>
             </div>
             <KbSelector size="large" class="config-select" :disabled="!isKbSupported" />
             <div v-if="!isKbSupported && selectedModel" style="color: #faad14; font-size: 12px; margin-top: 4px;">
