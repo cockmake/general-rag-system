@@ -3,10 +3,13 @@ import { ref, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { fetchRecentActivities } from '@/api/logApi'
 import { fetchDashboardSummary } from '@/api/dashboardApi'
+import { fetchLatestNotification } from '@/api/notificationApi'
 
 const userStore = useUserStore()
 const activities = ref([])
 const loading = ref(false)
+const notification = ref(null)
+const notificationModalVisible = ref(false)
 
 const stats = ref({
   kbCount: 0,
@@ -38,6 +41,17 @@ const fetchActivities = async () => {
   }
 }
 
+const fetchNotification = async () => {
+  try {
+    const data = await fetchLatestNotification()
+    if (data) {
+      notification.value = data
+    }
+  } catch (e) {
+    console.error('Failed to fetch notification', e)
+  }
+}
+
 const formatTime = (time) => {
   return new Date(time).toLocaleString()
 }
@@ -46,6 +60,7 @@ const formatTime = (time) => {
 onMounted(() => {
   fetchStats()
   fetchActivities()
+  fetchNotification()
 })
 
 </script>
@@ -59,6 +74,36 @@ onMounted(() => {
           👋 欢迎你，{{ userStore.username }}
         </h2>
       </div>
+    </div>
+
+    <div v-if="notification" style="margin-bottom: 24px;">
+      <a-alert
+        message="最新公告"
+        type="info"
+        show-icon
+        closable
+      >
+        <template #description>
+          <div v-if="notification.displayType === 'popup'">
+            <span>{{ notification.content && notification.content.length > 50 ? notification.content.substring(0, 50) + '...' : notification.content }}</span>
+            <a-button type="link" size="small" @click="notificationModalVisible = true">查看详情</a-button>
+          </div>
+          <div v-else>
+            {{ notification.content }}
+          </div>
+        </template>
+      </a-alert>
+      
+      <a-modal
+        v-model:open="notificationModalVisible"
+        title="公告详情"
+        :footer="null"
+      >
+        <div style="white-space: pre-wrap;">{{ notification.content }}</div>
+        <div style="margin-top: 16px; color: #999; font-size: 12px; text-align: right;">
+          发布于: {{ formatTime(notification.createdAt) }}
+        </div>
+      </a-modal>
     </div>
 
     <!-- 核心统计卡片 -->

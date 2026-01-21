@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rag.ragserver.mapper.NotificationsMapper">
+
+    <resultMap id="BaseResultMap" type="com.rag.ragserver.domain.Notifications">
+            <id property="id" column="id" />
+            <result property="content" column="content" />
+            <result property="createdAt" column="created_at" />
+            <result property="updatedAt" column="updated_at" />
+            <result property="displayType" column="display_type" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,content,created_at,updated_at,display_type
+    </sql>
+</mapper>
