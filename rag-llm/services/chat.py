@@ -185,7 +185,7 @@ async def chat_stream(
     kb_id = options.get('kbId')
     system_prompt = options.get('systemPrompt')
 
-    # 截断策略：保留最新用户问题，其余历史按(user, assistant)成组，总token数<10000
+    # 截断策略：保留最新用户问题，其余历史按(user, assistant)成组，总token数<20480
     if history:
         current_msg = history[-1]
         previous_msgs = history[:-1]
@@ -198,7 +198,7 @@ async def chat_stream(
             pair = previous_msgs[i - 2: i]
             pair_tokens = sum(get_token_count(m.get('content') or "") for m in pair)
 
-            if current_token_count + pair_tokens < 10000:
+            if current_token_count + pair_tokens < 20480:
                 current_token_count += pair_tokens
                 processed_context = pair + processed_context
             else:
