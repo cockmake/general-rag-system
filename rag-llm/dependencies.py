@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from milvus_utils import MilvusClientManager
 from mq.connection import rabbit_async_client
 from mq.document_embedding import document_embedding_consumer
 from mq.session_name import session_name_generator
@@ -48,5 +49,10 @@ async def app_lifespan(app: FastAPI):
             task.cancel()
         # 等待任务完成取消
         await asyncio.gather(*consume_background_tasks, return_exceptions=True)
+        
+        # 关闭 Milvus 连接池
+        logger.info("Closing Milvus connections...")
+        await MilvusClientManager.close_all()
+        
         # 最后关闭连接
         await rabbit_async_client.close()

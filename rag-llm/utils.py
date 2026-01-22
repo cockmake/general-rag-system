@@ -110,17 +110,10 @@ def get_embedding_instance(embedding_info: dict):
     )
 
 
-def get_structured_data_instance(llm: BaseChatModel, data_type):
+def get_structured_data_agent(llm: BaseChatModel, data_type):
     return create_agent(
         model=llm,
-        response_format=data_type,
-        middleware=[
-            ModelRetryMiddleware(
-                max_retries=2,
-                backoff_factor=2.0,
-                initial_delay=1.0,
-            ),
-        ],
+        response_format=data_type
     )
 
 
@@ -222,7 +215,7 @@ def pdf_split(
     """
     对PDF进行完美划分：全文合并后切分，解决跨页段落问题。
     自动检测图片型PDF并使用OCR提取文本。
-    
+
     Args:
         file_path: PDF文件路径
         chunk_size: 文本块大小
@@ -297,3 +290,29 @@ def get_token_count(text: str, encoding_name: str = "cl100k_base") -> int:
         # Fallback to cl100k_base if specific encoding not found
         encoding = tiktoken.get_encoding("cl100k_base")
     return len(encoding.encode(text))
+
+
+def cut_history(history: list, model: dict):
+    current_msg = history[-1]
+    previous_msgs = history[:-1]
+
+    processed_context = []
+    current_token_count = get_token_count(current_msg.get('content') or "")
+    n = len(previous_msgs)
+
+    max_tokens = 17920
+    if model.get("name").startswith("gpt"):
+        max_tokens = 12800
+    elif model.get("name") == "gemini-3-pro-preview":
+        max_tokens = 15360
+
+    for i in range(n, 1, -2):
+        pair = previous_msgs[i - 2: i]
+        pair_tokens = sum(get_token_count(m.get('content') or "") for m in pair)
+
+        if current_token_count + pair_tokens < max_tokens:
+            current_token_count += pair_tokens
+            processed_context = pair + processed_context
+        else:
+            break
+    return processed_context + [current_msg], current_token_count

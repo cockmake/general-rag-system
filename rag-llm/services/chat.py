@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from typing import Optional
 
 from fastapi import APIRouter, Body, Request
@@ -7,16 +8,14 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage, AIMessage
 
 from rag_utils import rag_service
-from utils import get_llm_instance, get_token_count
+from utils import get_llm_instance, cut_history, get_token_count
 
 logger = logging.getLogger(__name__)
 
 chat_service = APIRouter(prefix="/chat", tags=["chat"])
 
-import time
 
-
-async def stream_generator(model_instance, messages):
+async def stream_generator(model_instance, messages, prompt_tokens: int = 0):
     """纯LLM流式响应生成器"""
     full_content = ""
     start_time = time.time()  # Start timing
@@ -34,13 +33,13 @@ async def stream_generator(model_instance, messages):
 
     end_time = time.time()
     latency_ms = int((end_time - start_time) * 1000)  # Calculate latency
-
+    completion_tokens = get_token_count(full_content)
     usage_data = {
         "type": "usage",
         "payload": {
-            "prompt_tokens": 0,
-            "completion_tokens": len(full_content),
-            "total_tokens": len(full_content),
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
             "latency_ms": latency_ms  # Add latency_ms
         }
     }
@@ -53,7 +52,8 @@ async def rag_stream_generator(
         model_info: dict,
         kb_id: Optional[int] = None,
         user_id: Optional[int] = None,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
+        prompt_tokens: int = 0
 ):
     """
     RAG流式响应生成器
@@ -131,10 +131,10 @@ async def rag_stream_generator(
 def build_langchain_messages(history: list) -> list:
     """
     将历史消息转换为LangChain消息格式
-    
+
     Args:
         history: 原始历史消息列表
-        
+
     Returns:
         LangChain消息列表
     """
@@ -169,16 +169,17 @@ async def chat_stream(
     logger.info(f"Received chat stream request: model={model}, options={options}")
     """
     流式对话接口
-    
+
     支持两种模式：
     1. 纯LLM模式：当options中没有kbId时，直接使用LLM生成回复
     2. RAG模式：当options中有kbId时，执行多角度查询、并行检索、评分后生成回复
-    
+
     流程（RAG模式）：
     1. 根据用户问题生成3-5个不同角度的查询（调用LLM）
     2. 并行检索知识库获取相关文档
     3. 并行评估文档相关性并打分
-    4. 汇总相关文档并流式生成答案
+    4. 合并连续的文档切片
+    5. 汇总相关文档并流式生成答案
     """
     # 从options中提取参数
     user_id = options.get('userId')  # 注意这个userId是指知识库持有者的ID，不是当前提问用户的ID
@@ -186,26 +187,11 @@ async def chat_stream(
     system_prompt = options.get('systemPrompt')
 
     # 截断策略：保留最新用户问题，其余历史按(user, assistant)成组，总token数<20480
+    prompt_tokens = 0
     if history:
-        current_msg = history[-1]
-        previous_msgs = history[:-1]
+        history, prompt_tokens = cut_history(history, model)
 
-        processed_context = []
-        current_token_count = get_token_count(current_msg.get('content') or "")
-        n = len(previous_msgs)
-
-        for i in range(n, 1, -2):
-            pair = previous_msgs[i - 2: i]
-            pair_tokens = sum(get_token_count(m.get('content') or "") for m in pair)
-
-            if current_token_count + pair_tokens < 20480:
-                current_token_count += pair_tokens
-                processed_context = pair + processed_context
-            else:
-                break
-
-        history = processed_context + [current_msg]
-    logger.info(f"保留历史对话消息数: {len(history)}")
+    logger.info(f"保留历史对话消息数: {len(history) // 2} + 1")
     # 构建LangChain消息列表（不包含最后一条用户消息）
     langchain_messages = build_langchain_messages(history[:-1] if history else [])
 
@@ -236,7 +222,8 @@ async def chat_stream(
                 model_info=model,
                 kb_id=kb_id,
                 user_id=user_id,
-                system_prompt=system_prompt
+                system_prompt=system_prompt,
+                prompt_tokens=prompt_tokens
             ),
             media_type="text/event-stream"
         )
@@ -264,17 +251,16 @@ async def chat_stream(
         # 添加当前问题到消息列表
         all_messages = langchain_messages + [HumanMessage(content=current_question)]
 
-        # 如果有系统提示词，添加到消息列表开头
-        if system_prompt:
-            messages_with_system = [{"role": "system", "content": system_prompt}]
-            for msg in all_messages:
-                if isinstance(msg, HumanMessage):
-                    messages_with_system.append({"role": "user", "content": msg.content})
-                elif isinstance(msg, AIMessage):
-                    messages_with_system.append({"role": "assistant", "content": msg.content})
-            all_messages = messages_with_system
+        messages_with_system = []
+        # messages_with_system = [{"role": "system", "content": system_prompt}]
+        for msg in all_messages:
+            if isinstance(msg, HumanMessage):
+                messages_with_system.append({"role": "user", "content": msg.content})
+            elif isinstance(msg, AIMessage):
+                messages_with_system.append({"role": "assistant", "content": msg.content})
+        all_messages = messages_with_system
 
         return StreamingResponse(
-            stream_generator(llm, all_messages),
+            stream_generator(llm, all_messages, prompt_tokens=prompt_tokens),
             media_type="text/event-stream"
         )

@@ -14,11 +14,11 @@ from typing import AsyncGenerator, Optional
 
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_milvus import Milvus
 from pydantic import BaseModel, Field
 
 from aiohttp_utils import rerank
-from utils import get_llm_instance, get_embedding_instance, get_structured_data_instance
+from milvus_utils import MilvusClientManager
+from utils import get_llm_instance, get_embedding_instance, get_structured_data_agent
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class RAGService:
 请生成3-5个不同角度的查询，以及一个grade_query。"""
 
         llm = get_llm_instance(model_info)
-        structured_agent = get_structured_data_instance(llm, MultiQueryList)
+        structured_agent = get_structured_data_agent(llm, MultiQueryList)
         # 使用异步调用
         result = await structured_agent.ainvoke({"messages": [{"role": "user", "content": system_prompt}]})
 
@@ -96,20 +96,18 @@ class RAGService:
     ) -> list[Document]:
         """
         并行检索多个查询
-        
+
         Args:
             query_list: 查询列表
             user_id: 用户ID
             kb_id: 知识库ID
             top_k: 每个查询返回的文档数量
-            
+
         Returns:
             去重后的文档列表
         """
         milvus_uri = os.environ.get("MILVUS_URI")
         milvus_token = os.environ.get("MILVUS_TOKEN")
-        db_name = f"group_{user_id // 1000}"
-        collection_name = f"kb_{kb_id}"
 
         embedding_config = {
             'name': 'text-embedding-v4',
@@ -120,25 +118,11 @@ class RAGService:
         all_docs = []
         doc_set = set()
 
-        def connect_milvus():
-            try:
-                return Milvus(
-                    embedding_function=embeddings,
-                    connection_args={
-                        "uri": milvus_uri,
-                        "token": milvus_token,
-                        "db_name": db_name,
-                    },
-                    collection_name=collection_name,
-                    auto_id=True,
-                )
-            except Exception as e:
-                logger.error(f"连接 Milvus 失败: {e}")
-                return None
-
         vector_store = None
         try:
-            vector_store = connect_milvus()
+            vector_store = await MilvusClientManager.get_instance(
+                user_id, kb_id, milvus_uri, milvus_token, embeddings
+            )
             if not vector_store:
                 logger.warning(f"无法连接到知识库: {kb_id}")
                 return []
@@ -166,7 +150,7 @@ class RAGService:
                     keywords.append(query)
                 else:
                     # 简单分词，取长度大于2的词
-                    words = [w for w in query.split() if len(w) >= 2]
+                    words = [w for w in query.strip().split() if len(w) >= 2]
                     keywords.extend(words)
                 if not keywords:
                     return []
@@ -202,7 +186,7 @@ class RAGService:
                     for kw in keywords:
                         # 转义特殊字符
                         safe_kw = kw.replace("'", "\\'").replace('"', '\\"')
-                        
+
                         # 构造表达式: text 字段包含关键词 或 fileName 包含关键词
                         if has_filename:
                             expr = f'text like "%{safe_kw}%" or fileName like "%{safe_kw}%"'
@@ -290,12 +274,8 @@ class RAGService:
             logger.info(f"最终去重后共 {len(all_docs)} 个文档 (向量召回: {count_vector}, 关键词召回: {count_keyword})")
 
         finally:
-            # 清理连接
-            if vector_store:
-                try:
-                    await vector_store.aclient.close()
-                except Exception:
-                    pass
+            # 连接由 MilvusClientManager 管理，不需要在此关闭
+            pass
 
         return all_docs
 
@@ -309,14 +289,14 @@ class RAGService:
     ) -> list[Document]:
         """
         使用Rerank模型评估文档相关性（替代LLM评分）
-        
+
         Args:
             documents: 文档列表
             query: 原始查询
             model_info: 模型配置信息（保留参数以兼容旧接口，但不使用）
             top_n: 返回前N个最相关的文档，默认5个
             score_threshold: 相关性分数阈值（斩杀线），默认0.3，低于此分数的文档将被过滤
-            
+
         Returns:
             按相关性分数排序的文档列表
         """
@@ -481,7 +461,7 @@ class RAGService:
     ) -> AsyncGenerator[dict, None]:
         """
         带过程信息的流式RAG响应生成器
-        
+
         Args:
             question: 用户问题
             history: 对话历史（LangChain消息格式）
@@ -493,7 +473,7 @@ class RAGService:
             top_n: Rerank后返回的文档数量
             grade_top_n: Rerank评分时考虑的文档数量
             grade_score_threshold: Rerank相关性分数阈值
-            
+
         Yields:
             包含type和payload的字典，type可以是"process"或"content"
         """
