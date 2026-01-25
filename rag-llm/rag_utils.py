@@ -51,10 +51,15 @@ class RAGService:
         Returns:
             (多角度查询列表, 评分用查询)
         """
-        # 构建对话历史（最近5轮，即10条消息）
+        # 这里暂时全部使用qwen3-max模型
+        model_info = {
+            'name': 'qwen3-max',
+            'provider': 'qwen'
+        }
+        # 构建对话历史（最近4轮，即8条消息）
         history_context = ""
         if history:
-            recent_history = history[-10:] if len(history) > 10 else history
+            recent_history = history[-8:] if len(history) > 8 else history
             history_context = "\n".join([
                 f"{'用户' if isinstance(m, HumanMessage) else '助手'}: {m.content}"
                 for m in recent_history
@@ -67,9 +72,9 @@ class RAGService:
 2. 提取问题中的关键实体、专业术语、错误码或具体名称，保留在查询中以利于关键词匹配
 3. 从不同语义角度拆解问题（如：定义、应用、对比、原理等）
 4. 生成的查询应该互补，覆盖问题的不同方面
-5. 查询应简洁明确，兼顾向量检索（语义）和关键词检索（精确），多个关键词间请用空格分隔
+5. 查询应丰富明确，兼顾向量检索（语义）和关键词检索（精确），多个关键词间请用空格分隔
 
-另外，请额外生成一个'grade_query'，它是对用户当前问题的完整重写（指代消歧后），用于后续的文档相关性评分。
+另外，请额外生成一个'grade_query'，它是对用户当前问题的完整陈述性重写（指代消歧后），用于对后续检索到的文档判定相关性。
 例如：如果用户说“继续”，grade_query 应该是上一轮话题的延续描述，如"关于XXX的进一步详细说明"。
 
 {'对话历史：\n' + history_context if history_context else '无对话历史'}
@@ -633,7 +638,7 @@ class RAGService:
         if system_prompt:
             logger.info("使用自定义提示词")
             final_system_prompt = f"""{system_prompt}
-m
+
 参考文档：
 {context}"""
         else:
@@ -641,10 +646,9 @@ m
             final_system_prompt = f"""你是一个专业的AI助手。基于提供的文档和对话历史回答用户问题。
 
 要求：
-1. 优先使用提供的文档中的信息
+1. 文档中的信息仅供参考
 2. 如果文档不足以完整回答，结合对话历史进行推理或明确说明
-3. 保持对话连贯，考虑历史上下文
-4. 用清晰、简洁的语言回答
+3. 文档中的信息为切片信息，可能语义并不连贯或存在错误，你需要抽取或推理相关信息
 
 参考文档：
 {context}"""

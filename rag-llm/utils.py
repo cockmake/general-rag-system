@@ -300,11 +300,11 @@ def cut_history(history: list, model: dict):
     current_token_count = get_token_count(current_msg.get('content') or "")
     n = len(previous_msgs)
 
-    max_tokens = 17920
+    max_tokens = 20480
     if model.get("name").startswith("gpt"):
-        max_tokens = 12800
-    elif model.get("name") == "gemini-3-pro-preview":
         max_tokens = 15360
+    elif model.get("name") == "gemini-3-pro-preview":
+        max_tokens = 17920
 
     for i in range(n, 1, -2):
         pair = previous_msgs[i - 2: i]

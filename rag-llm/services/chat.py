@@ -116,12 +116,13 @@ async def rag_stream_generator(
     end_time = time.time()
     latency_ms = int((end_time - start_time) * 1000)  # Calculate latency
 
+    completion_tokens = get_token_count(full_content)
     usage_data = {
         "type": "usage",
         "payload": {
-            "prompt_tokens": 0,
-            "completion_tokens": len(full_content),
-            "total_tokens": len(full_content),
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": completion_tokens + prompt_tokens,
             "latency_ms": latency_ms  # Add latency_ms
         }
     }

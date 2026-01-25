@@ -113,6 +113,7 @@
           :loading="loadingMembers"
           :pagination="false"
           row-key="id"
+          :scroll="{ x: 600 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'role'">

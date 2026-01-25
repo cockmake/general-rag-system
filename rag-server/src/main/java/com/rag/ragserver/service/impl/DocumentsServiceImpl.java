@@ -90,6 +90,9 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
         for (MultipartFile file : files) {
             try {
                 String originalFilename = file.getOriginalFilename();
+                if (originalFilename != null) {
+                    originalFilename = originalFilename.replace("\\", "/");
+                }
                 String extension = "";
                 if (originalFilename != null && originalFilename.contains(".")) {
                     extension = originalFilename.substring(originalFilename.lastIndexOf("."));
@@ -109,10 +112,12 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
                     checksum = DigestUtils.md5DigestAsHex(is);
                 }
 
-                long count = this.count(new LambdaQueryWrapper<Documents>().eq(Documents::getKbId, kbId).and(wrapper -> wrapper.eq(Documents::getFileName, originalFilename).or().eq(Documents::getChecksum, checksum)));
+                long count = this.count(new LambdaQueryWrapper<Documents>()
+                        .eq(Documents::getKbId, kbId)
+                        .eq(Documents::getFileName, originalFilename));
 
                 if (count > 0) {
-                    throw new BusinessException(400, "文件 '" + originalFilename + "' 已存在或内容重复");
+                    throw new BusinessException(400, "文件 '" + originalFilename + "' 已存在");
                 }
 
                 try (InputStream is = file.getInputStream()) {

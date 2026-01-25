@@ -7,7 +7,7 @@ import 'vue-pdf-embed/dist/styles/textLayer.css';
 import md from "@/utils/markdown.js";
 import {useRoute, useRouter} from "vue-router";
 import {message} from "ant-design-vue";
-import { LoadingOutlined, ArrowLeftOutlined } from '@ant-design/icons-vue';
+import { LoadingOutlined, ArrowLeftOutlined, FolderOutlined, FileOutlined, HomeOutlined, MoreOutlined, DownOutlined } from '@ant-design/icons-vue';
 import {deleteDocument, previewDocument, listDocuments, uploadDocument, renameDocument, listChunks, inviteUserToKb, getInvitedUsers, removeInvitedUser, fetchAvailableKbs, updateKb} from "@/api/kbApi.js";
 import { useUserStore } from "@/stores/user";
 
@@ -18,6 +18,130 @@ const kbId = route.params.kbId;
 const fileList = ref([]);
 const uploading = ref(false);
 const currentKb = ref(null);
+const currentPath = ref([]);
+
+const currentPathString = computed(() => {
+  return currentPath.value.join('/');
+});
+
+const getRelativePath = (fullPath) => {
+  const prefix = currentPathString.value ? currentPathString.value + '/' : '';
+  if (!fullPath.startsWith(prefix)) return null;
+  return fullPath.substring(prefix.length);
+};
+
+const displayList = computed(() => {
+  const list = [];
+  const folders = new Set();
+  
+  if (!fileList.value) return [];
+
+  // Sort files first to ensure consistent order
+  const sortedFiles = [...fileList.value].sort((a, b) => (a.fileName || '').localeCompare(b.fileName || ''));
+
+  sortedFiles.forEach(file => {
+    // Normalize path separators just in case
+    const fileName = (file.fileName || '').replace(/\\/g, '/');
+    const rel = getRelativePath(fileName);
+    if (rel === null) return; // Not in current folder
+    
+    // Ignore if it's exactly the folder itself (shouldn't happen with files but just in case)
+    if (rel === '') return;
+
+    const parts = rel.split('/');
+    if (parts.length > 1) {
+      // It's in a subfolder
+      const folderName = parts[0];
+      if (!folders.has(folderName)) {
+        folders.add(folderName);
+        
+        // Calculate folder stats
+        const prefix = (currentPathString.value ? currentPathString.value + '/' : '') + folderName + '/';
+        const filesInFolder = fileList.value.filter(f => (f.fileName || '').replace(/\\/g, '/').startsWith(prefix));
+        
+        let totalSize = 0;
+        let status = 'ready';
+        let hasProcessing = false;
+        let hasFailed = false;
+
+        filesInFolder.forEach(f => {
+            totalSize += (f.fileSize || 0);
+            if (f.status === 'failed') hasFailed = true;
+            if (f.status === 'processing') hasProcessing = true;
+        });
+
+        if (hasFailed) status = 'failed';
+        else if (hasProcessing) status = 'processing';
+
+        list.push({
+          id: 'folder-' + folderName, // unique key for UI
+          fileName: folderName,
+          isFolder: true,
+          fileSize: totalSize, 
+          status: status,
+          createdAt: file.createdAt, // Just use one of the files' date
+        });
+      }
+    } else {
+      // It's a file in current folder
+      list.push({
+        ...file,
+        isFolder: false
+      });
+    }
+  });
+  
+  // Sort folders first, then files
+  return list.sort((a, b) => {
+    if (a.isFolder && !b.isFolder) return -1;
+    if (!a.isFolder && b.isFolder) return 1;
+    return a.fileName.localeCompare(b.fileName);
+  });
+});
+
+const enterFolder = (folderName) => {
+  currentPath.value.push(folderName);
+};
+
+const navToLevel = (index) => {
+  if (index === -1) {
+    currentPath.value = [];
+  } else {
+    currentPath.value = currentPath.value.slice(0, index + 1);
+  }
+};
+
+const handleDeleteFolder = async (folderName) => {
+  const prefix = (currentPathString.value ? currentPathString.value + '/' : '') + folderName + '/';
+  // Find all files that start with this prefix
+  const filesToDelete = fileList.value.filter(f => {
+      const fn = (f.fileName || '').replace(/\\/g, '/');
+      return fn.startsWith(prefix);
+  });
+  
+  if (filesToDelete.length === 0) {
+      message.warning('空文件夹或无法找到文件');
+      return;
+  }
+
+  const hide = message.loading(`正在删除 ${filesToDelete.length} 个文件...`, 0);
+  try {
+    // Execute sequentially to avoid overwhelming server or hitting rate limits
+    // Or parallel with limit. 
+    // Since we don't have a batch delete API, we loop.
+    for (const file of filesToDelete) {
+        await deleteDocument(kbId, file.id);
+    }
+    message.success('文件夹删除成功');
+    fetchDocuments();
+  } catch (e) {
+    console.error(e);
+    message.error('部分文件删除失败，请重试');
+    fetchDocuments(); // Refresh to see what's left
+  } finally {
+    hide();
+  }
+};
 
 const goBack = () => {
   router.push('/kb');
@@ -147,11 +271,9 @@ watch(uploadProgressModalVisible, (val) => {
 const systemPromptPlaceholder = `你是一个专业的AI助手。基于提供的文档和对话历史回答用户问题。
 
 要求：
-1. 提供的文档中的信息可供参考
-2. 如果文档不足以完整回答，结合对话历史和已有知识回答或直接明确说明
-3. 保持对话连贯，考虑历史上下文
-4. 用清晰、简洁的语言回答
-5. 文件为切片信息，编排可能较乱，你需要提取相关信息`;
+1. 文档中的信息仅供参考
+2. 如果文档不足以完整回答，结合对话历史进行推理或明确说明
+3. 文档中的信息为切片信息，可能语义并不连贯或存在错误，你需要抽取或推理相关信息`;
 
 const acceptExtensions = ".md,.txt,.pdf,.json,.py,.java,.js,.ts,.vue,.html,.xml,.yml,.sh,.rb,.css,.scss,.jpg,.jpeg,.png,.gif,.bmp,.webp";
 
@@ -164,6 +286,7 @@ const invitedUsersColumns = [
 ];
 
 const columns = [
+  {title: '', key: 'icon', width: 50, align: 'center'},
   {title: '文件名', dataIndex: 'fileName', key: 'fileName'},
   {title: '大小', dataIndex: 'fileSize', key: 'fileSize'},
   {title: '状态', dataIndex: 'status', key: 'status'}, // processing, ready, failed
@@ -223,7 +346,10 @@ const customRequest = async (options) => {
   uploading.value = true;
 
   const formData = new FormData();
-  formData.append('files', file);
+  // Use webkitRelativePath if available (folder upload), otherwise fallback to name.
+  // We explicitly set the filename in formData to include the path.
+  const fullPath = file.webkitRelativePath || file.name;
+  formData.append('files', file, fullPath);
 
   try {
     await uploadDocument(kbId, formData, {
@@ -488,8 +614,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div style="padding: 24px">
-    <div class="kb-header">
+  <div style="padding: 24px; height: 100vh; display: flex; flex-direction: column;">
+    <div class="kb-header" style="flex-shrink: 0;">
       <div class="kb-title-container">
         <a-button @click="goBack" type="text" shape="circle">
           <template #icon><arrow-left-outlined /></template>
@@ -514,6 +640,18 @@ onUnmounted(() => {
             :showUploadList="false"
             :accept="acceptExtensions"
             :before-upload="beforeUpload"
+            directory
+            multiple>
+          <a-button>
+            <span v-if="!isMobile">📂 上传文件夹</span>
+            <span v-else>📂</span>
+          </a-button>
+        </a-upload>
+        <a-upload
+            :customRequest="customRequest"
+            :showUploadList="false"
+            :accept="acceptExtensions"
+            :before-upload="beforeUpload"
             multiple>
           <a-button type="primary" :loading="uploading">
             <span v-if="!isMobile">⬆️ 上传文档</span>
@@ -523,37 +661,123 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <a-table :columns="columns" :data-source="fileList" row-key="id" :scroll="{ x: 800 }">
+    <!-- Breadcrumb -->
+    <div style="margin-bottom: 16px; flex-shrink: 0;">
+       <a-breadcrumb>
+         <a-breadcrumb-item>
+           <a @click="navToLevel(-1)"><home-outlined /> 根目录</a>
+         </a-breadcrumb-item>
+         <a-breadcrumb-item v-for="(folder, index) in currentPath" :key="index">
+           <a @click="navToLevel(index)">{{ folder }}</a>
+         </a-breadcrumb-item>
+       </a-breadcrumb>
+    </div>
+
+    <a-table :columns="columns" :data-source="displayList" row-key="id" :pagination="false" :scroll="{ x: 800, y: 'calc(100vh - 250px)' }">
       <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'icon'">
+            <folder-outlined v-if="record.isFolder" style="color: #1890ff; font-size: 18px;" />
+            <file-outlined v-else style="color: #666; font-size: 18px;" />
+        </template>
+        <template v-if="column.key === 'fileName'">
+            <a v-if="record.isFolder" @click="enterFolder(record.fileName)" style="font-weight: bold;">
+                {{ record.fileName }}
+            </a>
+            <span v-else>{{ record.fileName.split('/').pop() }}</span>
+        </template>
         <template v-if="column.key === 'fileSize'">
-          {{ (record.fileSize / (1024 * 1024)).toFixed(2) }} MB
+          <span>{{ (record.fileSize / (1024 * 1024)).toFixed(2) }} MB</span>
         </template>
         <template v-if="column.key === 'status'">
-          <a-tag v-if="record.status === 'processing'" color="blue">
-            <loading-outlined />
-            向量化中
-          </a-tag>
-          <a-tag v-else-if="record.status === 'ready'" color="green">完成</a-tag>
-          <a-tag v-else-if="record.status === 'failed'" color="red">失败</a-tag>
-          <a-tag v-else color="default">{{ record.status }}</a-tag>
+          <template v-if="record.isFolder">
+              <a-tag v-if="record.status === 'processing'" color="blue">
+                <loading-outlined />
+                向量化中
+              </a-tag>
+              <a-tag v-else-if="record.status === 'ready'" color="green">完成</a-tag>
+              <a-tag v-else-if="record.status === 'failed'" color="red">失败</a-tag>
+          </template>
+          <template v-else>
+              <a-tag v-if="record.status === 'processing'" color="blue">
+                <loading-outlined />
+                向量化中
+              </a-tag>
+              <a-tag v-else-if="record.status === 'ready'" color="green">完成</a-tag>
+              <a-tag v-else-if="record.status === 'failed'" color="red">失败</a-tag>
+              <a-tag v-else color="default">{{ record.status }}</a-tag>
+          </template>
         </template>
         <template v-if="column.key === 'action'">
-          <a-button type="link" size="small" @click="handlePreview(record)">预览</a-button>
-          <a-divider type="vertical"/>
-          <a-button type="link" size="small" @click="handleDownload(record)">下载</a-button>
-          <a-divider type="vertical"/>
-          <a-button type="link" size="small" @click="handlePreviewChunks(record)">预览切片</a-button>
-          <a-divider type="vertical"/>
-          <a-button type="link" size="small" @click="openRenameModal(record)">重命名</a-button>
-          <a-divider type="vertical"/>
-          <a-popconfirm
-            title="确定要删除这个文件吗？"
-            ok-text="确定"
-            cancel-text="取消"
-            @confirm="handleDelete(record)"
-          >
-            <a-button type="link" danger size="small">删除</a-button>
-          </a-popconfirm>
+          <template v-if="record.isFolder">
+              <a-popconfirm
+                title="确定要删除这个文件夹及其所有内容吗？"
+                ok-text="确定"
+                cancel-text="取消"
+                @confirm="handleDeleteFolder(record.fileName)"
+              >
+                <a-button type="link" danger size="small">删除</a-button>
+              </a-popconfirm>
+          </template>
+          <template v-else>
+              <!-- Mobile View: Dropdown -->
+              <a-dropdown v-if="isMobile" :trigger="['click']">
+                <a-button type="text" size="small">
+                   <more-outlined />
+                </a-button>
+                <template #overlay>
+                  <a-menu>
+                    <a-menu-item @click="handlePreview(record)">预览</a-menu-item>
+                    <a-menu-item @click="handleDownload(record)">下载</a-menu-item>
+                    <a-menu-item @click="handlePreviewChunks(record)">预览切片</a-menu-item>
+                    <a-menu-item @click="openRenameModal(record)">重命名</a-menu-item>
+                    <a-menu-item danger>
+                        <a-popconfirm
+                            title="确定要删除这个文件吗？"
+                            ok-text="确定"
+                            cancel-text="取消"
+                            @confirm="handleDelete(record)"
+                        >
+                            <span>删除</span>
+                        </a-popconfirm>
+                    </a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+
+              <!-- Desktop View: Buttons -->
+              <span v-else>
+                  <a-button type="link" size="small" @click="handlePreview(record)">预览</a-button>
+                  <a-divider type="vertical"/>
+                  <a-button type="link" size="small" @click="handlePreviewChunks(record)">切片</a-button>
+                  <a-divider type="vertical"/>
+                  
+                  <a-dropdown>
+                    <a class="ant-dropdown-link" @click.prevent style="font-size: 12px">
+                      更多 <down-outlined />
+                    </a>
+                    <template #overlay>
+                      <a-menu>
+                        <a-menu-item @click="handleDownload(record)">
+                            下载文件
+                        </a-menu-item>
+                        <a-menu-item @click="openRenameModal(record)">
+                            重命名
+                        </a-menu-item>
+                        <a-menu-item danger>
+                            <a-popconfirm
+                                title="确定要删除这个文件吗？"
+                                ok-text="确定"
+                                cancel-text="取消"
+                                @confirm="handleDelete(record)"
+                            >
+                                <div style="width: 100%">删除文件</div>
+                            </a-popconfirm>
+                        </a-menu-item>
+                      </a-menu>
+                    </template>
+                  </a-dropdown>
+              </span>
+          </template>
         </template>
       </template>
     </a-table>

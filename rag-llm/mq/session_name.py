@@ -24,7 +24,10 @@ class SessionNameGenerator:
 
             messages = [
                 SystemMessage(
-                    content="你是一个助手。请根据用户的输入内容，生成一个简短的标题。直接返回标题，不要包含引号或其他多余文字。"),
+                    content="1. 请根据用户的输入内容，生成一个简短的标题。"
+                            "2. 直接返回标题，不要包含引号或其他多余文字。"
+                            "3. 注意不是回答用户内容，而是生成一个概括性的标题。"
+                ),
                 HumanMessage(content=f"用户输入内容: {content}")
             ]
 
@@ -48,7 +51,13 @@ class SessionNameGenerator:
                 session_id = data.get("sessionId")
                 # 兼容不同的字段名，假设 Java 端发送的是 content 或 message
                 content = data.get("firstMessage") or data.get("content") or data.get("message")
-                model = data.get("model")  # {'id': 7, 'name': 'gemini-2.5-flash', 'provider': 'gemini', 'metadata': '{}'}
+                model = data.get(
+                    "model")  # {'id': 7, 'name': 'gemini-2.5-flash', 'provider': 'gemini', 'metadata': '{}'}
+                # 这里暂时全部使用qwen3-max模型
+                model = {
+                    'name': 'qwen3-max',
+                    'provider': 'qwen'
+                }
                 llm = get_llm_instance(model)
                 # 调用 LLM 生成标题
                 session_key = await self.generate_session_name(content, llm)
