@@ -348,7 +348,9 @@ const customRequest = async (options) => {
   const formData = new FormData();
   // Use webkitRelativePath if available (folder upload), otherwise fallback to name.
   // We explicitly set the filename in formData to include the path.
-  const fullPath = file.webkitRelativePath || file.name;
+  const prefix = currentPathString.value ? currentPathString.value + '/' : '';
+  const relativePath = file.webkitRelativePath || file.name;
+  const fullPath = prefix + relativePath;
   formData.append('files', file, fullPath);
 
   try {
