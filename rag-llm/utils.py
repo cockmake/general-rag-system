@@ -9,7 +9,6 @@ import fitz  # PyMuPDF
 import tiktoken
 from PIL import Image
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRetryMiddleware
 from langchain.chat_models import init_chat_model
 from langchain.embeddings import init_embeddings
 from langchain_community.document_loaders import PyMuPDFLoader
@@ -137,7 +136,7 @@ def json_split(json_data: dict, min_chunk_size: int = 100, max_chunk_size: int =
     return json_splitter.split_json(json_data)
 
 
-def code_split(code_text: str, language: str, chunk_size: int = 1500, chunk_overlap: int = 0):
+def code_split(code_text: str, language: str, chunk_size: int = 1500, chunk_overlap: int = 200):
     language = Language(language)
     code_splitter = RecursiveCharacterTextSplitter.from_language(
         language=language, chunk_size=chunk_size, chunk_overlap=chunk_overlap
@@ -147,7 +146,7 @@ def code_split(code_text: str, language: str, chunk_size: int = 1500, chunk_over
 
 def plain_text_split(
         plain_text: str,
-        chunk_size: int = 1000, chunk_overlap: int = 200,
+        chunk_size: int = 1000, chunk_overlap: int = 150,
         separators: list = None, force_split: bool = False,
         add_start_index: bool = True
 ):
@@ -208,7 +207,7 @@ def _extract_text_with_ocr(pdf_path: str, language: str = 'chi_sim+eng'):
 
 
 def pdf_split(
-        file_path: str, chunk_size: int = 1000, chunk_overlap: int = 0,
+        file_path: str, chunk_size: int = 1000, chunk_overlap: int = 150,
         text_threshold: int = 20,
         ocr_language: str = 'chi_sim+eng',
 ):
@@ -263,7 +262,7 @@ def pdf_split(
 
 
 def image_split(
-        file_input, min_length: int = 20, chunk_size: int = 1000, chunk_overlap: int = 200,
+        file_input, min_length: int = 20, chunk_size: int = 1000, chunk_overlap: int = 150,
         lang: str = 'chi_sim+eng'
 ):
     if not TESSERACT_AVAILABLE:

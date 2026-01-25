@@ -25,7 +25,7 @@ http.interceptors.request.use(
             config.headers.Authorization = `Bearer ${userStore.token}`
         }
         // 弹出请求中
-        message.info('请求中...').then()
+        // message.info('请求中...').then()
         return config
     },
     (error) => Promise.reject(error)
