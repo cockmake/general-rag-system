@@ -27,9 +27,8 @@ rag-server/src/main/resources/application-*.yml
 *.log
 
 # Python (rag-llm)
-rag-llm/__pycache__/
-rag-llm/.pytest_cache/
-rag-llm/*.pyc
+**/__pycache__/
+**/*.pyc
 rag-llm/.env
 rag-llm/venv/
 rag-llm/temp/

@@ -198,10 +198,6 @@ async def chat_stream(
     kb_id = options.get('kbId')
     system_prompt = options.get('systemPrompt')
 
-    # 有些模型暂时自动开启联网模型
-    model_name = model.get('name', '')
-    if model_name == 'qwen3-max' or model_name.startswith("gpt-5.2-chat"):
-        options['webSearch'] = True
 
     # 截断策略：保留最新用户问题，其余历史按(user, assistant)成组，总token数<20480
     prompt_tokens = 0

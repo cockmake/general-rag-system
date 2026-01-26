@@ -129,7 +129,7 @@ export function startChatStream(sessionId, modelId, question, kbId, options, onO
 /**
  * 编辑最后一轮用户问题并重新生成回复
  */
-export function editMessageStream(messageId, sessionId, modelId, kbId, newContent, onOpen, onMessage, onError, onClose) {
+export function editMessageStream(messageId, sessionId, modelId, kbId, newContent, options, onOpen, onMessage, onError, onClose) {
     fetchEventSource(`${API_BASE_URL}/chat/messages/${messageId}/edit`, {
         method: "POST",
         headers: {
@@ -140,7 +140,8 @@ export function editMessageStream(messageId, sessionId, modelId, kbId, newConten
             sessionId: sessionId,
             modelId: modelId,
             kbId: kbId,
-            newContent: newContent
+            newContent: newContent,
+            options: options
         }),
         onopen(response) {
             if (response.ok) {
@@ -186,7 +187,7 @@ export function editMessageStream(messageId, sessionId, modelId, kbId, newConten
  * 重试最后一轮AI回复
  * @param userMessageId 最后一轮用户消息ID（用于定位需要重新生成回复的用户问题）
  */
-export function retryMessageStream(userMessageId, sessionId, modelId, kbId, onOpen, onMessage, onError, onClose) {
+export function retryMessageStream(userMessageId, sessionId, modelId, kbId, options, onOpen, onMessage, onError, onClose) {
     fetchEventSource(`${API_BASE_URL}/chat/messages/${userMessageId}/retry`, {
         method: "POST",
         headers: {
@@ -196,7 +197,8 @@ export function retryMessageStream(userMessageId, sessionId, modelId, kbId, onOp
         body: JSON.stringify({
             sessionId: sessionId,
             modelId: modelId,
-            kbId: kbId
+            kbId: kbId,
+            options: options
         }),
         onopen(response) {
             if (response.ok) {

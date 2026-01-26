@@ -308,6 +308,17 @@ const loadSession = async (newSessionId) => {
         console.error('Failed to parse ragContext:', e)
       }
     }
+    
+    // Parse options if present
+    let options = null
+    if (msg.options) {
+      try {
+        options = typeof msg.options === 'string' ? JSON.parse(msg.options) : msg.options
+      } catch(e) {
+        console.error('Failed to parse options:', e)
+      }
+    }
+    
     return {
       id: msg.id,
       role: msg.role,
@@ -316,9 +327,26 @@ const loadSession = async (newSessionId) => {
       loading: msg.role === 'assistant' && msg.status === 'generating',
       ragProcess: ragProcess,
       latencyMs: msg.latencyMs,
-      completionTokens: msg.completionTokens
+      completionTokens: msg.completionTokens,
+      options: options
     }
   })
+  
+  // 初始化时，根据最后一条用户消息的 options 同步工具选择状态
+  const lastUserMsg = messages.value.filter(m => m.role === 'user').pop()
+  if (lastUserMsg && lastUserMsg.options) {
+    const opts = lastUserMsg.options
+    // 重置 selectedTools
+    selectedTools.value = []
+    if (opts.webSearch) {
+      selectedTools.value.push('webSearch')
+    }
+    // 后续如果有其他 tool，也在这里添加逻辑
+  } else {
+    // 如果没有历史 options，默认清空 (或者保留默认值? 根据需求，这里先清空以保持一致性)
+    selectedTools.value = []
+  }
+
   if (data.length > 0) {
     const lastMsg = data[data.length - 1]
     if (lastMsg.role === 'user' && lastMsg.status === 'pending') {
@@ -554,6 +582,11 @@ const confirmEdit = () => {
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
 
   isGenerating.value = true
+  const options = {}
+  if (selectedTools.value.includes('webSearch')) {
+    options.webSearch = true
+  }
+
   // 调用编辑接口
   editMessageStream(
       userMsg.id,
@@ -561,6 +594,7 @@ const confirmEdit = () => {
       selectedModel.value,
       isKbSupported.value ? (selectedKb.value || undefined) : undefined,
       editingContent.value,
+      options,
       onOpen,
       onMessage,
       onError,
@@ -596,12 +630,18 @@ const onRetry = (userMsgIndex) => {
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
 
   isGenerating.value = true
+  const options = {}
+  if (selectedTools.value.includes('webSearch')) {
+    options.webSearch = true
+  }
+
   // 调用重试接口
   retryMessageStream(
       userMsg.id,
       sessionId.value,
       selectedModel.value,
       isKbSupported.value ? (selectedKb.value || undefined) : undefined,
+      options,
       onOpen,
       onMessage,
       onError,
@@ -751,6 +791,29 @@ const roles = computed(() => ({
             class="chat-sender"
             placeholder="输入消息，Shift + Enter 换行，Enter 发送"
         >
+          <!-- 工具栏 (Header插槽) -->
+          <template #header>
+            <div class="sender-header-tools" v-if="allKnownTools.length > 0">
+              <div class="header-tools-wrapper">
+                <div 
+                  v-for="toolKey in allKnownTools" 
+                  :key="toolKey"
+                  class="header-tool-item"
+                  :class="{ 
+                    active: selectedTools.includes(toolKey),
+                    disabled: !availableTools.includes(toolKey)
+                  }"
+                  @click="toggleTool(toolKey)"
+                  :title="!availableTools.includes(toolKey) ? '当前模型不支持' : (toolConfigs[toolKey]?.desc || toolKey)"
+                >
+                  <component :is="toolConfigs[toolKey]?.icon || AppstoreOutlined" />
+                  <span>{{ toolConfigs[toolKey]?.label || toolKey }}</span>
+                  <CheckOutlined v-if="selectedTools.includes(toolKey)" style="font-size: 10px; margin-left: 2px;" />
+                </div>
+              </div>
+            </div>
+          </template>
+
           <template #footer="{ info: { components: { SendButton, LoadingButton } } }">
             <div class="sender-footer">
               <div class="sender-config">
@@ -787,26 +850,8 @@ const roles = computed(() => ({
                   </Tooltip>
                 </div>
                 
-                <!-- 聊天界面中的工具选择 (紧凑模式) -->
-                <div class="inline-tools" v-if="allKnownTools.some(t => availableTools.includes(t))">
-                  <a-divider type="vertical" style="height: 16px; margin: 0 4px; border-left-color: rgba(0,0,0,0.1)"/>
-                   <a-tooltip 
-                      v-for="toolKey in allKnownTools" 
-                      :key="toolKey" 
-                      :title="!availableTools.includes(toolKey) ? '当前模型不支持' : (toolConfigs[toolKey]?.desc || toolKey)"
-                    >
-                      <div 
-                        class="mini-tool-btn" 
-                        :class="{ 
-                          active: selectedTools.includes(toolKey),
-                          disabled: !availableTools.includes(toolKey)
-                        }"
-                        @click="toggleTool(toolKey)"
-                      >
-                         <component :is="toolConfigs[toolKey]?.icon || AppstoreOutlined" />
-                      </div>
-                    </a-tooltip>
-                </div>
+                <!-- 聊天界面中的工具选择 (紧凑模式) - 已移除，移至 Header -->
+
 
               </div>
               <div class="sender-actions">
@@ -1145,39 +1190,68 @@ const roles = computed(() => ({
   min-width: 160px;
 }
 
-.inline-tools {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.sender-header-tools {
+  padding: 8px 12px 4px;
 }
 
-.mini-tool-btn {
-  width: 24px;
-  height: 24px;
+.header-tools-wrapper {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.header-tool-item {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
+  padding: 4px 10px;
   border-radius: 6px;
   cursor: pointer;
+  font-size: 13px;
   color: #666;
-  transition: all 0.2s;
+  background: #f5f5f5;
   border: 1px solid transparent;
+  transition: all 0.2s;
 }
 
-.mini-tool-btn:hover:not(.disabled) {
-  background: #f0f0f0;
+.header-tool-item:hover:not(.disabled) {
+  background: #e6f7ff;
   color: #1890ff;
 }
 
-.mini-tool-btn.active {
+.header-tool-item.active {
   background: #e6f7ff;
   color: #1890ff;
   border-color: #1890ff;
+  font-weight: 500;
 }
 
-.mini-tool-btn.disabled {
-  opacity: 0.3;
+.header-tool-item.disabled {
+  opacity: 0.5;
   cursor: not-allowed;
+  background: #f9f9f9;
+  color: #999;
+}
+
+.chat-session-container.is-dark .header-tool-item {
+  background: rgba(255, 255, 255, 0.05);
+  color: #a6a6a6;
+}
+
+.chat-session-container.is-dark .header-tool-item:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #177ddc;
+}
+
+.chat-session-container.is-dark .header-tool-item.active {
+  background: rgba(23, 125, 220, 0.2);
+  color: #177ddc;
+  border-color: #177ddc;
+}
+
+.chat-session-container.is-dark .header-tool-item.disabled {
+  background: rgba(255, 255, 255, 0.02);
+  color: #434343;
 }
 
 /* Mobile optimizations */
@@ -1198,25 +1272,6 @@ const roles = computed(() => ({
 /* Dark mode overrides for footer elements */
 .chat-session-container.is-dark .sender-footer {
   border-top-color: #333;
-}
-
-.chat-session-container.is-dark .mini-tool-btn {
-  color: #a6a6a6;
-}
-
-.chat-session-container.is-dark .mini-tool-btn:hover:not(.disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  color: #177ddc;
-}
-
-.chat-session-container.is-dark .mini-tool-btn.active {
-  background: rgba(23, 125, 220, 0.2);
-  color: #177ddc;
-  border-color: #177ddc;
-}
-
-.chat-session-container.is-dark .mini-tool-btn.disabled {
-  color: #434343;
 }
 
 /* ... existing styles ... */

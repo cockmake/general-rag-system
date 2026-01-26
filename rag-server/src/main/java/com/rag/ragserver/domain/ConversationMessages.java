@@ -9,7 +9,7 @@ import lombok.Data;
  * RAG 对话消息历史表
  * @TableName conversation_messages
  */
-@TableName(value ="conversation_messages")
+@TableName(value ="conversation_messages", autoResultMap = true)
 @Data
 public class ConversationMessages {
     /**
@@ -84,10 +84,16 @@ public class ConversationMessages {
     private Date createdAt;
 
     /**
-     * 逻辑删除标记：0-未删除，1-已删除
+     * 
      */
     @TableLogic
     private Integer isDeleted;
+
+    /**
+     * 
+     */
+    @TableField(typeHandler = com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler.class)
+    private Object options;
 
     @Override
     public boolean equals(Object that) {
@@ -114,7 +120,9 @@ public class ConversationMessages {
             && (this.getTotalTokens() == null ? other.getTotalTokens() == null : this.getTotalTokens().equals(other.getTotalTokens()))
             && (this.getRagContext() == null ? other.getRagContext() == null : this.getRagContext().equals(other.getRagContext()))
             && (this.getLatencyMs() == null ? other.getLatencyMs() == null : this.getLatencyMs().equals(other.getLatencyMs()))
-            && (this.getCreatedAt() == null ? other.getCreatedAt() == null : this.getCreatedAt().equals(other.getCreatedAt()));
+            && (this.getCreatedAt() == null ? other.getCreatedAt() == null : this.getCreatedAt().equals(other.getCreatedAt()))
+            && (this.getIsDeleted() == null ? other.getIsDeleted() == null : this.getIsDeleted().equals(other.getIsDeleted()))
+            && (this.getOptions() == null ? other.getOptions() == null : this.getOptions().equals(other.getOptions()));
     }
 
     @Override
@@ -135,6 +143,8 @@ public class ConversationMessages {
         result = prime * result + ((getRagContext() == null) ? 0 : getRagContext().hashCode());
         result = prime * result + ((getLatencyMs() == null) ? 0 : getLatencyMs().hashCode());
         result = prime * result + ((getCreatedAt() == null) ? 0 : getCreatedAt().hashCode());
+        result = prime * result + ((getIsDeleted() == null) ? 0 : getIsDeleted().hashCode());
+        result = prime * result + ((getOptions() == null) ? 0 : getOptions().hashCode());
         return result;
     }
 
@@ -158,6 +168,8 @@ public class ConversationMessages {
         sb.append(", ragContext=").append(ragContext);
         sb.append(", latencyMs=").append(latencyMs);
         sb.append(", createdAt=").append(createdAt);
+        sb.append(", isDeleted=").append(isDeleted);
+        sb.append(", options=").append(options);
         sb.append("]");
         return sb.toString();
     }

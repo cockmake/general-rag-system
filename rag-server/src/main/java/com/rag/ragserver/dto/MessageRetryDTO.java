@@ -13,4 +13,6 @@ public class MessageRetryDTO {
     private Long modelId;
 
     private Long kbId;
+
+    private java.util.Map<String, Object> options;
 }

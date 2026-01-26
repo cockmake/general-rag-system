@@ -42,11 +42,7 @@ public class Models {
      */
     private Integer enabled;
 
-    /**
-     * 模型扩展信息（如是否支持 function calling、vision 等）
-     */
-    @TableField(typeHandler = JacksonTypeHandler.class)
-    private ModelMetadata metadata;
+    private Object metadata;
 
     /**
      * 创建时间

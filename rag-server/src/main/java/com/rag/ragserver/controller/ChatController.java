@@ -76,11 +76,7 @@ public class ChatController {
         
         // 保存 options
         if (chatStart.getOptions() != null) {
-            try {
-                conversationMessage.setOptions(new ObjectMapper().writeValueAsString(chatStart.getOptions()));
-            } catch (JsonProcessingException e) {
-                log.error("序列化 options 失败", e);
-            }
+            conversationMessage.setOptions(chatStart.getOptions());
         }
         
         conversationMessagesService.save(conversationMessage);
@@ -121,7 +117,8 @@ public class ChatController {
                         ConversationMessages::getStatus,
                         ConversationMessages::getCreatedAt,
                         ConversationMessages::getLatencyMs,
-                        ConversationMessages::getCompletionTokens
+                        ConversationMessages::getCompletionTokens,
+                        ConversationMessages::getOptions
                 )
                 .eq(ConversationMessages::getSessionId, sessionId)
                 .and(w -> w.isNull(ConversationMessages::getIsDeleted).or().eq(ConversationMessages::getIsDeleted, 0))
@@ -188,6 +185,15 @@ public class ChatController {
 
         ModelPermission modelPermission = validatePermissions(roleId, dto.getModelId(), dto.getKbId(), userId, workspaceId);
 
+        // 更新用户消息内容及options
+        ConversationMessages userMsg = conversationMessagesService.getById(messageId);
+        if (userMsg != null && userMsg.getUserId().equals(userId)) {
+             userMsg.setContent(dto.getNewContent());
+             if (dto.getOptions() != null) {
+                 userMsg.setOptions(dto.getOptions());
+             }
+             conversationMessagesService.updateById(userMsg);
+        }
         conversationMessagesService.editLastUserMessage(dto.getSessionId(), messageId, userId, dto.getNewContent());
 
         ChatStream chatStream = new ChatStream();
@@ -195,6 +201,7 @@ public class ChatController {
         chatStream.setModelId(dto.getModelId());
         chatStream.setKbId(dto.getKbId());
         chatStream.setQuestion(dto.getNewContent());
+        chatStream.setOptions(dto.getOptions());
 
         List<ConversationMessages> messageList = getSessionMessages(dto.getSessionId(), userId);
         Long currentUserMessageId = messageList.get(messageList.size() - 1).getId();
@@ -210,6 +217,15 @@ public class ChatController {
 
         ModelPermission modelPermission = validatePermissions(roleId, dto.getModelId(), dto.getKbId(), userId, workspaceId);
 
+        // 如果提供了新的 options，更新原用户消息的 options
+        if (dto.getOptions() != null) {
+            ConversationMessages userMsg = conversationMessagesService.getById(userMessageId);
+            if (userMsg != null) {
+                userMsg.setOptions(dto.getOptions());
+                conversationMessagesService.updateById(userMsg);
+            }
+        }
+        
         conversationMessagesService.retryLastAssistantMessage(dto.getSessionId(), userMessageId, userId);
 
         ChatStream chatStream = new ChatStream();
@@ -217,6 +233,7 @@ public class ChatController {
         chatStream.setModelId(dto.getModelId());
         chatStream.setKbId(dto.getKbId());
         chatStream.setQuestion(null);
+        chatStream.setOptions(dto.getOptions());
 
         List<ConversationMessages> messageList = getSessionMessages(dto.getSessionId(), userId);
         Long currentUserMessageId = messageList.get(messageList.size() - 1).getId();
@@ -318,7 +335,6 @@ public class ChatController {
         }
         
         if (kbId != null && kb != null) {
-
             options.put("userId", kb.getOwnerUserId());
             options.put("kbId", kbId);
             options.put("systemPrompt", kb.getSystemPrompt());

@@ -17,4 +17,6 @@ public class MessageEditDTO {
 
     @NotBlank(message = "新问题内容不能为空")
     private String newContent;
+
+    private java.util.Map<String, Object> options;
 }
