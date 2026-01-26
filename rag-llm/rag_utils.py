@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # ============= Pydantic Models =============
 class MultiQueryList(BaseModel):
     """多角度查询列表"""
-    queries: list[str] = Field(description="从不同角度生成的查询列表，涵盖至少6个查询")
+    queries: list[str] = Field(description="从不同角度生成的语义和关键词查询列表，涵盖至少6个查询")
     grade_query: str = Field(description="用于文档评分的查询，应该是结合上下文、解决指代消歧后的完整问题")
     reasoning: str = Field(description="生成这些查询的原因")
 
@@ -69,19 +69,20 @@ class RAGService:
 
 生成策略：
 1. 理解问题的核心意图，结合对话历史解析代词和上下文
-2. 提取问题中的关键实体、专业术语、错误码或具体名称，保留在查询中以利于关键词匹配
-3. 从不同语义角度拆解问题（如：定义、应用、对比、原理等）
-4. 生成的查询应该互补，覆盖问题的不同方面
-5. 查询应丰富明确，兼顾向量检索（语义）和关键词检索（精确），多个关键词间请用空格分隔
+2. 提取历史对话和问题中的关键实体、专业术语或具体名称，保留在查询中以利于关键词匹配
+3. 从不同语义角度拆解问题（如：定义、应用、对比、原理等），生成的查询应该互补，覆盖问题的不同方面
+4. 中英文查询仅在确有必要时生成，避免机械翻译
+5. 每条语义查询所包含的语义应有明显差异，避免简单同义改写，只有关键词查询允许同义改写（如：[ragSystem rag-system rag_system 检索增强生成系统]）
+6. 查询应丰富明确，包含向量检索（语义）和关键词检索（精确），多个关键词间请用空格分隔
 
-另外，请额外生成一个'grade_query'，它是对用户当前问题的完整陈述性重写（指代消歧后），用于对后续检索到的文档判定相关性。
+另外，请额外生成一个'grade_query'，它是对用户当前问题的完整陈述性重写（指代消歧后），可直接用于判断检索到的文档是否相关。
 例如：如果用户说“继续”，grade_query 应该是上一轮话题的延续描述，如"关于XXX的进一步详细说明"。
 
 {'对话历史：\n' + history_context if history_context else '无对话历史'}
 
 当前问题：{question}
 
-请生成3-5个不同角度的查询，以及一个grade_query。"""
+请生成6-10个不同角度的查询，以及一个grade_query。"""
 
         llm = get_llm_instance(model_info)
         structured_agent = get_structured_data_agent(llm, MultiQueryList)
