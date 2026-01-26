@@ -75,12 +75,12 @@ async def rag_stream_generator(
             kb_id=kb_id,
             user_id=user_id,
             system_prompt=system_prompt,
-            top_k=15,
+            top_k=20,
 
             grade_top_n=30,
-            grade_score_threshold=0.4,
+            grade_score_threshold=0.5,
 
-            top_n=10,
+            top_n=18,
     ):
         if item["type"] == "process":
             # 检索过程信息

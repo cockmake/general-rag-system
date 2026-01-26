@@ -123,7 +123,7 @@ public class KnowledgeBasesServiceImpl extends ServiceImpl<KnowledgeBasesMapper,
                     AddFieldReq.builder()
                             .fieldName("text")
                             .dataType(DataType.VarChar)
-                            .maxLength(4095)
+                            .maxLength(6144)
                             .build()
             );
             schema.addField(

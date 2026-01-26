@@ -166,16 +166,8 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
         String dbName = "group_" + groupId;
         String collectionName = "kb_" + document.getKbId();
         try {
-            Boolean loadState = milvusClientV2.getLoadState(
-                    GetLoadStateReq.builder().databaseName(dbName).collectionName(collectionName).build()
-            );
-            if (loadState == null || !loadState) {
-                milvusClientV2.loadCollection(
-                        LoadCollectionReq.builder().databaseName(dbName).collectionName(collectionName).build()
-                );
-            }
+            // Spring Boot端不负责加载管理，只负责创建和删除数据
             milvusClientV2.delete(DeleteReq.builder().databaseName(dbName).collectionName(collectionName).filter("documentId == " + docId).build());
-
             log.info("Deleted vectors from Milvus: docId={}, db={}, collection={}", docId, dbName, collectionName);
         } catch (Exception e) {
             log.error("Failed to delete from Milvus: docId={}, error={}", docId, e.getMessage());

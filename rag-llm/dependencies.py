@@ -15,14 +15,16 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     logger.info("初始化进程")
-    logger.info("Initializing RabbitMQ client and consumer...")
+
     consume_background_tasks = []
-    
-    # 手动连接而不是使用 async with，避免过早关闭连接
+
+    # RabbitMQ
     await rabbit_async_client.connect()
-    
+
+    # 启动 Milvus 释放任务
+    milvus_release_task = asyncio.create_task(MilvusClientManager.milvus_release_worker())
+
     try:
-        # 生成 session name
         consume_background_tasks.append(
             asyncio.create_task(
                 rabbit_async_client.consume(
@@ -31,7 +33,7 @@ async def app_lifespan(app: FastAPI):
                 )
             )
         )
-        # 文档向量化
+
         consume_background_tasks.append(
             asyncio.create_task(
                 rabbit_async_client.consume(
@@ -40,19 +42,24 @@ async def app_lifespan(app: FastAPI):
                 )
             )
         )
+
         yield
+
     finally:
         logger.info("进程结束")
-        logger.info("Shutting down RabbitMQ client and consumer...")
-        # 先取消任务
+
+        # 停止 Milvus 释放任务
+        milvus_release_task.cancel()
+        await asyncio.gather(milvus_release_task, return_exceptions=True)
+
+        # 停止 MQ consumer
         for task in consume_background_tasks:
             task.cancel()
-        # 等待任务完成取消
         await asyncio.gather(*consume_background_tasks, return_exceptions=True)
-        
-        # 关闭 Milvus 连接池
+
+        # 释放所有 Milvus collection
         logger.info("Closing Milvus connections...")
         await MilvusClientManager.close_all()
-        
-        # 最后关闭连接
+
+        # 关闭 MQ
         await rabbit_async_client.close()

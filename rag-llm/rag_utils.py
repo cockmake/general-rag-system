@@ -572,6 +572,7 @@ class RAGService:
                 }
 
                 # 4. 构建上下文
+                consecutive_docs = 0
                 merged_docs = []
                 if graded_docs:
                     yield {
@@ -585,6 +586,7 @@ class RAGService:
                     }
                     # 合并同一文档的连续切片（在 top_n 截断前进行，以保证完整性）
                     merged_docs = self.merge_consecutive_chunks(graded_docs)
+                    consecutive_docs = len(merged_docs)
 
                     # 最终应用 top_n 限制
                     merged_docs = merged_docs[:top_n]
@@ -593,17 +595,18 @@ class RAGService:
                         f"[文档{i + 1}]: {doc.page_content} (来源: {doc.metadata.get('fileName', '未命名文件')})"
                         for i, doc in enumerate(merged_docs)
                     ])
-
+                logger.info(
+                    f"构建上下文完成，合并后共有 {consecutive_docs} 个文档，选择前 {len(merged_docs)} 个用于回答。")
                 yield {
                     "type": "process",
                     "payload": {
                         "step": "reformat",
                         "title": "构建上下文",
-                        "description": f"基于检索和评分结果构建回答上下文，共 {len(merged_docs)} 个文档",
+                        "description": f"基于检索和评分结果构建回答上下文，合并后共有 {consecutive_docs} 个文档， 选择前 {len(merged_docs)} 个用于回答。",
                         "status": "completed",
                         "content": "\n\n---\n\n".join(
                             [
-                                f"[文档{i + 1}] [来源: {doc.metadata.get('fileName', '未命名文件')}] [相关性：{doc.metadata.get('rerank_score', 0):.3f}]: {doc.page_content}"
+                                f"```document\n[文档{i + 1}] [来源: {doc.metadata.get('fileName', '未命名文件')}] [相关性：{doc.metadata.get('rerank_score', 0):.3f}]: {doc.page_content}\n```"
                                 for i, doc in enumerate(merged_docs)
                             ]
                         ) if merged_docs else "无相关文档"

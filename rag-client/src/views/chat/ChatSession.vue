@@ -20,7 +20,7 @@ import {
 import {Typography, Button, Space, message as antMessage, theme, Input, Spin, Tooltip} from "ant-design-vue";
 import {findKbById, groupedModels, loadKbs, models, selectedKb, selectedModel} from "@/vars.js";
 import KbSelector from "@/components/KbSelector.vue";
-import { useThemeStore } from '@/stores/theme';
+import {useThemeStore} from '@/stores/theme';
 
 // --- Markdown 相关引入 ---
 import markdownit from 'markdown-it';
@@ -285,9 +285,9 @@ const loadSession = async (newSessionId) => {
       // 找到最后一条用户消息的引用
       const userMsg = messages.value[messages.value.length - 1]
       messages.value.push({
-        role: 'assistant', 
-        content: '', 
-        loading: true, 
+        role: 'assistant',
+        content: '',
+        loading: true,
         ragProcess: [],
         latencyMs: 0,
         completionTokens: 0
@@ -355,9 +355,9 @@ const onSend = (text) => {
   const userMsg = {role: 'user', content: text, status: 'pending'}
   messages.value.push(userMsg)
   messages.value.push({
-    role: 'assistant', 
-    content: '', 
-    loading: true, 
+    role: 'assistant',
+    content: '',
+    loading: true,
     ragProcess: [],
     latencyMs: 0,
     completionTokens: 0
@@ -487,9 +487,9 @@ const confirmEdit = () => {
 
   // 添加新的助手消息占位
   messages.value.push({
-    role: 'assistant', 
-    content: '', 
-    loading: true, 
+    role: 'assistant',
+    content: '',
+    loading: true,
     ragProcess: [],
     latencyMs: 0,
     completionTokens: 0
@@ -529,9 +529,9 @@ const onRetry = (userMsgIndex) => {
 
   // 添加新的助手消息占位
   messages.value.push({
-    role: 'assistant', 
-    content: '', 
-    loading: true, 
+    role: 'assistant',
+    content: '',
+    loading: true,
     ragProcess: [],
     latencyMs: 0,
     completionTokens: 0
@@ -616,12 +616,11 @@ const roles = computed(() => ({
                     description: p.description || '',
                     status: p.status || 'pending'
                   }
-                  // 如果有详细内容，渲染为 HTML
                   if (p.content) {
                     item.content = h('div', {
                       innerHTML: md.render(p.content),
                       class: 'markdown-body',
-                      style: { background: 'transparent' }
+                      style: { background: 'transparent'}
                     })
                   }
                   return item
@@ -723,15 +722,19 @@ const roles = computed(() => ({
                 <a-divider type="vertical" style="height: 16px; margin: 0 4px; border-left-color: rgba(0,0,0,0.1)"/>
 
                 <div class="kb-wrapper">
-                  <Tooltip :title="!isKbSupported ? '当前模型不支持知识库功能' : '请在您需要检索知识库中信息时选用'" placement="topLeft">
+                  <Tooltip :title="!isKbSupported ? '当前模型不支持知识库功能' : '请在您需要检索知识库中信息时选用'"
+                           placement="topLeft">
                     <div style="width: 100%">
-                      <KbSelector class="kb-select-footer" :disabled="!isKbSupported" :bordered="false" size="small" width="180px"/>
+                      <KbSelector class="kb-select-footer" :disabled="!isKbSupported" :bordered="false" size="small"
+                                  width="180px"/>
                     </div>
                   </Tooltip>
                 </div>
               </div>
               <div class="sender-actions">
-                <component :is="(loading || isGenerating || isLastUserMsgGenerating) ? LoadingButton : SendButton" type="primary" :disabled="loading || isGenerating || isLastUserMsgGenerating || !question" @click="!loading && !isGenerating && !isLastUserMsgGenerating && onSend(question)"/>
+                <component :is="(loading || isGenerating || isLastUserMsgGenerating) ? LoadingButton : SendButton"
+                           type="primary" :disabled="loading || isGenerating || isLastUserMsgGenerating || !question"
+                           @click="!loading && !isGenerating && !isLastUserMsgGenerating && onSend(question)"/>
               </div>
             </div>
           </template>
@@ -1031,7 +1034,7 @@ const roles = computed(() => ({
     flex: 1;
     min-width: 0;
   }
-  
+
   .kb-select-footer {
     width: 100% !important;
   }
