@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 chat_service = APIRouter(prefix="/chat", tags=["chat"])
 
 
-async def stream_generator(model_instance, messages, prompt_tokens: int = 0):
+async def stream_generator(model_instance, messages, prompt_tokens: int = 0, options: dict = None):
     """纯LLM流式响应生成器"""
     full_content = ""
     start_time = time.time()  # Start timing
@@ -23,6 +23,15 @@ async def stream_generator(model_instance, messages, prompt_tokens: int = 0):
     async for chunk in model_instance.astream(messages):
         content = chunk.content
         if content:
+            if isinstance(content, list):
+                text_content = ""
+                for item in content:
+                    if isinstance(item, str):
+                        text_content += item
+                    elif isinstance(item, dict) and "text" in item:
+                        text_content += item["text"]
+                content = text_content
+
             full_content += content
             # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
             data = {
@@ -53,7 +62,8 @@ async def rag_stream_generator(
         kb_id: Optional[int] = None,
         user_id: Optional[int] = None,
         system_prompt: Optional[str] = None,
-        prompt_tokens: int = 0
+        prompt_tokens: int = 0,
+        options: dict = None,
 ):
     """
     RAG流式响应生成器
@@ -75,6 +85,7 @@ async def rag_stream_generator(
             kb_id=kb_id,
             user_id=user_id,
             system_prompt=system_prompt,
+            options=options,
             top_k=20,
 
             grade_top_n=30,
@@ -187,6 +198,11 @@ async def chat_stream(
     kb_id = options.get('kbId')
     system_prompt = options.get('systemPrompt')
 
+    # 有些模型暂时自动开启联网模型
+    model_name = model.get('name', '')
+    if model_name == 'qwen3-max' or model_name.startswith("gpt-5.2-chat"):
+        options['webSearch'] = True
+
     # 截断策略：保留最新用户问题，其余历史按(user, assistant)成组，总token数<20480
     prompt_tokens = 0
     if history:
@@ -224,7 +240,8 @@ async def chat_stream(
                 kb_id=kb_id,
                 user_id=user_id,
                 system_prompt=system_prompt,
-                prompt_tokens=prompt_tokens
+                prompt_tokens=prompt_tokens,
+                options=options
             ),
             media_type="text/event-stream"
         )
@@ -232,22 +249,7 @@ async def chat_stream(
     # 否则使用纯LLM模式
     else:
         logger.info("使用纯LLM模式")
-        try:
-            llm = get_llm_instance(model)
-        except Exception as e:
-            logger.error(f"Error initializing model: {e}")
-
-            async def error_generator():
-                error_data = {
-                    "type": "error",
-                    "payload": f"Failed to initialize model: {e}"
-                }
-                yield f"data: {json.dumps(error_data)}\n\n"
-
-            return StreamingResponse(
-                error_generator(),
-                media_type="text/event-stream"
-            )
+        llm = get_llm_instance(model, enable_web_search=options.get('webSearch', False))
 
         # 添加当前问题到消息列表
         all_messages = langchain_messages + [HumanMessage(content=current_question)]
@@ -262,6 +264,6 @@ async def chat_stream(
         all_messages = messages_with_system
 
         return StreamingResponse(
-            stream_generator(llm, all_messages, prompt_tokens=prompt_tokens),
+            stream_generator(llm, all_messages, prompt_tokens=prompt_tokens, options=options),
             media_type="text/event-stream"
         )

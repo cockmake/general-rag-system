@@ -40,7 +40,7 @@ def _load_config_cached():
         return json.load(f)
 
 
-def get_llm_instance(model_info: dict, temperature: float = None):
+def get_llm_instance(model_info: dict, temperature: float = None, enable_web_search: bool = False):
     """根据模型信息加载配置并初始化 LLM"""
     provider = model_info.get("provider")
     model_name = model_info.get("name")
@@ -64,7 +64,7 @@ def get_llm_instance(model_info: dict, temperature: float = None):
     base_url = settings.get("base_url")
 
     # 初始化 LangChain ChatModel
-    return init_chat_model(
+    llm = init_chat_model(
         model=model_name,
         api_key=api_key,
         base_url=base_url,
@@ -73,6 +73,20 @@ def get_llm_instance(model_info: dict, temperature: float = None):
         timeout=30,
         max_retries=2,
     )
+
+    if enable_web_search:
+        if model_name == "qwen3-max":
+            llm = llm.bind(
+                extra_body={"enable_search": True}
+            )
+        elif model_name.startswith("gpt-5.2-chat"):
+            llm = llm.bind(
+                tools=[
+                    {"type": "web_search_preview"},
+                ]
+            )
+
+    return llm
 
 
 def get_embedding_instance(embedding_info: dict):

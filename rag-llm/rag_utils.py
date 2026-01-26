@@ -457,6 +457,7 @@ class RAGService:
             kb_id: Optional[int] = None,
             user_id: Optional[int] = None,
             system_prompt: Optional[str] = None,
+            options: dict = None,
             top_k: int = 15,
 
             grade_top_n: int = 50,
@@ -475,6 +476,7 @@ class RAGService:
             kb_id: 知识库ID（可选）
             user_id: 用户ID（可选）
             system_prompt: 自定义系统提示词（可选）
+            options: 其他选项（如启用Web搜索等）
             top_k: 每个查询检索的文档数量
             top_n: Rerank后返回的文档数量
             grade_top_n: Rerank评分时考虑的文档数量
@@ -672,12 +674,21 @@ class RAGService:
         conversation.append({"role": "user", "content": question})
 
         # 获取LLM实例并流式生成
-        llm = get_llm_instance(model_info)
+        llm = get_llm_instance(model_info, enable_web_search=options.get('webSearch', False) if options else False)
 
         # 使用异步流式生成
         async for chunk in llm.astream(conversation):
             content = chunk.content
             if content:
+                if isinstance(content, list):
+                    text_content = ""
+                    for item in content:
+                        if isinstance(item, str):
+                            text_content += item
+                        elif isinstance(item, dict) and "text" in item:
+                            text_content += item["text"]
+                    content = text_content
+
                 yield {
                     "type": "content",
                     "payload": content
