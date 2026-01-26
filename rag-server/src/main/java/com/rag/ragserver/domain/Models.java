@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+import com.rag.ragserver.domain.model.ModelMetadata;
 import java.util.Date;
 import lombok.Data;
 
@@ -11,7 +13,7 @@ import lombok.Data;
  * 可用大模型定义表
  * @TableName models
  */
-@TableName(value ="models")
+@TableName(value ="models", autoResultMap = true)
 @Data
 public class Models {
     /**
@@ -43,7 +45,8 @@ public class Models {
     /**
      * 模型扩展信息（如是否支持 function calling、vision 等）
      */
-    private Object metadata;
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private ModelMetadata metadata;
 
     /**
      * 创建时间

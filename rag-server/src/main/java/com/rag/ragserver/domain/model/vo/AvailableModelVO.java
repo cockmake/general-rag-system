@@ -1,5 +1,6 @@
 package com.rag.ragserver.domain.model.vo;
 
+import com.rag.ragserver.domain.model.ModelMetadata;
 import lombok.Data;
 
 @Data
@@ -41,4 +42,6 @@ public class AvailableModelVO {
      * 每日 token 上限（可能为 null，表示不限）
      */
     private Long dailyTokenLimit;
+
+    private ModelMetadata metadata;
 }

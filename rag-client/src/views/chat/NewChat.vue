@@ -55,20 +55,27 @@ const currentModel = computed(() => {
 
 const availableTools = computed(() => {
   if (!currentModel.value || !currentModel.value.metadata) return []
-  // metadata could be an object or string depending on API response
-  let metadata = currentModel.value.metadata
-  if (typeof metadata === 'string') {
-     try {
-       metadata = JSON.parse(metadata)
-     } catch (e) {
-       console.error("Parse metadata failed", e)
-       return []
-     }
+  // 后端已统一返回对象，直接读取 tools
+  return currentModel.value.metadata.tools || []
+})
+
+// 所有已知工具列表，用于渲染UI（即使模型不支持也显示，但禁用）
+const allKnownTools = ['webSearch']
+
+watch(selectedModel, () => {
+  if (!isKbSupported.value) {
+    selectedKb.value = null
   }
-  return metadata.tools || []
+  // 切换模型时，检查已选工具是否仍被支持
+  // 如果不支持，则移除；
+  // 如果支持，保留用户的选择（或者根据需求也可以全重置，这里选择保留支持的）
+  const newSupported = availableTools.value
+  selectedTools.value = selectedTools.value.filter(t => newSupported.includes(t))
 })
 
 const toggleTool = (toolKey) => {
+  if (!availableTools.value.includes(toolKey)) return // Disabled
+  
   const index = selectedTools.value.indexOf(toolKey)
   if (index === -1) {
     selectedTools.value.push(toolKey)
@@ -76,13 +83,6 @@ const toggleTool = (toolKey) => {
     selectedTools.value.splice(index, 1)
   }
 }
-
-watch(selectedModel, () => {
-  if (!isKbSupported.value) {
-    selectedKb.value = null
-  }
-  selectedTools.value = [] // Reset tools on model change
-})
 
 const onSend = async (text) => {
   if (!selectedModel.value) {
@@ -165,7 +165,7 @@ const onSend = async (text) => {
             </a-select>
           </div>
 
-          <div class="config-item" v-if="availableTools.length > 0">
+          <div class="config-item">
             <div class="config-label">
               <ToolOutlined class="config-icon" />
               <span>功能选择</span>
@@ -173,13 +173,16 @@ const onSend = async (text) => {
             
             <div class="tools-container">
               <a-tooltip 
-                v-for="toolKey in availableTools" 
+                v-for="toolKey in allKnownTools" 
                 :key="toolKey" 
-                :title="toolConfigs[toolKey]?.desc || toolKey"
+                :title="!availableTools.includes(toolKey) ? '当前模型不支持此功能' : (toolConfigs[toolKey]?.desc || toolKey)"
               >
                 <div 
                   class="tool-btn" 
-                  :class="{ active: selectedTools.includes(toolKey) }"
+                  :class="{ 
+                    active: selectedTools.includes(toolKey),
+                    disabled: !availableTools.includes(toolKey)
+                  }"
                   @click="toggleTool(toolKey)"
                 >
                   <component :is="toolConfigs[toolKey]?.icon || AppstoreOutlined" />
@@ -447,6 +450,21 @@ const onSend = async (text) => {
   font-weight: 500;
 }
 
+.tool-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f5f5f5;
+  border-color: #d9d9d9;
+  color: #00000040;
+  box-shadow: none;
+}
+.tool-btn.disabled:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: #d9d9d9;
+  color: #00000040;
+}
+
 /* Dark mode support for tools */
 .new-chat-container.is-dark .tool-btn {
   background: rgba(255, 255, 255, 0.05);
@@ -464,6 +482,17 @@ const onSend = async (text) => {
   background: rgba(23, 125, 220, 0.2);
   border-color: #177ddc;
   color: #177ddc;
+}
+
+.new-chat-container.is-dark .tool-btn.disabled {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: #303030;
+  color: #434343;
+}
+.new-chat-container.is-dark .tool-btn.disabled:hover {
+  border-color: #303030;
+  color: #434343;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 /* 暗色模式样式 - 非 scoped 以确保优先级和覆盖 */

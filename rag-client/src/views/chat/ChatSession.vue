@@ -63,15 +63,8 @@ const currentModel = computed(() => {
 
 const availableTools = computed(() => {
   if (!currentModel.value || !currentModel.value.metadata) return []
-  let metadata = currentModel.value.metadata
-  if (typeof metadata === 'string') {
-     try {
-       metadata = JSON.parse(metadata)
-     } catch (e) {
-       return []
-     }
-  }
-  return metadata.tools || []
+  // 后端已统一返回对象，直接读取 tools
+  return currentModel.value.metadata.tools || []
 })
 
 const toggleTool = (toolKey) => {
@@ -1127,27 +1120,107 @@ const roles = computed(() => ({
 
 .sender-footer {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   padding: 8px 12px 8px 4px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .sender-config {
   display: flex;
-  gap: 4px;
   align-items: center;
   flex: 1;
-  overflow: scroll;
+  overflow-x: auto;
+  gap: 4px;
+}
+
+.sender-config::-webkit-scrollbar {
+  display: none;
 }
 
 .model-select-footer {
-  width: 180px;
+  min-width: 120px;
 }
 
-.kb-wrapper {
-  /* Ensure it doesn't shrink to 0 on desktop if not needed, but flex:1 in mobile handles it */
+.kb-select-footer {
+  min-width: 160px;
 }
+
+.inline-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mini-tool-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.mini-tool-btn:hover:not(.disabled) {
+  background: #f0f0f0;
+  color: #1890ff;
+}
+
+.mini-tool-btn.active {
+  background: #e6f7ff;
+  color: #1890ff;
+  border-color: #1890ff;
+}
+
+.mini-tool-btn.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .chat-input-area.is-mobile .sender-config {
+    flex-wrap: nowrap;
+  }
+
+  .chat-input-area.is-mobile .kb-select-footer {
+    min-width: 100px;
+  }
+
+  .chat-input-area.is-mobile .model-select-footer {
+    min-width: 90px;
+  }
+}
+
+/* Dark mode overrides for footer elements */
+.chat-session-container.is-dark .sender-footer {
+  border-top-color: #333;
+}
+
+.chat-session-container.is-dark .mini-tool-btn {
+  color: #a6a6a6;
+}
+
+.chat-session-container.is-dark .mini-tool-btn:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #177ddc;
+}
+
+.chat-session-container.is-dark .mini-tool-btn.active {
+  background: rgba(23, 125, 220, 0.2);
+  color: #177ddc;
+  border-color: #177ddc;
+}
+
+.chat-session-container.is-dark .mini-tool-btn.disabled {
+  color: #434343;
+}
+
+/* ... existing styles ... */
+
 
 .kb-select-footer {
   width: 180px; /* Default desktop width */
