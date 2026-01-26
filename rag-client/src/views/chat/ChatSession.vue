@@ -174,7 +174,8 @@ const handleScroll = () => {
 
 // 监听消息变化，自动滚动
 // 移除 messages.value.length 的监听，合并到 deep watcher 中处理，或者使用 ant-design-x-vue 内置的 auto-scroll
-// 这里保留 deep watch 但增加 throttle 避免高频调用
+// 移除自动滚动逻辑，由用户控制
+/*
 let scrollTimeout = null
 watch(
     messages,
@@ -189,6 +190,7 @@ watch(
     },
     {deep: true}
 )
+*/
 
 const handleStreamCallbacks = (assistantMsg, userMsg = null) => {
   // 流开始时设置用户消息状态为generating
@@ -202,8 +204,6 @@ const handleStreamCallbacks = (assistantMsg, userMsg = null) => {
       if (data.type === 'content') {
         if (assistantMsg.loading) assistantMsg.loading = false
         assistantMsg.content += data.content
-        // 触发滚动
-        scrollToBottom()
       } else if (data.type === 'process') {
         // 第一次收到 process 消息时就取消 loading 状态
         if (assistantMsg.loading) assistantMsg.loading = false
@@ -226,8 +226,6 @@ const handleStreamCallbacks = (assistantMsg, userMsg = null) => {
           // 否则添加为新步骤（running 和 completed 会作为不同的项）
           assistantMsg.ragProcess.push(processInfo)
         }
-        // 触发滚动
-        scrollToBottom()
       } else if (data.type === 'done') {
         // 流完成，更新消息ID和状态
         if (userMsg) {
@@ -440,6 +438,7 @@ const onSend = (text) => {
     latencyMs: 0,
     completionTokens: 0
   })
+  scrollToBottom()
   const assistant = messages.value[messages.value.length - 1]
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
   isGenerating.value = true
