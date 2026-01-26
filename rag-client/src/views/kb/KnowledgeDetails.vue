@@ -327,6 +327,60 @@ const beforeUpload = (file) => {
   return true;
 };
 
+const MAX_CONCURRENT_UPLOADS = 5;
+const concurrentUploads = ref(0);
+const uploadQueue = [];
+
+const processQueue = async () => {
+  if (uploadQueue.length === 0 || concurrentUploads.value >= MAX_CONCURRENT_UPLOADS) {
+    return;
+  }
+
+  while (uploadQueue.length > 0 && concurrentUploads.value < MAX_CONCURRENT_UPLOADS) {
+    const task = uploadQueue.shift();
+    concurrentUploads.value++;
+    
+    const { formData, file, onSuccess, onError } = task;
+
+    try {
+      await uploadDocument(kbId, formData, {
+        onUploadProgress: (progressEvent) => {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          const item = uploadProgressList.value.find(item => item.uid === file.uid);
+          if (item) {
+            item.percent = percent;
+          }
+        }
+      });
+      
+      // Success
+      const item = uploadProgressList.value.find(item => item.uid === file.uid);
+      if (item) {
+        item.status = 'done';
+        item.percent = 100;
+      }
+      message.success(`${file.name} 上传成功`);
+      onSuccess(null, file);
+      fetchDocuments();
+    } catch (err) {
+      // Error
+      const item = uploadProgressList.value.find(item => item.uid === file.uid);
+      if (item) {
+        item.status = 'error';
+        item.error = err.message || '上传失败';
+      }
+      onError(err);
+    } finally {
+      concurrentUploads.value--;
+      activeUploadsCount.value--;
+      if (activeUploadsCount.value === 0) {
+        uploading.value = false;
+      }
+      processQueue();
+    }
+  }
+};
+
 const customRequest = async (options) => {
   const { file, onSuccess, onError } = options;
   
@@ -353,40 +407,9 @@ const customRequest = async (options) => {
   const fullPath = prefix + relativePath;
   formData.append('files', file, fullPath);
 
-  try {
-    await uploadDocument(kbId, formData, {
-      onUploadProgress: (progressEvent) => {
-        const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        const item = uploadProgressList.value.find(item => item.uid === file.uid);
-        if (item) {
-          item.percent = percent;
-        }
-      }
-    });
-    
-    // Success
-    const item = uploadProgressList.value.find(item => item.uid === file.uid);
-    if (item) {
-      item.status = 'done';
-      item.percent = 100;
-    }
-    message.success(`${file.name} 上传成功`);
-    onSuccess(null, file);
-    fetchDocuments();
-  } catch (err) {
-    // Error
-    const item = uploadProgressList.value.find(item => item.uid === file.uid);
-    if (item) {
-      item.status = 'error';
-      item.error = err.message || '上传失败';
-    }
-    onError(err);
-  } finally {
-    activeUploadsCount.value--;
-    if (activeUploadsCount.value === 0) {
-      uploading.value = false;
-    }
-  }
+  // Add to queue and process
+  uploadQueue.push({ formData, file, onSuccess, onError });
+  processQueue();
 };
 
 // 2. 预览逻辑
