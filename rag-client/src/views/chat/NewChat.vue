@@ -3,7 +3,16 @@ import {ref, onMounted, computed, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {message} from 'ant-design-vue'
 import {Sender} from 'ant-design-x-vue'
-import {CommentOutlined, RobotOutlined, DatabaseOutlined, ToolOutlined} from '@ant-design/icons-vue'
+import {
+  CommentOutlined, 
+  RobotOutlined, 
+  DatabaseOutlined, 
+  ToolOutlined,
+  GlobalOutlined,
+  AppstoreOutlined,
+  CodeOutlined,
+  FileSearchOutlined
+} from '@ant-design/icons-vue'
 
 import {awaitSessionTitle, fetchAvailableModels, startChat} from '@/api/chatApi'
 import {models, groupedModels, selectedModel, selectedKb, loadKbs} from "@/vars.js";
@@ -16,6 +25,13 @@ const themeStore = useThemeStore();
 
 const loading = ref(false)
 const selectedTools = ref([])
+
+// 工具配置映射
+const toolConfigs = {
+  'webSearch': { icon: GlobalOutlined, label: '联网搜索', desc: '开启联网搜索能力，获取实时信息' },
+  'web_extractor': { icon: FileSearchOutlined, label: '网页提取', desc: '读取并分析指定网页内容' },
+  'code_interpreter': { icon: CodeOutlined, label: '代码解释器', desc: '执行代码进行计算或分析' },
+}
 
 onMounted(async () => {
   // 默认选第一个模型
@@ -52,9 +68,14 @@ const availableTools = computed(() => {
   return metadata.tools || []
 })
 
-const toolOptions = computed(() => {
-  return availableTools.value.map(t => ({ label: t, value: t }))
-})
+const toggleTool = (toolKey) => {
+  const index = selectedTools.value.indexOf(toolKey)
+  if (index === -1) {
+    selectedTools.value.push(toolKey)
+  } else {
+    selectedTools.value.splice(index, 1)
+  }
+}
 
 watch(selectedModel, () => {
   if (!isKbSupported.value) {
@@ -149,7 +170,23 @@ const onSend = async (text) => {
               <ToolOutlined class="config-icon" />
               <span>功能选择</span>
             </div>
-             <a-checkbox-group v-model:value="selectedTools" :options="toolOptions" />
+            
+            <div class="tools-container">
+              <a-tooltip 
+                v-for="toolKey in availableTools" 
+                :key="toolKey" 
+                :title="toolConfigs[toolKey]?.desc || toolKey"
+              >
+                <div 
+                  class="tool-btn" 
+                  :class="{ active: selectedTools.includes(toolKey) }"
+                  @click="toggleTool(toolKey)"
+                >
+                  <component :is="toolConfigs[toolKey]?.icon || AppstoreOutlined" />
+                  <span class="tool-label">{{ toolConfigs[toolKey]?.label || toolKey }}</span>
+                </div>
+              </a-tooltip>
+            </div>
           </div>
 
           <div class="config-item">
@@ -360,10 +397,75 @@ const onSend = async (text) => {
   .config-select {
     width: 100% !important;
   }
+  
+  .tools-container {
+    justify-content: center;
+  }
+  
+  .tool-btn {
+    flex: 1;
+    justify-content: center;
+  }
 }
 </style>
 
 <style>
+/* 工具按钮样式 */
+.tools-container {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #666;
+  background: #fff;
+  user-select: none;
+  font-size: 14px;
+}
+
+.tool-btn:hover {
+  border-color: #1890ff;
+  color: #1890ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.1);
+}
+
+.tool-btn.active {
+  background: #e6f7ff;
+  border-color: #1890ff;
+  color: #1890ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
+  font-weight: 500;
+}
+
+/* Dark mode support for tools */
+.new-chat-container.is-dark .tool-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #434343;
+  color: #a6a6a6;
+}
+
+.new-chat-container.is-dark .tool-btn:hover {
+  border-color: #177ddc;
+  color: #177ddc;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.new-chat-container.is-dark .tool-btn.active {
+  background: rgba(23, 125, 220, 0.2);
+  border-color: #177ddc;
+  color: #177ddc;
+}
+
 /* 暗色模式样式 - 非 scoped 以确保优先级和覆盖 */
 .new-chat-container.is-dark {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
