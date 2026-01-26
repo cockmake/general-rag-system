@@ -3,7 +3,7 @@ import {ref, onMounted, computed, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {message} from 'ant-design-vue'
 import {Sender} from 'ant-design-x-vue'
-import {CommentOutlined, RobotOutlined, DatabaseOutlined} from '@ant-design/icons-vue'
+import {CommentOutlined, RobotOutlined, DatabaseOutlined, ToolOutlined} from '@ant-design/icons-vue'
 
 import {awaitSessionTitle, fetchAvailableModels, startChat} from '@/api/chatApi'
 import {models, groupedModels, selectedModel, selectedKb, loadKbs} from "@/vars.js";
@@ -15,6 +15,7 @@ const router = useRouter()
 const themeStore = useThemeStore();
 
 const loading = ref(false)
+const selectedTools = ref([])
 
 onMounted(async () => {
   // 默认选第一个模型
@@ -31,10 +32,35 @@ const isKbSupported = computed(() => {
   return modelObj.kbSupported || false
 })
 
+const currentModel = computed(() => {
+  if (!selectedModel.value) return null
+  return models.value.find(m => m.modelId === selectedModel.value) || null
+})
+
+const availableTools = computed(() => {
+  if (!currentModel.value || !currentModel.value.metadata) return []
+  // metadata could be an object or string depending on API response
+  let metadata = currentModel.value.metadata
+  if (typeof metadata === 'string') {
+     try {
+       metadata = JSON.parse(metadata)
+     } catch (e) {
+       console.error("Parse metadata failed", e)
+       return []
+     }
+  }
+  return metadata.tools || []
+})
+
+const toolOptions = computed(() => {
+  return availableTools.value.map(t => ({ label: t, value: t }))
+})
+
 watch(selectedModel, () => {
   if (!isKbSupported.value) {
     selectedKb.value = null
   }
+  selectedTools.value = [] // Reset tools on model change
 })
 
 const onSend = async (text) => {
@@ -45,10 +71,16 @@ const onSend = async (text) => {
 
   loading.value = true
   try {
+    const options = {}
+    if (selectedTools.value.includes('webSearch')) {
+      options.webSearch = true
+    }
+    
     const res = await startChat({
       modelId: selectedModel.value,
       question: text,
-      kbId: isKbSupported.value ? (selectedKb.value || undefined) : undefined
+      kbId: isKbSupported.value ? (selectedKb.value || undefined) : undefined,
+      options: options
     })
     let {sessionId} = res
     if (sessionId) {
@@ -110,6 +142,14 @@ const onSend = async (text) => {
                 </a-select-option>
               </a-select-opt-group>
             </a-select>
+          </div>
+
+          <div class="config-item" v-if="availableTools.length > 0">
+            <div class="config-label">
+              <ToolOutlined class="config-icon" />
+              <span>功能选择</span>
+            </div>
+             <a-checkbox-group v-model:value="selectedTools" :options="toolOptions" />
           </div>
 
           <div class="config-item">

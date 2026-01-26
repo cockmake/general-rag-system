@@ -295,7 +295,17 @@ const loadSession = async (newSessionId) => {
       const assistant = messages.value[messages.value.length - 1]
       const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
       isGenerating.value = true
-      startChatStream(newSessionId, selectedModel.value, null, selectedKb.value || undefined, onOpen, onMessage, onError, onClose)
+      
+      let options = null
+      if (lastMsg.options) {
+        try {
+           options = typeof lastMsg.options === 'string' ? JSON.parse(lastMsg.options) : lastMsg.options
+        } catch (e) {
+           console.error("Parse options failed", e)
+        }
+      }
+      
+      startChatStream(newSessionId, selectedModel.value, null, selectedKb.value || undefined, options, onOpen, onMessage, onError, onClose)
     }
   }
   loading.value = false
@@ -365,7 +375,7 @@ const onSend = (text) => {
   const assistant = messages.value[messages.value.length - 1]
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
   isGenerating.value = true
-  startChatStream(sessionId.value, selectedModel.value, text, isKbSupported.value ? (selectedKb.value || undefined) : undefined, onOpen, onMessage, onError, onClose)
+  startChatStream(sessionId.value, selectedModel.value, text, isKbSupported.value ? (selectedKb.value || undefined) : undefined, null, onOpen, onMessage, onError, onClose)
 }
 
 const onCopy = (textToCopy) => {

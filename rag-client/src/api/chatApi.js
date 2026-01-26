@@ -8,11 +8,12 @@ export function fetchAvailableModels() {
     return commonApi.get('/models/available')
 }
 
-export function startChat({modelId, question, kbId}) {
+export function startChat({modelId, question, kbId, options}) {
     return commonApi.post('/chat/start', {
         modelId,
         question,
-        kbId
+        kbId,
+        options
     })
 }
 
@@ -66,7 +67,7 @@ export function awaitSessionTitle(sessionId, onEvent) {
     }).then()
 }
 
-export function startChatStream(sessionId, modelId, question, kbId, onOpen, onMessage, onError, onClose) {
+export function startChatStream(sessionId, modelId, question, kbId, options, onOpen, onMessage, onError, onClose) {
     fetchEventSource(`${API_BASE_URL}/chat/stream`, {
         method: "POST",
 
@@ -78,7 +79,8 @@ export function startChatStream(sessionId, modelId, question, kbId, onOpen, onMe
             sessionId: sessionId,
             modelId: modelId,
             question: question,
-            kbId: kbId
+            kbId: kbId,
+            options: options
         }),
 
         onopen(response) {

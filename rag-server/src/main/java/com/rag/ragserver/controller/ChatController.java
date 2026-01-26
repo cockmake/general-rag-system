@@ -73,6 +73,16 @@ public class ChatController {
         conversationMessage.setContent(chatStart.getQuestion());
         conversationMessage.setModelId(chatStart.getModelId());
         conversationMessage.setStatus("pending");
+        
+        // 保存 options
+        if (chatStart.getOptions() != null) {
+            try {
+                conversationMessage.setOptions(new ObjectMapper().writeValueAsString(chatStart.getOptions()));
+            } catch (JsonProcessingException e) {
+                log.error("序列化 options 失败", e);
+            }
+        }
+        
         conversationMessagesService.save(conversationMessage);
 
         Boolean f = querySessionsService.sessionNameGenerate(userId, querySession.getId(), chatStart.getQuestion(), modelPermission);
@@ -234,7 +244,8 @@ public class ChatController {
                         ConversationMessages::getRole,
                         ConversationMessages::getContent,
                         ConversationMessages::getRagContext,
-                        ConversationMessages::getStatus
+                        ConversationMessages::getStatus,
+                        ConversationMessages::getOptions
                 )
                 .eq(ConversationMessages::getSessionId, sessionId)
                 .eq(ConversationMessages::getUserId, userId)
@@ -270,6 +281,16 @@ public class ChatController {
             newUserMessage.setContent(chatStream.getQuestion());
             newUserMessage.setModelId(chatStream.getModelId());
             newUserMessage.setStatus("pending");
+            
+            // 保存 options
+            if (chatStream.getOptions() != null) {
+                try {
+                    newUserMessage.setOptions(new ObjectMapper().writeValueAsString(chatStream.getOptions()));
+                } catch (JsonProcessingException e) {
+                    log.error("序列化 options 失败", e);
+                }
+            }
+            
             conversationMessagesService.save(newUserMessage);
             messageList.add(newUserMessage);
             currentUserMessageId = newUserMessage.getId();
@@ -291,6 +312,11 @@ public class ChatController {
         ObjectMapper objectMapper = new ObjectMapper();
 
         Map<String, Object> options = new java.util.HashMap<>();
+        // 合并用户传递的 options
+        if (chatStream.getOptions() != null) {
+            options.putAll(chatStream.getOptions());
+        }
+        
         if (kbId != null && kb != null) {
 
             options.put("userId", kb.getOwnerUserId());
