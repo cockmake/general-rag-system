@@ -6,7 +6,11 @@ import {
   EditOutlined,
   ReloadOutlined,
   CheckOutlined,
-  CloseOutlined
+  CloseOutlined,
+  GlobalOutlined,
+  FileSearchOutlined,
+  CodeOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons-vue';
 import {Bubble, Sender, ThoughtChain} from 'ant-design-x-vue';
 import {useRoute} from 'vue-router'
@@ -42,6 +46,49 @@ const themeStore = useThemeStore();
 const messagesContainer = ref(null)
 const userScrolledUp = ref(false)
 const isAutoScrolling = ref(false)
+
+// 选中的工具
+const selectedTools = ref([])
+const allKnownTools = ['webSearch']
+const toolConfigs = {
+  'webSearch': { icon: GlobalOutlined, label: '联网', desc: '开启联网搜索' },
+  'web_extractor': { icon: FileSearchOutlined, label: '网页', desc: '网页提取' },
+  'code_interpreter': { icon: CodeOutlined, label: '代码', desc: '代码解释器' },
+}
+
+const currentModel = computed(() => {
+  if (!selectedModel.value) return null
+  return models.value.find(m => m.modelId === selectedModel.value) || null
+})
+
+const availableTools = computed(() => {
+  if (!currentModel.value || !currentModel.value.metadata) return []
+  let metadata = currentModel.value.metadata
+  if (typeof metadata === 'string') {
+     try {
+       metadata = JSON.parse(metadata)
+     } catch (e) {
+       return []
+     }
+  }
+  return metadata.tools || []
+})
+
+const toggleTool = (toolKey) => {
+  if (!availableTools.value.includes(toolKey)) return
+  const index = selectedTools.value.indexOf(toolKey)
+  if (index === -1) {
+    selectedTools.value.push(toolKey)
+  } else {
+    selectedTools.value.splice(index, 1)
+  }
+}
+
+watch(selectedModel, () => {
+   // 模型切换时，校验并重置工具
+   const newSupported = availableTools.value
+   selectedTools.value = selectedTools.value.filter(t => newSupported.includes(t))
+})
 
 // 编辑相关
 const editingIndex = ref(-1)
@@ -375,7 +422,13 @@ const onSend = (text) => {
   const assistant = messages.value[messages.value.length - 1]
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
   isGenerating.value = true
-  startChatStream(sessionId.value, selectedModel.value, text, isKbSupported.value ? (selectedKb.value || undefined) : undefined, null, onOpen, onMessage, onError, onClose)
+  
+  const options = {}
+  if (selectedTools.value.includes('webSearch')) {
+    options.webSearch = true
+  }
+  
+  startChatStream(sessionId.value, selectedModel.value, text, isKbSupported.value ? (selectedKb.value || undefined) : undefined, options, onOpen, onMessage, onError, onClose)
 }
 
 const onCopy = (textToCopy) => {
@@ -740,6 +793,28 @@ const roles = computed(() => ({
                     </div>
                   </Tooltip>
                 </div>
+                
+                <!-- 聊天界面中的工具选择 (紧凑模式) -->
+                <div class="inline-tools" v-if="allKnownTools.some(t => availableTools.includes(t))">
+                  <a-divider type="vertical" style="height: 16px; margin: 0 4px; border-left-color: rgba(0,0,0,0.1)"/>
+                   <a-tooltip 
+                      v-for="toolKey in allKnownTools" 
+                      :key="toolKey" 
+                      :title="!availableTools.includes(toolKey) ? '当前模型不支持' : (toolConfigs[toolKey]?.desc || toolKey)"
+                    >
+                      <div 
+                        class="mini-tool-btn" 
+                        :class="{ 
+                          active: selectedTools.includes(toolKey),
+                          disabled: !availableTools.includes(toolKey)
+                        }"
+                        @click="toggleTool(toolKey)"
+                      >
+                         <component :is="toolConfigs[toolKey]?.icon || AppstoreOutlined" />
+                      </div>
+                    </a-tooltip>
+                </div>
+
               </div>
               <div class="sender-actions">
                 <component :is="(loading || isGenerating || isLastUserMsgGenerating) ? LoadingButton : SendButton"
