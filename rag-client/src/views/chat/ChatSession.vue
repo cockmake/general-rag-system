@@ -10,7 +10,9 @@ import {
   GlobalOutlined,
   FileSearchOutlined,
   CodeOutlined,
-  AppstoreOutlined
+  AppstoreOutlined,
+  BulbOutlined,
+  CaretRightOutlined,
 } from '@ant-design/icons-vue';
 import {Bubble, Sender, ThoughtChain} from 'ant-design-x-vue';
 import {useRoute} from 'vue-router'
@@ -21,7 +23,11 @@ import {
   editMessageStream,
   retryMessageStream
 } from '@/api/chatApi'
-import {Typography, Button, Space, message as antMessage, theme, Input, Spin, Tooltip} from "ant-design-vue";
+import {
+  Typography, Button, Space, message as antMessage,
+  theme, Input, Spin, Tooltip, Collapse,
+  CollapsePanel
+} from "ant-design-vue";
 import {findKbById, groupedModels, loadKbs, models, selectedKb, selectedModel} from "@/vars.js";
 import KbSelector from "@/components/KbSelector.vue";
 import {useThemeStore} from '@/stores/theme';
@@ -51,9 +57,9 @@ const isAutoScrolling = ref(false)
 const selectedTools = ref([])
 const allKnownTools = ['webSearch']
 const toolConfigs = {
-  'webSearch': { icon: GlobalOutlined, label: '联网', desc: '开启联网搜索' },
-  'web_extractor': { icon: FileSearchOutlined, label: '网页', desc: '网页提取' },
-  'code_interpreter': { icon: CodeOutlined, label: '代码', desc: '代码解释器' },
+  'webSearch': {icon: GlobalOutlined, label: '联网', desc: '开启联网搜索'},
+  'web_extractor': {icon: FileSearchOutlined, label: '网页', desc: '网页提取'},
+  'code_interpreter': {icon: CodeOutlined, label: '代码', desc: '代码解释器'},
 }
 
 const currentModel = computed(() => {
@@ -78,9 +84,9 @@ const toggleTool = (toolKey) => {
 }
 
 watch(selectedModel, () => {
-   // 模型切换时，校验并重置工具
-   const newSupported = availableTools.value
-   selectedTools.value = selectedTools.value.filter(t => newSupported.includes(t))
+  // 模型切换时，校验并重置工具
+  const newSupported = availableTools.value
+  selectedTools.value = selectedTools.value.filter(t => newSupported.includes(t))
 })
 
 // 编辑相关
@@ -204,6 +210,13 @@ const handleStreamCallbacks = (assistantMsg, userMsg = null) => {
       if (data.type === 'content') {
         if (assistantMsg.loading) assistantMsg.loading = false
         assistantMsg.content += data.content
+      } else if (data.type === 'thinking') {
+        if (assistantMsg.loading) assistantMsg.loading = false
+        if (typeof assistantMsg.thinking === "string") {
+          assistantMsg.thinking += data.content
+        } else {
+          assistantMsg.thinking = data.content
+        }
       } else if (data.type === 'process') {
         // 第一次收到 process 消息时就取消 loading 状态
         if (assistantMsg.loading) assistantMsg.loading = false
@@ -306,17 +319,17 @@ const loadSession = async (newSessionId) => {
         console.error('Failed to parse ragContext:', e)
       }
     }
-    
+
     // Parse options if present
     let options = null
     if (msg.options) {
       try {
         options = typeof msg.options === 'string' ? JSON.parse(msg.options) : msg.options
-      } catch(e) {
+      } catch (e) {
         console.error('Failed to parse options:', e)
       }
     }
-    
+
     return {
       id: msg.id,
       role: msg.role,
@@ -329,7 +342,7 @@ const loadSession = async (newSessionId) => {
       options: options
     }
   })
-  
+
   // 初始化时，根据最后一条用户消息的 options 同步工具选择状态
   const lastUserMsg = messages.value.filter(m => m.role === 'user').pop()
   if (lastUserMsg && lastUserMsg.options) {
@@ -361,16 +374,16 @@ const loadSession = async (newSessionId) => {
       const assistant = messages.value[messages.value.length - 1]
       const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
       isGenerating.value = true
-      
+
       let options = null
       if (lastMsg.options) {
         try {
-           options = typeof lastMsg.options === 'string' ? JSON.parse(lastMsg.options) : lastMsg.options
+          options = typeof lastMsg.options === 'string' ? JSON.parse(lastMsg.options) : lastMsg.options
         } catch (e) {
-           console.error("Parse options failed", e)
+          console.error("Parse options failed", e)
         }
       }
-      
+
       startChatStream(newSessionId, selectedModel.value, null, selectedKb.value || undefined, options, onOpen, onMessage, onError, onClose)
     }
   }
@@ -442,12 +455,12 @@ const onSend = (text) => {
   const assistant = messages.value[messages.value.length - 1]
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
   isGenerating.value = true
-  
+
   const options = {}
   if (selectedTools.value.includes('webSearch')) {
     options.webSearch = true
   }
-  
+
   startChatStream(sessionId.value, selectedModel.value, text, isKbSupported.value ? (selectedKb.value || undefined) : undefined, options, onOpen, onMessage, onError, onClose)
 }
 
@@ -701,7 +714,7 @@ const roles = computed(() => ({
             </template>
             <template #message="{ item: msg, index }">
               <div v-if="msg.role === 'assistant'" class="assistant-message">
-                <!-- 显示检索思考过程 -->
+                <!-- 显示检索过程 -->
                 <ThoughtChain
                     v-if="msg.ragProcess && msg.ragProcess.length > 0"
                     :items="msg.ragProcess.map((p, idx) => {
@@ -723,11 +736,54 @@ const roles = computed(() => ({
                     collapsible
                     class="thought-chain"
                 />
+                <!-- 显示思考过程 -->
+                <div v-if="msg.thinking" class="thinking-section">
+                  <a-collapse
+                      ghost
+                      size="small"
+                      :bordered="false"
+                      :defaultActiveKey="['thinking-panel']"
+                      expand-icon-position="start"
+                  >
+                    <template #expandIcon="{ isActive }">
+                      <div class="expand-icon-wrapper" :class="{ 'is-active': isActive }">
+                        <CaretRightOutlined/>
+                      </div>
+                    </template>
+
+                    <a-collapse-panel key="thinking-panel">
+                      <template #header>
+                        <div class="thinking-header-content">
+                          <div class="thinking-title">
+                            <BulbOutlined class="thinking-icon"/>
+                            <span>深度思考过程</span>
+                          </div>
+
+                          <div v-if="msg.loading && !msg.content" class="thinking-status">
+                            <span class="thinking-dots">思考中...</span>
+                          </div>
+
+                        </div>
+                      </template>
+
+                      <div class="thinking-content-wrapper">
+                        <Typography>
+                          <div
+                              class="markdown-body thinking-markdown" v-html="md.render(msg.thinking || '')">
+                          </div>
+                        </Typography>
+                      </div>
+
+                    </a-collapse-panel>
+                  </a-collapse>
+                </div>
+
                 <!-- 显示回答内容 -->
                 <Typography>
                   <div class="markdown-body message-content" v-html="md.render(msg.content || '')"/>
                 </Typography>
               </div>
+
               <div v-else class="user-message">
                 <!-- 编辑模式 -->
                 <div v-if="isLastUserMessage(msg) && editingIndex !== -1" class="edit-mode">
@@ -794,20 +850,20 @@ const roles = computed(() => ({
           <template #header>
             <div class="sender-header-tools" v-if="allKnownTools.length > 0">
               <div class="header-tools-wrapper">
-                <div 
-                  v-for="toolKey in allKnownTools" 
-                  :key="toolKey"
-                  class="header-tool-item"
-                  :class="{ 
+                <div
+                    v-for="toolKey in allKnownTools"
+                    :key="toolKey"
+                    class="header-tool-item"
+                    :class="{
                     active: selectedTools.includes(toolKey),
                     disabled: !availableTools.includes(toolKey)
                   }"
-                  @click="toggleTool(toolKey)"
-                  :title="!availableTools.includes(toolKey) ? '当前模型不支持' : (toolConfigs[toolKey]?.desc || toolKey)"
+                    @click="toggleTool(toolKey)"
+                    :title="!availableTools.includes(toolKey) ? '当前模型不支持' : (toolConfigs[toolKey]?.desc || toolKey)"
                 >
-                  <component :is="toolConfigs[toolKey]?.icon || AppstoreOutlined" />
+                  <component :is="toolConfigs[toolKey]?.icon || AppstoreOutlined"/>
                   <span>{{ toolConfigs[toolKey]?.label || toolKey }}</span>
-                  <CheckOutlined v-if="selectedTools.includes(toolKey)" style="font-size: 10px; margin-left: 2px;" />
+                  <CheckOutlined v-if="selectedTools.includes(toolKey)" style="font-size: 10px; margin-left: 2px;"/>
                 </div>
               </div>
             </div>
@@ -848,7 +904,7 @@ const roles = computed(() => ({
                     </div>
                   </Tooltip>
                 </div>
-                
+
                 <!-- 聊天界面中的工具选择 (紧凑模式) - 已移除，移至 Header -->
 
 
@@ -1272,10 +1328,6 @@ const roles = computed(() => ({
 .chat-session-container.is-dark .sender-footer {
   border-top-color: #333;
 }
-
-/* ... existing styles ... */
-
-
 .kb-select-footer {
   width: 180px; /* Default desktop width */
 }
@@ -1346,5 +1398,153 @@ const roles = computed(() => ({
 
 .chat-session-container.is-dark .messages-wrapper::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+
+/* --- 思考过程美化样式 --- */
+
+.thinking-section {
+  margin-bottom: 16px;
+  background: #f9f9fb; /* 极淡的蓝灰色背景 */
+  border: 1px solid #eef0f5; /* 柔和边框 */
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* 头部样式优化 */
+.thinking-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  user-select: none;
+  padding: 2px 0;
+}
+
+.thinking-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #606266;
+}
+
+.thinking-icon {
+  color: #f59e0b; /* 琥珀色灯泡 */
+  font-size: 14px;
+}
+
+/* 自定义展开图标容器 */
+.expand-icon-wrapper {
+  color: #909399;
+  font-size: 10px;
+  transition: transform 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.expand-icon-wrapper.is-active {
+  transform: rotate(90deg);
+}
+
+/* 思考中状态 */
+.thinking-status {
+  font-size: 12px;
+  color: #909399;
+  display: flex;
+  align-items: center;
+}
+
+.thinking-dots {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.4;
+  }
+}
+
+/* 内容区域 */
+.thinking-content-wrapper {
+  padding: 8px 16px 16px 36px; /* 左侧留白对齐标题文字 */
+  position: relative;
+}
+
+/* 在左侧添加一条细装饰线，增强层次感 */
+.thinking-content-wrapper::before {
+  content: '';
+  position: absolute;
+  left: 23px; /* 根据图标位置调整 */
+  top: 0;
+  bottom: 12px;
+  width: 1px;
+  background-color: #e0e0e0;
+}
+
+/* Markdown 样式重写 - 模拟 Log/Draft 风格 */
+.thinking-markdown {
+  font-size: 14px !important;
+  color: #444 !important;
+  border-radius: 5px;
+  padding: 10px;
+}
+
+/* 弱化思考过程中的代码块背景，使其融入整体 */
+.thinking-markdown :deep(pre) {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border: none !important;
+  margin: 8px 0 !important;
+  padding: 8px 12px !important;
+}
+
+.thinking-markdown :deep(code) {
+  background: rgba(0, 0, 0, 0.03) !important;
+  font-size: 12px !important;
+  color: #d63384 !important; /* 稍微不同的代码颜色区分 */
+}
+
+/* 去除 Collapse 组件默认的内边距干扰 */
+.thinking-section :deep(.ant-collapse-header) {
+  padding: 8px 12px !important;
+  align-items: center !important;
+}
+
+.thinking-section :deep(.ant-collapse-content-box) {
+  padding: 0 !important;
+}
+
+/* --- 暗色模式适配 --- */
+.chat-session-container.is-dark .thinking-section {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: #303030;
+}
+
+.chat-session-container.is-dark .thinking-title {
+  color: #a6a6a6;
+}
+
+.chat-session-container.is-dark .thinking-content-wrapper::before {
+  background-color: #444;
+}
+
+.chat-session-container.is-dark .thinking-markdown {
+  color: #999 !important;
+}
+
+.chat-session-container.is-dark .thinking-markdown :deep(pre),
+.chat-session-container.is-dark .thinking-markdown :deep(code) {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: #ccc !important;
 }
 </style>

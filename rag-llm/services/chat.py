@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage, AIMessage
 
 from rag_utils import rag_service
-from utils import get_llm_instance, cut_history, get_token_count
+from utils import get_llm_instance, cut_history, get_token_count, content_extractor
 
 logger = logging.getLogger(__name__)
 
@@ -17,28 +17,31 @@ chat_service = APIRouter(prefix="/chat", tags=["chat"])
 
 async def stream_generator(model_instance, messages, prompt_tokens: int = 0, options: dict = None):
     """纯LLM流式响应生成器"""
+    cot_content = ""
     full_content = ""
     start_time = time.time()  # Start timing
 
     async for chunk in model_instance.astream(messages):
         content = chunk.content
         if content:
-            if isinstance(content, list):
-                text_content = ""
-                for item in content:
-                    if isinstance(item, str):
-                        text_content += item
-                    elif isinstance(item, dict) and "text" in item:
-                        text_content += item["text"]
-                content = text_content
+            think_content, text_content = content_extractor(content)
+            if think_content != "":
+                cot_content += think_content
+                # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
+                data = {
+                    "type": "thinking",
+                    "payload": json.dumps(think_content, ensure_ascii=False)
+                }
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-            full_content += content
-            # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
-            data = {
-                "type": "content",
-                "payload": json.dumps(content, ensure_ascii=False)
-            }
-            yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+            if text_content != "":
+                full_content += text_content
+                # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
+                data = {
+                    "type": "content",
+                    "payload": json.dumps(text_content, ensure_ascii=False)
+                }
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
     end_time = time.time()
     latency_ms = int((end_time - start_time) * 1000)  # Calculate latency
@@ -102,14 +105,14 @@ async def rag_stream_generator(
                 "payload": json.dumps(item["payload"], ensure_ascii=False)
             }
             yield f"data: {json.dumps(process_data, ensure_ascii=False)}\n\n"
-        elif item["type"] == "content":
+        elif item["type"] == "content" or item["type"] == "thinking":
             # 答案内容
             content = item["payload"]
             if content:
                 full_content += content
                 # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
                 data = {
-                    "type": "content",
+                    "type": item["type"],
                     "payload": json.dumps(content, ensure_ascii=False)
                 }
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -198,7 +201,6 @@ async def chat_stream(
     kb_id = options.get('kbId')
     system_prompt = options.get('systemPrompt')
 
-
     # 截断策略：保留最新用户问题，其余历史按(user, assistant)成组，总token数<20480
     prompt_tokens = 0
     if history:
@@ -250,16 +252,14 @@ async def chat_stream(
         # 添加当前问题到消息列表
         all_messages = langchain_messages + [HumanMessage(content=current_question)]
 
-        messages_with_system = []
-        # messages_with_system = [{"role": "system", "content": system_prompt}]
+        messages = []
         for msg in all_messages:
             if isinstance(msg, HumanMessage):
-                messages_with_system.append({"role": "user", "content": msg.content})
+                # 添加status兼容火山引擎
+                messages.append({"role": "user", "content": msg.content, "status": {}})
             elif isinstance(msg, AIMessage):
-                messages_with_system.append({"role": "assistant", "content": msg.content})
-        all_messages = messages_with_system
-
+                messages.append({"role": "assistant", "content": msg.content, "status": {}})
         return StreamingResponse(
-            stream_generator(llm, all_messages, prompt_tokens=prompt_tokens, options=options),
+            stream_generator(llm, messages, prompt_tokens=prompt_tokens, options=options),
             media_type="text/event-stream"
         )

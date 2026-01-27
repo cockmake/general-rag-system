@@ -93,9 +93,9 @@ export function startChatStream(sessionId, modelId, question, kbId, options, onO
         },
         onmessage(ev) {
             let json = JSON.parse(ev.data)
-            if (json.type === 'content') {
+            if (json.type === 'content' || json.type === 'thinking') {
                 // content字段直接使用，已在server端解析
-                if (onMessage) onMessage({type: 'content', content: json.content})
+                if (onMessage) onMessage({type: json.type, content: json.content})
             } else if (json.type === 'process') {
                 // payload字段直接使用，已在server端解析
                 if (onMessage) onMessage({type: 'process', payload: json.payload})
@@ -153,8 +153,9 @@ export function editMessageStream(messageId, sessionId, modelId, kbId, newConten
         },
         onmessage(ev) {
             let json = JSON.parse(ev.data)
-            if (json.type === 'content') {
-                if (onMessage) onMessage({type: 'content', content: json.content})
+            if (json.type === 'content' || json.type === 'thinking') {
+                // content字段直接使用，已在server端解析
+                if (onMessage) onMessage({type: json.type, content: json.content})
             } else if (json.type === 'process') {
                 if (onMessage) onMessage({type: 'process', payload: json.payload})
             } else if (json.type === 'done') {
@@ -185,7 +186,6 @@ export function editMessageStream(messageId, sessionId, modelId, kbId, newConten
 
 /**
  * 重试最后一轮AI回复
- * @param userMessageId 最后一轮用户消息ID（用于定位需要重新生成回复的用户问题）
  */
 export function retryMessageStream(userMessageId, sessionId, modelId, kbId, options, onOpen, onMessage, onError, onClose) {
     fetchEventSource(`${API_BASE_URL}/chat/messages/${userMessageId}/retry`, {
@@ -210,8 +210,9 @@ export function retryMessageStream(userMessageId, sessionId, modelId, kbId, opti
         },
         onmessage(ev) {
             let json = JSON.parse(ev.data)
-            if (json.type === 'content') {
-                if (onMessage) onMessage({type: 'content', content: json.content})
+            if (json.type === 'content' || json.type === 'thinking') {
+                // content字段直接使用，已在server端解析
+                if (onMessage) onMessage({type: json.type, content: json.content})
             } else if (json.type === 'process') {
                 if (onMessage) onMessage({type: 'process', payload: json.payload})
             } else if (json.type === 'done') {

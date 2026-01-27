@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from aiohttp_utils import rerank
 from milvus_utils import MilvusClientManager
-from utils import get_llm_instance, get_embedding_instance, get_structured_data_agent
+from utils import get_llm_instance, get_embedding_instance, get_structured_data_agent, content_extractor
 
 logger = logging.getLogger(__name__)
 
@@ -661,15 +661,11 @@ class RAGService:
 
         # 构建对话消息
         conversation = [{"role": "system", "content": final_system_prompt}]
-
-        # 添加历史对话（最近5轮）
-        recent_history = history[-10:] if len(history) > 10 else history
-        for msg in recent_history:
+        for msg in history:
             if isinstance(msg, HumanMessage):
                 conversation.append({"role": "user", "content": msg.content})
             elif isinstance(msg, AIMessage):
                 conversation.append({"role": "assistant", "content": msg.content})
-
         # 添加当前问题
         conversation.append({"role": "user", "content": question})
 
@@ -680,19 +676,17 @@ class RAGService:
         async for chunk in llm.astream(conversation):
             content = chunk.content
             if content:
-                if isinstance(content, list):
-                    text_content = ""
-                    for item in content:
-                        if isinstance(item, str):
-                            text_content += item
-                        elif isinstance(item, dict) and "text" in item:
-                            text_content += item["text"]
-                    content = text_content
-
-                yield {
-                    "type": "content",
-                    "payload": content
-                }
+                think_content, text_content = content_extractor(content)
+                if think_content:
+                    yield {
+                        "type": "thinking",
+                        "payload": think_content
+                    }
+                if text_content:
+                    yield {
+                        "type": "content",
+                        "payload": content
+                    }
 
 
 # 全局RAG服务实例

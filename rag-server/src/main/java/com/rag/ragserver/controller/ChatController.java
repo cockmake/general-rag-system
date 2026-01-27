@@ -73,12 +73,12 @@ public class ChatController {
         conversationMessage.setContent(chatStart.getQuestion());
         conversationMessage.setModelId(chatStart.getModelId());
         conversationMessage.setStatus("pending");
-        
+
         // 保存 options
         if (chatStart.getOptions() != null) {
             conversationMessage.setOptions(chatStart.getOptions());
         }
-        
+
         conversationMessagesService.save(conversationMessage);
 
         Boolean f = querySessionsService.sessionNameGenerate(userId, querySession.getId(), chatStart.getQuestion(), modelPermission);
@@ -188,11 +188,11 @@ public class ChatController {
         // 更新用户消息内容及options
         ConversationMessages userMsg = conversationMessagesService.getById(messageId);
         if (userMsg != null && userMsg.getUserId().equals(userId)) {
-             userMsg.setContent(dto.getNewContent());
-             if (dto.getOptions() != null) {
-                 userMsg.setOptions(dto.getOptions());
-             }
-             conversationMessagesService.updateById(userMsg);
+            userMsg.setContent(dto.getNewContent());
+            if (dto.getOptions() != null) {
+                userMsg.setOptions(dto.getOptions());
+            }
+            conversationMessagesService.updateById(userMsg);
         }
         conversationMessagesService.editLastUserMessage(dto.getSessionId(), messageId, userId, dto.getNewContent());
 
@@ -225,7 +225,7 @@ public class ChatController {
                 conversationMessagesService.updateById(userMsg);
             }
         }
-        
+
         conversationMessagesService.retryLastAssistantMessage(dto.getSessionId(), userMessageId, userId);
 
         ChatStream chatStream = new ChatStream();
@@ -298,7 +298,7 @@ public class ChatController {
             newUserMessage.setContent(chatStream.getQuestion());
             newUserMessage.setModelId(chatStream.getModelId());
             newUserMessage.setStatus("pending");
-            
+
             // 保存 options
             if (chatStream.getOptions() != null) {
                 try {
@@ -307,7 +307,7 @@ public class ChatController {
                     log.error("序列化 options 失败", e);
                 }
             }
-            
+
             conversationMessagesService.save(newUserMessage);
             messageList.add(newUserMessage);
             currentUserMessageId = newUserMessage.getId();
@@ -333,7 +333,7 @@ public class ChatController {
         if (chatStream.getOptions() != null) {
             options.putAll(chatStream.getOptions());
         }
-        
+
         if (kbId != null && kb != null) {
             options.put("userId", kb.getOwnerUserId());
             options.put("kbId", kbId);
@@ -369,13 +369,15 @@ public class ChatController {
             JsonNode data = objectMapper.readTree(dataStr);
             String type = data.path("type").asText();
 
-            if ("content".equals(type)) {
+            if ("content".equals(type) || "thinking".equals(type)) {
                 String payloadJson = data.path("payload").asText();
                 try {
                     String text = objectMapper.readValue(payloadJson, String.class);
-                    sb.append(text);
+                    if ("content".equals(type)) {
+                        sb.append(text);
+                    }
                     return Flux.just(objectMapper.writeValueAsString(
-                            Map.of("type", "content", "content", text)
+                            Map.of("type", type, "content", text)
                     ));
                 } catch (JsonProcessingException e) {
                     log.error("解析content payload失败: {}", e.getMessage());

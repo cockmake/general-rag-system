@@ -402,12 +402,11 @@ const onSend = async (text) => {
   }
   
   .tools-container {
-    justify-content: center;
+    justify-content: flex-start;
   }
   
   .tool-btn {
-    flex: 1;
-    justify-content: center;
+    padding: 8px 12px;
   }
 }
 </style>

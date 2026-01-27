@@ -20,6 +20,8 @@ from langchain_text_splitters import (
     MarkdownHeaderTextSplitter
 )
 
+from gemini_utils import GeminiInstance
+
 logger = logging.getLogger(__name__)
 try:
     import pytesseract
@@ -40,7 +42,13 @@ def _load_config_cached():
         return json.load(f)
 
 
-def get_llm_instance(model_info: dict, temperature: float = None, enable_web_search: bool = False):
+def get_llm_instance(
+        model_info: dict,
+        temperature: float = None,
+        enable_web_search: bool = False,
+        timeout: int = 60,
+        max_retries: int = 5,
+):
     """根据模型信息加载配置并初始化 LLM"""
     provider = model_info.get("provider")
     model_name = model_info.get("name")
@@ -63,6 +71,15 @@ def get_llm_instance(model_info: dict, temperature: float = None, enable_web_sea
     api_key = settings.get("api_key")
     base_url = settings.get("base_url")
 
+    if model_name.startswith("gemini"):
+        return GeminiInstance(
+            model_name=model_name,
+            api_key=api_key,
+            base_url=base_url,
+            enable_web_search=enable_web_search,
+            timeout=timeout,
+            max_retries=max_retries,
+        )
     # 初始化 LangChain ChatModel
     llm = init_chat_model(
         model=model_name,
@@ -70,8 +87,8 @@ def get_llm_instance(model_info: dict, temperature: float = None, enable_web_sea
         base_url=base_url,
         temperature=temperature if temperature is not None else temperature,
         model_provider=settings['model_provider'] if "model_provider" in settings else None,
-        timeout=30,
-        max_retries=2,
+        timeout=timeout,
+        max_retries=max_retries,
     )
 
     if enable_web_search:
@@ -85,7 +102,12 @@ def get_llm_instance(model_info: dict, temperature: float = None, enable_web_sea
                     {"type": "web_search_preview"},
                 ]
             )
-
+        elif model_name.startswith("doubao-seed"):
+            llm = llm.bind(
+                tools=[
+                    {"type": "web_search"},
+                ]
+            )
     return llm
 
 
@@ -329,3 +351,28 @@ def cut_history(history: list, model: dict):
         else:
             break
     return processed_context + [current_msg], current_token_count
+
+
+def content_extractor(content):
+    """提取content中的文本和推理内容"""
+    think_content = ""
+    text_content = ""
+    if isinstance(content, str):
+        text_content = content
+    elif isinstance(content, list):
+        item = content[0]
+        if item['type'] == 'text':
+            if isinstance(item, str):
+                text_content += item
+            elif isinstance(item, dict) and "text" in item:
+                text_content += item["text"]
+        elif item['type'] == 'reasoning':
+            if isinstance(item, str):
+                think_content += item
+            elif isinstance(item, dict) and "summary" in item:
+                summary = item["summary"]
+                if len(summary) > 0:
+                    summary = summary[0]
+                    if "text" in summary:
+                        think_content += summary["text"]
+    return think_content, text_content
