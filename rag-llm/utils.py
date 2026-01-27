@@ -336,10 +336,8 @@ def cut_history(history: list, model: dict):
     n = len(previous_msgs)
 
     max_tokens = 20480
-    if model.get("name").startswith("gpt"):
+    if model.get("name").startswith("gpt") or model.get("name") == "gemini-3-pro-preview":
         max_tokens = 15360
-    elif model.get("name") == "gemini-3-pro-preview":
-        max_tokens = 17920
 
     for i in range(n, 1, -2):
         pair = previous_msgs[i - 2: i]

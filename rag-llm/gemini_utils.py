@@ -117,31 +117,3 @@ class GeminiInstance:
         async for chunk in response_stream:
             if chunk.text:
                 yield ResponseWrapper(content=chunk.text)
-
-
-# --- 使用示例 ---
-
-async def main():
-    api_key = "sk-hlDrexmtGOoyUwAehGwCpWRIYJDI71tdJ1BtI4bdwuJVY8iv"
-    base_url = "https://api.vectorengine.ai"
-    messages = [
-        {"role": "user", "content": "现在是北京什么时间？"},
-    ]
-
-    print("=== 实例 1: 开启搜索 （默认） ===")
-    gemini_search = GeminiInstance(
-        api_key=api_key,
-        base_url=base_url,
-        # model_name="gemini-3-pro-preview",
-        # model_name="gemini-3-flash-preview",
-        model_name="gemini-2.5-flash-thinking",
-        enable_web_search=True,
-    )
-    async for chunk in gemini_search.astream(messages):
-        print(chunk.content, end="", flush=True)
-    print("\n")
-
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
