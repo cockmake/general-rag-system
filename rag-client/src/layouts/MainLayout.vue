@@ -152,7 +152,8 @@ const go = (path) => {
       <div class="sidebar-container">
         <!-- Logo -->
         <div class="logo"
-             :style="{ color: themeStore.isDark ? '#fff' : 'inherit', borderBottomColor: themeStore.isDark ? '#303030' : '#f0f0f0' }">
+             :style="{ color: themeStore.isDark ? '#fff' : 'inherit', borderBottomColor: themeStore.isDark ? '#303030' : '#f0f0f0' }"
+             @click="go('/dashboard')">
           <img v-if="!collapsed" src="@/assets/logo.png" alt="Logo" style="height: 50px"/>
           <img v-else src="@/assets/logo.png" alt="Logo" style="height: 32px"/>
           <span v-if="!collapsed">RAG 系统</span>
@@ -308,6 +309,7 @@ const go = (path) => {
   flex-shrink: 0;
   gap: 8px;
   transition: all 0.2s;
+  cursor: pointer;
 }
 
 .session-wrapper {
