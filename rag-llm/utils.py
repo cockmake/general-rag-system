@@ -416,10 +416,10 @@ def get_display_docs(documents: list, max_tokens: int = 5120, min_docs: int = 1)
     return display_docs
 
 
-def deepseek_reasoning_content_wrapper(chunk):
+def reasoning_content_wrapper(chunk):
     if chunk.response_metadata:
         response_metadata = chunk.response_metadata
-        if response_metadata.get("model_provider", "") == "deepseek":
+        if response_metadata.get("model_provider", ""):
             additional_kwargs = chunk.additional_kwargs
             reasoning_content = additional_kwargs.get("reasoning_content", "")
             if reasoning_content:
