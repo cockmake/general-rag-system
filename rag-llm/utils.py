@@ -90,7 +90,8 @@ def get_llm_instance(
         timeout=timeout,
         max_retries=max_retries,
     )
-
+    # thinking配置 todo: 统一配置
+    # tools配置
     if enable_web_search:
         if model_name == "qwen3-max":
             llm = llm.bind(
@@ -359,6 +360,7 @@ def cut_history(history: list, model: dict):
             current_token_count += pair_tokens
             processed_context = pair + processed_context
         else:
+            logger.info(f"截断历史对话触发")
             break
     return processed_context + [current_msg], current_token_count
 
@@ -377,9 +379,9 @@ def content_extractor(content):
             elif isinstance(item, dict) and "text" in item:
                 text_content += item["text"]
         elif item['type'] == 'reasoning':
-            if isinstance(item, str):
-                think_content += item
-            elif isinstance(item, dict) and "summary" in item:
+            if "text" in item:
+                think_content += item["text"]
+            elif "summary" in item:
                 summary = item["summary"]
                 if len(summary) > 0:
                     summary = summary[0]
@@ -405,3 +407,14 @@ def get_display_docs(documents: list, max_tokens: int = 5120, min_docs: int = 1)
         else:
             break
     return display_docs
+
+
+def deepseek_reasoning_content_wrapper(chunk):
+    if chunk.response_metadata:
+        response_metadata = chunk.response_metadata
+        if response_metadata.get("model_provider", "") == "deepseek":
+            additional_kwargs = chunk.additional_kwargs
+            reasoning_content = additional_kwargs.get("reasoning_content", "")
+            if reasoning_content:
+                return [{"type": "reasoning", "text": reasoning_content}]
+    return ""

@@ -1,12 +1,18 @@
-import asyncio
+import json
+import logging
+from typing import AsyncGenerator
 
+import aiohttp
 from google import genai
 from google.genai import types
+from google.genai.types import ThinkingConfig
+
+logger = logging.getLogger(__name__)
 
 
 # 统一返回结构
 class ResponseWrapper:
-    def __init__(self, content: str):
+    def __init__(self, content: str | list):
         self.content = content
 
     def __repr__(self):
@@ -31,8 +37,16 @@ class GeminiInstance:
         :param base_url: API 基础地址
         """
         self.model_name = model_name
+        self.is_thinking = "thinking" in model_name  # 简单判断是否为思考模型
         self.enable_web_search = enable_web_search
 
+        # 保存原始配置供 astream 手动请求使用
+        self.api_key = api_key
+        # 确保 base_url 不以 / 结尾，方便后续拼接
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+
+        # --- SDK 初始化 (保留给 ainvoke 使用) ---
         # 配置 HTTP 选项
         retry_options = types.HttpRetryOptionsDict(attempts=max_retries)
         http_options = types.HttpOptionsDict(
@@ -53,7 +67,9 @@ class GeminiInstance:
         )
 
     def _parse_messages(self, messages: list):
-        """解析消息列表为 system_instruction 和 contents"""
+        """
+        SDK 专用的消息解析 (供 ainvoke 使用)
+        """
         system_instruction = None
         contents = []
 
@@ -79,41 +95,144 @@ class GeminiInstance:
 
         return system_instruction, contents
 
-    def _get_config(self, system_instruction: str = None):
-        """根据初始化参数动态生成配置"""
-        # 根据 enable_web_search 决定是否添加工具
+    def _get_config(self, system_instruction: str = None) -> types.GenerateContentConfig:
+        """SDK 专用配置生成 (供 ainvoke 使用)"""
         tools = [self.grounding_tool] if self.enable_web_search else None
-
         return types.GenerateContentConfig(
             tools=tools,
-            system_instruction=system_instruction
+            system_instruction=system_instruction,
+            thinking_config=ThinkingConfig(
+                include_thoughts=True
+            ) if self.is_thinking else None
         )
 
     async def ainvoke(self, messages: list) -> ResponseWrapper:
-        """一次性异步返回"""
+        """
+        一次性异步返回 (保持原样，使用 SDK)
+        """
         system_instruction, contents = self._parse_messages(messages)
         config = self._get_config(system_instruction)
+        try:
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=contents,
+                config=config,
+            )
+            text = response.text if response.text else ""
+            return ResponseWrapper(content=text)
+        except Exception as e:
+            logger.error(f"Gemini ainvoke error: {e}")
+            return ResponseWrapper(content=f"Error: {str(e)}")
 
-        response = await self.client.aio.models.generate_content(
-            model=self.model_name,
-            contents=contents,
-            config=config,
-        )
+    async def astream(self, messages: list) -> AsyncGenerator[ResponseWrapper, None]:
+        """
+        异步流式返回 (重写：使用 aiohttp 手动实现 t.py 的逻辑)
+        """
+        # 1. 构建 URL
+        endpoint = f"/v1beta/models/{self.model_name}:streamGenerateContent?alt=sse"
+        url = f"{self.base_url}{endpoint}"
 
-        text = response.text if response.text else ""
-        return ResponseWrapper(content=text)
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
 
-    async def astream(self, messages: list):
-        """异步流式返回"""
-        system_instruction, contents = self._parse_messages(messages)
-        config = self._get_config(system_instruction)
+        # 2. 手动构建 Payload
+        contents_payload = []
+        system_instruction = {}
 
-        response_stream = await self.client.aio.models.generate_content_stream(
-            model=self.model_name,
-            contents=contents,
-            config=config,
-        )
+        for msg in messages:
+            role = msg.get("role")
+            content = msg.get("content")
 
-        async for chunk in response_stream:
-            if chunk.text:
-                yield ResponseWrapper(content=chunk.text)
+            if role == "system":
+                system_instruction["parts"] = [{"text": content}]
+            elif role == "user":
+                contents_payload.append({
+                    "role": "user",
+                    "parts": [{"text": content}]
+                })
+            elif role == "assistant":
+                contents_payload.append({
+                    "role": "model",
+                    "parts": [{"text": content}]
+                })
+
+        payload: dict = {
+            "contents": contents_payload
+        }
+
+        # 添加 System Instruction
+        if system_instruction:
+            payload["systemInstruction"] = system_instruction
+
+        # 添加 Tools
+        if self.enable_web_search:
+            payload["tools"] = [{"googleSearch": {}}]
+
+        # 添加 Generation Config
+        generation_config = {}
+        if self.is_thinking:
+            generation_config["thinkingConfig"] = {
+                "includeThoughts": True,
+            }
+
+        if generation_config:
+            payload["generationConfig"] = generation_config
+
+        # 3. 发起请求并处理 SSE
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, headers=headers, timeout=self.timeout) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"Gemini Request Failed [Status: {response.status}]: {error_text}")
+                        yield ResponseWrapper(content=f"Error {response.status}: {error_text}")
+                        return
+
+                    # 高性能流式读取
+                    async for line in response.content:
+                        line = line.strip()
+                        if not line:
+                            continue
+
+                        decoded_line = line.decode('utf-8')
+
+                        # 处理 SSE 数据行
+                        if decoded_line.startswith("data: "):
+                            json_str = decoded_line[6:]  # 去掉 "data: " 前缀
+                            try:
+                                data = json.loads(json_str)
+
+                                # 提取 candidates
+                                if "candidates" in data and data["candidates"]:
+                                    candidate = data["candidates"][0]
+
+                                    # 检查是否有内容
+                                    if "content" in candidate and "parts" in candidate["content"]:
+                                        parts = candidate["content"]["parts"]
+                                        for part in parts:
+                                            text = part.get("text", "")
+                                            if text == "":
+                                                continue
+                                            is_thought = part.get("thought", False)
+                                            if is_thought:
+                                                # 封装思考内容
+                                                yield ResponseWrapper(content=[{"type": "reasoning", "text": text}])
+                                            else:
+                                                # 普通内容
+                                                yield ResponseWrapper(content=text)
+
+                            except json.JSONDecodeError:
+                                logger.warning(f"Failed to decode JSON chunk: {json_str}")
+                                continue
+                            except Exception as e:
+                                logger.error(f"Error parsing chunk: {e}")
+                                continue
+
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error in astream: {e}")
+            yield ResponseWrapper(content=f"Network error: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unknown error in astream: {e}")
+            yield ResponseWrapper(content=f"Error: {str(e)}")

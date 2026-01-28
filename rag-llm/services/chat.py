@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage, AIMessage
 
 from rag_utils import rag_service
-from utils import get_llm_instance, cut_history, get_token_count, content_extractor
+from utils import get_llm_instance, cut_history, get_token_count, content_extractor, deepseek_reasoning_content_wrapper
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,10 @@ async def stream_generator(model_instance, messages, prompt_tokens: int = 0, opt
 
     async for chunk in model_instance.astream(messages):
         content = chunk.content
+
+        if model_instance.model_name == "deepseek-reasoner":
+            content = content or deepseek_reasoning_content_wrapper(chunk)
+
         if content:
             think_content, text_content = content_extractor(content)
             if think_content != "":

@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from aiohttp_utils import rerank
 from milvus_utils import MilvusClientManager
 from utils import get_llm_instance, get_embedding_instance, get_structured_data_agent, content_extractor, \
-    get_display_docs
+    get_display_docs, deepseek_reasoning_content_wrapper
 
 logger = logging.getLogger(__name__)
 
@@ -682,6 +682,10 @@ class RAGService:
         # 使用异步流式生成
         async for chunk in llm.astream(conversation):
             content = chunk.content
+
+            if model_info.get("name") == "deepseek-reasoner":
+                content = content or deepseek_reasoning_content_wrapper(chunk)
+
             if content:
                 think_content, text_content = content_extractor(content)
                 if think_content:
