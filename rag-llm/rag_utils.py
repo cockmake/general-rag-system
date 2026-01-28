@@ -51,9 +51,9 @@ class RAGService:
         Returns:
             (多角度查询列表, 评分用查询)
         """
-        # 这里暂时全部使用qwen3-max模型
+        # 这里暂时全部使用qwen3-max-2026-01-23模型
         model_info = {
-            'name': 'qwen3-max',
+            'name': 'qwen3-max-2026-01-23',
             'provider': 'qwen'
         }
         # 构建对话历史（最近4轮，即8条消息）
@@ -670,6 +670,10 @@ class RAGService:
         conversation.append({"role": "user", "content": question})
 
         # 获取LLM实例并流式生成
+        if len(conversation) > 2 and model_info['name'].startswith('doubao-seed'):
+            # 因为有system_prompt所以 > 2
+            # 豆包只有第一轮允许网页搜索
+            options['webSearch'] = False
         llm = get_llm_instance(model_info, enable_web_search=options.get('webSearch', False) if options else False)
 
         # 使用异步流式生成
@@ -685,7 +689,7 @@ class RAGService:
                 if text_content:
                     yield {
                         "type": "content",
-                        "payload": content
+                        "payload": text_content
                     }
 
 

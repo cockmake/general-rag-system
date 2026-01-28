@@ -38,6 +38,7 @@ import taskLists from 'markdown-it-task-lists';
 import mj from 'markdown-it-mathjax3';
 import hljs from "highlight.js";
 import 'highlight.js/styles/atom-one-light.css';
+import Paragraph from "ant-design-vue/es/typography/Paragraph.js";
 
 const question = ref('')
 const route = useRoute()
@@ -718,21 +719,19 @@ const roles = computed(() => ({
                 <ThoughtChain
                     v-if="msg.ragProcess && msg.ragProcess.length > 0"
                     :items="msg.ragProcess.map((p, idx) => {
-                  const item = {
-                    key: `${p.step}-${p.status}-${idx}`,
-                    title: p.title || '处理中',
-                    description: p.description || '',
-                    status: p.status || 'pending'
-                  }
-                  if (p.content) {
-                    item.content = h('div', {
-                      innerHTML: md.render(p.content),
-                      class: 'markdown-body',
-                      style: { background: 'transparent'}
-                    })
-                  }
-                  return item
-                })"
+                      const item = {
+                        key: `${p.step}-${p.status}-${idx}`,
+                        title: p.title || '处理中',
+                        description: p.description || '',
+                        status: p.status || 'pending'
+                      }
+                      if (p.content) {
+                        item.content = h(Typography, {
+                          innerHTML: md.render(p.content),
+                        })
+                      }
+                      return item
+                    })"
                     collapsible
                     class="thought-chain"
                 />
@@ -923,6 +922,7 @@ const roles = computed(() => ({
 </template>
 
 <style scoped>
+/* ================= 布局与容器 ================= */
 .chat-session-container {
   height: 100vh;
   display: flex;
@@ -971,6 +971,7 @@ const roles = computed(() => ({
   min-width: 200px;
 }
 
+/* ================= 消息区域 ================= */
 .messages-container {
   flex: 1;
   overflow: hidden;
@@ -999,14 +1000,8 @@ const roles = computed(() => ({
 }
 
 @keyframes messageSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .thought-chain {
@@ -1015,12 +1010,8 @@ const roles = computed(() => ({
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .message-content {
@@ -1052,6 +1043,7 @@ const roles = computed(() => ({
   justify-content: flex-end;
 }
 
+/* ================= 输入区域 & Sender ================= */
 .input-container {
   flex-shrink: 0;
   padding: 12px 24px 16px;
@@ -1077,10 +1069,86 @@ const roles = computed(() => ({
   box-shadow: 0 6px 20px rgba(102, 126, 234, 0.25);
 }
 
-/* Markdown 样式优化 */
+.sender-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 8px 4px;
+}
+
+.sender-config {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  overflow-x: auto;
+  gap: 4px;
+}
+
+.sender-config::-webkit-scrollbar {
+  display: none;
+}
+
+.sender-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: 8px;
+}
+
+.model-select-footer {
+  min-width: 120px;
+}
+
+.kb-select-footer {
+  min-width: 160px;
+  width: 180px; /* Default desktop width */
+}
+
+.sender-header-tools {
+  padding: 8px 12px 4px;
+}
+
+.header-tools-wrapper {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.header-tool-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #666;
+  background: #f5f5f5;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.header-tool-item:hover:not(.disabled) {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+.header-tool-item.active {
+  background: #e6f7ff;
+  color: #1890ff;
+  border-color: #1890ff;
+  font-weight: 500;
+}
+
+.header-tool-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f9f9f9;
+  color: #999;
+}
+
+/* ================= Markdown 内部样式优化 ================= */
 :deep(.markdown-body) {
   color: #24292f;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
 }
 
 :deep(.markdown-body p) {
@@ -1145,7 +1213,7 @@ const roles = computed(() => ({
   font-weight: 600;
 }
 
-/* 滚动条样式 */
+/* ================= 滚动条样式 ================= */
 .messages-wrapper::-webkit-scrollbar {
   width: 6px;
 }
@@ -1168,126 +1236,8 @@ const roles = computed(() => ({
   height: 100%;
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .chat-header {
-    padding: 8px 16px;
-  }
-
-  .header-content {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-
-  .config-group {
-    width: 100%;
-  }
-
-  .model-select,
-  .kb-select {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .messages-container {
-    padding: 8px 16px;
-  }
-
-  .messages-wrapper {
-    padding: 16px;
-  }
-
-  .input-container {
-    padding: 8px 16px 12px;
-  }
-
-  .model-select-footer {
-    width: auto !important;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .kb-wrapper {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .kb-select-footer {
-    width: 100% !important;
-  }
-}
-
-.sender-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px 8px 4px;
-}
-
-.sender-config {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  overflow-x: auto;
-  gap: 4px;
-}
-
-.sender-config::-webkit-scrollbar {
-  display: none;
-}
-
-.model-select-footer {
-  min-width: 120px;
-}
-
-.kb-select-footer {
-  min-width: 160px;
-}
-
-.sender-header-tools {
-  padding: 8px 12px 4px;
-}
-
-.header-tools-wrapper {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.header-tool-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  color: #666;
-  background: #f5f5f5;
-  border: 1px solid transparent;
-  transition: all 0.2s;
-}
-
-.header-tool-item:hover:not(.disabled) {
-  background: #e6f7ff;
-  color: #1890ff;
-}
-
-.header-tool-item.active {
-  background: #e6f7ff;
-  color: #1890ff;
-  border-color: #1890ff;
-  font-weight: 500;
-}
-
-.header-tool-item.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: #f9f9f9;
-  color: #999;
-}
-
+/* ================= 暗色模式 (Scoped部分) ================= */
+/* 工具项暗色适配 */
 .chat-session-container.is-dark .header-tool-item {
   background: rgba(255, 255, 255, 0.05);
   color: #a6a6a6;
@@ -1309,61 +1259,85 @@ const roles = computed(() => ({
   color: #434343;
 }
 
-/* Mobile optimizations */
+/* Sender Footer 暗色适配 */
+.chat-session-container.is-dark .sender-footer {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ================= 响应式设计 (合并) ================= */
 @media (max-width: 768px) {
-  .chat-input-area.is-mobile .sender-config {
-    flex-wrap: nowrap;
+  .chat-header,
+  .messages-container {
+    padding: 8px 16px;
   }
 
-  .chat-input-area.is-mobile .kb-select-footer {
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .config-group {
+    width: 100%;
+  }
+
+  .model-select,
+  .kb-select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .messages-wrapper {
+    padding: 16px;
+  }
+
+  .input-container {
+    padding: 8px 16px 12px;
+  }
+
+  /* Sender配置移动端适配 */
+  .model-select-footer {
+    width: auto !important;
+    flex: 1;
+    min-width: 90px;
+  }
+
+  .kb-wrapper {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .kb-select-footer {
+    width: 100% !important;
     min-width: 100px;
   }
 
-  .chat-input-area.is-mobile .model-select-footer {
-    min-width: 90px;
+  .sender-config {
+    flex-wrap: nowrap;
   }
-}
-
-/* Dark mode overrides for footer elements */
-.chat-session-container.is-dark .sender-footer {
-  border-top-color: #333;
-}
-.kb-select-footer {
-  width: 180px; /* Default desktop width */
-}
-
-.sender-actions {
-  display: flex;
-  gap: 8px;
-  margin-left: 8px;
-}
-
-.chat-session-container.is-dark .sender-footer {
-  border-top-color: rgba(255, 255, 255, 0.1);
 }
 </style>
 
 <style>
-/* 暗色模式样式 - 非 scoped 以确保优先级和覆盖 */
+/* ================= 全局暗色模式覆盖 ================= */
+/* 非 scoped 以确保优先级和覆盖 deep 结构或第三方组件 */
+
 .chat-session-container.is-dark {
   background: linear-gradient(to bottom, #141414 0%, #1a1a1a 100%);
   color: #e0e0e0;
 }
 
+.chat-session-container.is-dark .header-card,
+.chat-session-container.is-dark .messages-wrapper,
+.chat-session-container.is-dark .chat-sender {
+  background: #1e1e1e;
+}
 .chat-session-container.is-dark .header-card {
   background: rgba(30, 30, 30, 0.9);
 }
 
 .chat-session-container.is-dark .config-label-text {
   color: #aaa;
-}
-
-.chat-session-container.is-dark .messages-wrapper {
-  background: #1e1e1e;
-}
-
-.chat-session-container.is-dark .chat-sender {
-  background: #1e1e1e;
 }
 
 .chat-session-container.is-dark .markdown-body {
@@ -1400,8 +1374,7 @@ const roles = computed(() => ({
   background: rgba(255, 255, 255, 0.3);
 }
 
-/* --- 思考过程美化样式 --- */
-
+/* ================= 思考过程 (Thinking Section) ================= */
 .thinking-section {
   margin-bottom: 16px;
   background: #f9f9fb; /* 极淡的蓝灰色背景 */
@@ -1411,7 +1384,7 @@ const roles = computed(() => ({
   transition: all 0.3s ease;
 }
 
-/* 头部样式优化 */
+/* 头部样式 */
 .thinking-header-content {
   display: flex;
   align-items: center;
@@ -1435,7 +1408,7 @@ const roles = computed(() => ({
   font-size: 14px;
 }
 
-/* 自定义展开图标容器 */
+/* 展开图标 */
 .expand-icon-wrapper {
   color: #909399;
   font-size: 10px;
@@ -1451,7 +1424,7 @@ const roles = computed(() => ({
   transform: rotate(90deg);
 }
 
-/* 思考中状态 */
+/* 思考状态 */
 .thinking-status {
   font-size: 12px;
   color: #909399;
@@ -1464,15 +1437,9 @@ const roles = computed(() => ({
 }
 
 @keyframes pulse {
-  0% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.4;
-  }
+  0% { opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { opacity: 0.4; }
 }
 
 /* 内容区域 */
@@ -1481,7 +1448,6 @@ const roles = computed(() => ({
   position: relative;
 }
 
-/* 在左侧添加一条细装饰线，增强层次感 */
 .thinking-content-wrapper::before {
   content: '';
   position: absolute;
@@ -1492,7 +1458,7 @@ const roles = computed(() => ({
   background-color: #e0e0e0;
 }
 
-/* Markdown 样式重写 - 模拟 Log/Draft 风格 */
+/* Markdown 模拟 Log/Draft 风格 */
 .thinking-markdown {
   font-size: 14px !important;
   color: #444 !important;
@@ -1500,31 +1466,30 @@ const roles = computed(() => ({
   padding: 10px;
 }
 
-/* 弱化思考过程中的代码块背景，使其融入整体 */
-.thinking-markdown :deep(pre) {
+.thinking-markdown pre {
   background: rgba(0, 0, 0, 0.03) !important;
   border: none !important;
   margin: 8px 0 !important;
   padding: 8px 12px !important;
 }
 
-.thinking-markdown :deep(code) {
+.thinking-markdown code {
   background: rgba(0, 0, 0, 0.03) !important;
   font-size: 12px !important;
-  color: #d63384 !important; /* 稍微不同的代码颜色区分 */
+  color: #d63384 !important;
 }
 
-/* 去除 Collapse 组件默认的内边距干扰 */
-.thinking-section :deep(.ant-collapse-header) {
+/* 去除 Collapse 组件默认干扰 */
+.thinking-section .ant-collapse-header {
   padding: 8px 12px !important;
   align-items: center !important;
 }
 
-.thinking-section :deep(.ant-collapse-content-box) {
+.thinking-section .ant-collapse-content-box {
   padding: 0 !important;
 }
 
-/* --- 暗色模式适配 --- */
+/* 思考过程 - 暗色模式适配 */
 .chat-session-container.is-dark .thinking-section {
   background: rgba(255, 255, 255, 0.03);
   border-color: #303030;
@@ -1542,8 +1507,8 @@ const roles = computed(() => ({
   color: #999 !important;
 }
 
-.chat-session-container.is-dark .thinking-markdown :deep(pre),
-.chat-session-container.is-dark .thinking-markdown :deep(code) {
+.chat-session-container.is-dark .thinking-markdown pre,
+.chat-session-container.is-dark .thinking-markdown code {
   background: rgba(255, 255, 255, 0.05) !important;
   color: #ccc !important;
 }

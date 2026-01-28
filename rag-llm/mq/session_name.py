@@ -53,9 +53,9 @@ class SessionNameGenerator:
                 content = data.get("firstMessage") or data.get("content") or data.get("message")
                 model = data.get(
                     "model")  # {'id': 7, 'name': 'gemini-2.5-flash', 'provider': 'gemini', 'metadata': '{}'}
-                # 这里暂时全部使用qwen3-max模型
+                # 这里暂时全部使用qwen3-max-2026-01-23模型
                 model = {
-                    'name': 'qwen3-max',
+                    'name': 'qwen3-max-2026-01-23',
                     'provider': 'qwen'
                 }
                 llm = get_llm_instance(model)

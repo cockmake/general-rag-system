@@ -84,7 +84,7 @@ def get_llm_instance(
     llm = init_chat_model(
         model=model_name,
         api_key=api_key,
-        base_url=base_url,
+        base_url=settings["response_base_url"] if enable_web_search and "response_base_url" in settings else base_url,
         temperature=temperature if temperature is not None else temperature,
         model_provider=settings['model_provider'] if "model_provider" in settings else None,
         timeout=timeout,
@@ -95,6 +95,15 @@ def get_llm_instance(
         if model_name == "qwen3-max":
             llm = llm.bind(
                 extra_body={"enable_search": True}
+            )
+        elif model_name == "qwen3-max-2026-01-23":
+            llm = llm.bind(
+                tools=[
+                    {"type": "web_search"},
+                    {"type": "web_extractor"},
+                    {"type": "code_interpreter"},
+                ],
+                extra_body={"enable_thinking": True}
             )
         elif model_name.startswith("gpt-5.2-chat"):
             llm = llm.bind(
@@ -334,10 +343,13 @@ def cut_history(history: list, model: dict):
     processed_context = []
     current_token_count = get_token_count(current_msg.get('content') or "")
     n = len(previous_msgs)
+    model_name = model.get("name", "")
 
-    max_tokens = 20480
-    if model.get("name").startswith("gpt") or model.get("name") == "gemini-3-pro-preview":
-        max_tokens = 15360
+    max_tokens = 15360
+    if model_name.startswith("gpt") or model_name.startswith("gemini-3-pro"):
+        max_tokens = 12800
+    elif model_name.startswith("gemini-3-flash"):
+        max_tokens = 20480
 
     for i in range(n, 1, -2):
         pair = previous_msgs[i - 2: i]

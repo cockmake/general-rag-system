@@ -92,7 +92,7 @@ async def rag_stream_generator(
             top_k=20,
 
             grade_top_n=30,
-            grade_score_threshold=0.5,
+            grade_score_threshold=0.45,
 
             top_n=18,
     ):
@@ -247,6 +247,9 @@ async def chat_stream(
     # 否则使用纯LLM模式
     else:
         logger.info("使用纯LLM模式")
+        if len(history) > 1 and model['name'].startswith('doubao-seed'):
+            # 豆包只有第一轮允许网页搜索
+            options['webSearch'] = False
         llm = get_llm_instance(model, enable_web_search=options.get('webSearch', False))
 
         # 添加当前问题到消息列表
