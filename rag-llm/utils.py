@@ -90,7 +90,14 @@ def get_llm_instance(
         timeout=timeout,
         max_retries=max_retries,
     )
-    # thinking配置 todo: 统一配置
+    # thinking配置
+    if model_name.startswith("gpt-5.2-chat"):
+        llm = llm.bind(
+            reasoning={
+                "effort": "medium",
+                "summary": "detailed"
+            },
+        )
     # tools配置
     if enable_web_search:
         if model_name == "qwen3-max":
@@ -110,7 +117,7 @@ def get_llm_instance(
             llm = llm.bind(
                 tools=[
                     {"type": "web_search_preview"},
-                ]
+                ],
             )
         elif model_name.startswith("doubao-seed"):
             llm = llm.bind(
