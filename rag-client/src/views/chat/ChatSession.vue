@@ -1023,6 +1023,7 @@ const roles = computed(() => ({
 .user-message-content {
   line-height: 1.6;
   font-size: 15px;
+  white-space: pre-wrap;
 }
 
 /* 编辑模式样式 */
