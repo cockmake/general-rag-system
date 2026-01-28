@@ -18,7 +18,8 @@ from pydantic import BaseModel, Field
 
 from aiohttp_utils import rerank
 from milvus_utils import MilvusClientManager
-from utils import get_llm_instance, get_embedding_instance, get_structured_data_agent, content_extractor
+from utils import get_llm_instance, get_embedding_instance, get_structured_data_agent, content_extractor, \
+    get_display_docs
 
 logger = logging.getLogger(__name__)
 
@@ -599,7 +600,8 @@ class RAGService:
                     ])
                 logger.info(
                     f"构建上下文完成，合并后共有 {consecutive_docs} 个文档，选择前 {len(merged_docs)} 个用于回答。")
-                docs_display_num = min(3, len(merged_docs))
+
+                display_docs = get_display_docs(merged_docs)
                 yield {
                     "type": "process",
                     "payload": {
@@ -608,11 +610,11 @@ class RAGService:
                         "description": f"基于检索和评分结果构建回答上下文，合并后共有 {consecutive_docs} 个文档， 选择前 {len(merged_docs)} 个用于回答。",
                         "status": "completed",
                         "content": "\n\n---\n\n".join(
-                            [f"## 前 {docs_display_num} 份检索到的文件"] + [
+                            [f"## 前 {len(display_docs)} 份检索到的文件如下"] + [
                                 f"```document\n[文档{i + 1}] [来源: {doc.metadata.get('fileName', '未命名文件')}] [相关性：{doc.metadata.get('rerank_score', 0):.3f}]: {doc.page_content}\n```"
-                                for i, doc in enumerate(merged_docs[:docs_display_num])
+                                for i, doc in enumerate(display_docs)
                             ]
-                        ) if merged_docs else "无相关文档"
+                        ) if display_docs else "无相关文档"
                     }
                 }
 

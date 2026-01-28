@@ -386,3 +386,22 @@ def content_extractor(content):
                     if "text" in summary:
                         think_content += summary["text"]
     return think_content, text_content
+
+
+def get_display_docs(documents: list, max_tokens: int = 10240, min_docs: int = 1):
+    """根据token限制筛选展示的文档"""
+    if len(documents) <= min_docs:
+        return documents
+    display_docs = [documents[i] for i in range(min_docs)]
+    total_tokens = sum(get_token_count(documents[i].page_content) for i in range(min_docs))
+    if total_tokens >= max_tokens:
+        return display_docs
+    for doc in documents[min_docs:]:
+        content = doc.page_content
+        doc_tokens = get_token_count(content)
+        if total_tokens + doc_tokens <= max_tokens:
+            display_docs.append(doc)
+            total_tokens += doc_tokens
+        else:
+            break
+    return display_docs
