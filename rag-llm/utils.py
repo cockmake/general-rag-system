@@ -388,7 +388,7 @@ def content_extractor(content):
     return think_content, text_content
 
 
-def get_display_docs(documents: list, max_tokens: int = 10240, min_docs: int = 1):
+def get_display_docs(documents: list, max_tokens: int = 5120, min_docs: int = 1):
     """根据token限制筛选展示的文档"""
     if len(documents) <= min_docs:
         return documents

@@ -610,7 +610,7 @@ class RAGService:
                         "description": f"基于检索和评分结果构建回答上下文，合并后共有 {consecutive_docs} 个文档， 选择前 {len(merged_docs)} 个用于回答。",
                         "status": "completed",
                         "content": "\n\n---\n\n".join(
-                            [f"## 前 {len(display_docs)} 份检索到的文件如下"] + [
+                            [f"## 部分检索到的信息如下（{len(display_docs)}份）"] + [
                                 f"```document\n[文档{i + 1}] [来源: {doc.metadata.get('fileName', '未命名文件')}] [相关性：{doc.metadata.get('rerank_score', 0):.3f}]: {doc.page_content}\n```"
                                 for i, doc in enumerate(display_docs)
                             ]
