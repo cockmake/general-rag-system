@@ -10,7 +10,7 @@ RAG Service - 多角度查询与并行处理的异步RAG服务
 import asyncio
 import logging
 import os
-from typing import AsyncGenerator, Optional, List, Tuple
+from typing import AsyncGenerator, Optional, List
 
 import numpy as np
 from langchain_core.documents import Document
@@ -27,10 +27,11 @@ logger = logging.getLogger(__name__)
 
 
 def filter_grade_threshold(
-        docs: List[Document],
-        high_score_threshold: float = 0.7
-) -> Tuple[Tuple[float, float], List[Document]]:
-    # 提取分数
+        docs: List[Document],  # 修正类型提示，兼容 Document
+        high_score_threshold: float = 0.7,
+        possible_search_ratio: float = 0.15
+) -> dict:
+    # 1. 提取分数
     scores = []
     valid_docs = []
     for doc in docs:
@@ -40,22 +41,36 @@ def filter_grade_threshold(
             valid_docs.append(doc)
 
     if not scores:
-        return (0.0, 0.0), []
+        return {
+            "high_ratio": 0,
+            "threshold": 0.0,
+            "documents": []
+        }
 
-    # 降序排序
+    # 2. 降序排序
     scores = np.array(scores)
     order = np.argsort(scores)[::-1]
     sorted_scores = scores[order]
     sorted_docs = [valid_docs[i] for i in order]
     n = len(sorted_scores)
 
+    # 3. 数量过少直接返回
     if n < 2:
-        return (1, sorted_scores[0]), sorted_docs
+        return {
+            "high_ratio": 1,
+            "threshold": sorted_scores[0],
+            "documents": sorted_docs
+        }
 
-    if sorted_scores.min() >= high_score_threshold:  # 阈值可根据业务调整
-        return (1, sorted_scores.min()), sorted_docs  # 保留全部文档
+    # 4. 高分直通车
+    if sorted_scores.min() >= high_score_threshold:
+        return {
+            "high_ratio": 1,
+            "threshold": sorted_scores.min(),
+            "documents": sorted_docs
+        }
 
-    # K-Means聚类
+    # 5. K-Means聚类
     kmeans = KMeans(n_clusters=2, random_state=42, n_init=10)
     kmeans.fit(sorted_scores.reshape(-1, 1))
 
@@ -63,18 +78,43 @@ def filter_grade_threshold(
     labels = kmeans.labels_
     centers_raw = kmeans.cluster_centers_.flatten()
 
-    # 按中心值排序并同步计数
+    # 按中心值排序 (Low, High)
     sorted_idx = np.argsort(centers_raw)
     sorted_centers = centers_raw[sorted_idx]
+    low_center = sorted_centers[0]
+
+    # 计算高分占比
+    # 注意：这里逻辑没问题，labels对应的是centers_raw的索引
     sorted_counts = np.array([np.sum(labels == label) for label in sorted_idx])
-
-    # 插值法计算阈值：在两中心间按高分簇比例定位
     high_ratio = sorted_counts[1] / n
-    kmeans_threshold = sorted_centers[0] + (sorted_centers[1] - sorted_centers[0]) * high_ratio
 
-    # 过滤
+    # 获取高分簇的Label
+    high_score_label = sorted_idx[1]
+
+    # 步骤 A: 先获取该簇的所有分数，不要直接 [-1]，防止列表为空
+    high_cluster_subset = sorted_scores[labels == high_score_label]
+
+    if len(high_cluster_subset) == 0:
+        # 防御性逻辑：如果高分簇为空（极罕见），降级为低分中心或全保留
+        kmeans_threshold = low_center
+    else:
+        # 步骤 B: 取高分簇的最小值（因为是降序排列，所以是最后一个）
+        min_high_score = high_cluster_subset[-1]
+        # 步骤 C: 计算阈值
+        kmeans_threshold = min_high_score - (min_high_score - low_center) * possible_search_ratio
+
+    # 步骤 D: 安全兜底 防止传入 possible_search_ratio > 1
+    # 防止 buffer 太大导致阈值低于低分中心，这会导致把噪音全放进来
+    kmeans_threshold = max(kmeans_threshold, low_center)
+
     filtered_docs = [doc for s, doc in zip(sorted_scores, sorted_docs) if s >= kmeans_threshold]
-    return (high_ratio, kmeans_threshold), filtered_docs
+
+    return {
+        "high_ratio": high_ratio,
+        "threshold": kmeans_threshold,
+        "documents": filtered_docs,
+        "kmeans_centers": sorted_centers.tolist()
+    }
 
 
 # ============= Pydantic Models =============
@@ -629,14 +669,21 @@ class RAGService:
                 consecutive_docs = 0
                 merged_docs = []
                 if graded_docs:
-                    (high_ratio, threshold), graded_docs = filter_grade_threshold(graded_docs)
+                    filter_result = filter_grade_threshold(graded_docs)
+                    threshold = filter_result['threshold']
+                    high_ratio = filter_result['high_ratio']
+                    graded_docs = filter_result['documents']
+                    kmeans_centers = filter_result.get('kmeans_centers', [])
                     yield {
                         "type": "process",
                         "payload": {
-                            "step": "reformat",
-                            "title": "构建上下文",
-                            "description": f"动态相关性：{threshold:.2f}，高分占比：{high_ratio * 100:.2f}%，进一步筛选得到 {len(graded_docs)} 个文档。正在合并文档切片...",
-                            "status": "running"
+                            "step": "filter",
+                            "title": "动态过滤文档",
+                            "description": f"动态相关性：{threshold:.2f}，高分占比：{high_ratio * 100:.2f}%，筛选得到 {len(graded_docs)} 个文档。" +
+                                           (
+                                               f" K-Means中心：[{', '.join([f'{c:.2f}' for c in kmeans_centers])}]。" if kmeans_centers else ""
+                                           ),
+                            "status": "completed"
                         }
                     }
                     # 合并同一文档的连续切片（在 top_n 截断前进行，以保证完整性）
@@ -659,7 +706,7 @@ class RAGService:
                     "payload": {
                         "step": "reformat",
                         "title": "构建上下文",
-                        "description": f"基于检索和评分结果构建回答上下文，合并后共有 {consecutive_docs} 份文档， 选择前 {len(merged_docs)} 份用于回答。",
+                        "description": f"连续文档合并，得到 {consecutive_docs} 份文档， 选择前 {len(merged_docs)} 份用于上下文。",
                         "status": "completed",
                         "content": "\n\n---\n\n".join(
                             [f"## 部分检索到的信息如下（仅展示前 {len(display_docs)} 份）"] + [
