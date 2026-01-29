@@ -20,30 +20,32 @@ async def stream_generator(model_instance, messages, prompt_tokens: int = 0, opt
     cot_content = ""
     full_content = ""
     start_time = time.time()  # Start timing
+    try:
+        async for chunk in model_instance.astream(messages):
 
-    async for chunk in model_instance.astream(messages):
+            content = chunk.content or reasoning_content_wrapper(chunk)
 
-        content = chunk.content or reasoning_content_wrapper(chunk)
+            if content:
+                think_content, text_content = content_extractor(content)
+                if think_content != "":
+                    cot_content += think_content
+                    # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
+                    data = {
+                        "type": "thinking",
+                        "payload": json.dumps(think_content, ensure_ascii=False)
+                    }
+                    yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-        if content:
-            think_content, text_content = content_extractor(content)
-            if think_content != "":
-                cot_content += think_content
-                # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
-                data = {
-                    "type": "thinking",
-                    "payload": json.dumps(think_content, ensure_ascii=False)
-                }
-                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-            if text_content != "":
-                full_content += text_content
-                # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
-                data = {
-                    "type": "content",
-                    "payload": json.dumps(text_content, ensure_ascii=False)
-                }
-                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+                if text_content != "":
+                    full_content += text_content
+                    # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
+                    data = {
+                        "type": "content",
+                        "payload": json.dumps(text_content, ensure_ascii=False)
+                    }
+                    yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+    except Exception as e:
+        logger.error(e)
 
     end_time = time.time()
     latency_ms = int((end_time - start_time) * 1000)  # Calculate latency
@@ -131,7 +133,6 @@ async def rag_stream_generator(
     # 发送使用统计
     end_time = time.time()
     latency_ms = int((end_time - start_time) * 1000)  # Calculate latency
-
     completion_tokens = get_token_count(full_content)
     usage_data = {
         "type": "usage",

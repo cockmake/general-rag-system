@@ -790,21 +790,25 @@ class RAGService:
         llm = get_llm_instance(model_info, enable_web_search=options.get('webSearch', False) if options else False)
 
         # 使用异步流式生成
-        async for chunk in llm.astream(conversation):
-            content = chunk.content or reasoning_content_wrapper(chunk)
+        try:
+            async for chunk in llm.astream(conversation):
 
-            if content:
-                think_content, text_content = content_extractor(content)
-                if think_content:
-                    yield {
-                        "type": "thinking",
-                        "payload": think_content
-                    }
-                if text_content:
-                    yield {
-                        "type": "content",
-                        "payload": text_content
-                    }
+                content = chunk.content or reasoning_content_wrapper(chunk)
+
+                if content:
+                    think_content, text_content = content_extractor(content)
+                    if think_content:
+                        yield {
+                            "type": "thinking",
+                            "payload": think_content
+                        }
+                    if text_content:
+                        yield {
+                            "type": "content",
+                            "payload": text_content
+                        }
+        except Exception as e:
+            logger.error(e)
 
 
 # 全局RAG服务实例
