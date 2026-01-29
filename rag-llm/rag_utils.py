@@ -84,16 +84,13 @@ def filter_grade_threshold(
     low_center = sorted_centers[0]
 
     # 计算高分占比
-    # 注意：这里逻辑没问题，labels对应的是centers_raw的索引
     sorted_counts = np.array([np.sum(labels == label) for label in sorted_idx])
     high_ratio = sorted_counts[1] / n
-
-    # 获取高分簇的Label
     high_score_label = sorted_idx[1]
 
     # 步骤 A: 先获取该簇的所有分数，不要直接 [-1]，防止列表为空
     high_cluster_subset = sorted_scores[labels == high_score_label]
-
+    min_high_score = 0.0
     if len(high_cluster_subset) == 0:
         # 防御性逻辑：如果高分簇为空（极罕见），降级为低分中心或全保留
         kmeans_threshold = low_center
@@ -109,8 +106,15 @@ def filter_grade_threshold(
 
     filtered_docs = [doc for s, doc in zip(sorted_scores, sorted_docs) if s >= kmeans_threshold]
 
+    # 获取低分区的最大边界值
+    low_score_label = sorted_idx[0]
+    low_cluster_subset = sorted_scores[labels == low_score_label]
+    max_low_score = low_cluster_subset[0] if len(low_cluster_subset) > 0 else 0.0
+
     return {
         "high_ratio": high_ratio,
+        "min_high_score": min_high_score,
+        "max_low_score": max_low_score,
         "threshold": kmeans_threshold,
         "documents": filtered_docs,
         "kmeans_centers": sorted_centers.tolist()
@@ -674,6 +678,8 @@ class RAGService:
                     high_ratio = filter_result['high_ratio']
                     graded_docs = filter_result['documents']
                     kmeans_centers = filter_result.get('kmeans_centers', [])
+                    min_high_score = filter_result.get('min_high_score', None)
+                    max_low_score = filter_result.get('max_low_score', None)
                     yield {
                         "type": "process",
                         "payload": {
@@ -681,7 +687,12 @@ class RAGService:
                             "title": "动态过滤文档",
                             "description": f"动态相关性：{threshold:.2f}，高分占比：{high_ratio * 100:.2f}%，筛选得到 {len(graded_docs)} 个文档。" +
                                            (
-                                               f" K-Means中心：[{', '.join([f'{c:.2f}' for c in kmeans_centers])}]。" if kmeans_centers else ""
+                                               f"高分区域边界：{min_high_score}，低分区域边界：{max_low_score}。"
+                                               if min_high_score is not None and max_low_score is not None else ""
+                                           ) +
+                                           (
+                                               f" 中心：[{', '.join([f'{c:.2f}' for c in kmeans_centers])}]。"
+                                               if kmeans_centers else ""
                                            ),
                             "status": "completed"
                         }
