@@ -14,9 +14,9 @@ async def rerank(
         documents: list[str],
         provider: str = "qwen",
         model_name: str = "qwen3-rerank",
-        top_n: Optional[int] = None,
+        grade_top_n: Optional[int] = None,
         return_documents: bool = True,
-        score_threshold: Optional[float] = None
+        grade_score_threshold: Optional[float] = None
 ) -> dict:
     """
     文档重排序服务
@@ -26,9 +26,9 @@ async def rerank(
         documents: 待排序的文档列表
         provider: 服务提供商，默认"qwen"
         model_name: 模型名称，默认"qwen3-rank"
-        top_n: 返回前N个文档，None则返回全部
+        grade_top_n: 返回前N个文档，None则返回全部
         return_documents: 是否返回文档内容
-        score_threshold: 相关性分数阈值（斩杀线），低于此分数的文档将被过滤，默认None（不过滤）
+        grade_score_threshold: 相关性分数阈值（斩杀线），低于此分数的文档将被过滤，默认None（不过滤）
         
     Returns:
         {
@@ -121,23 +121,23 @@ async def rerank(
                 filtered_results = all_results
                 
                 # 1. 应用分数阈值过滤（斩杀线）
-                if score_threshold is not None:
+                if grade_score_threshold is not None:
                     original_count = len(all_results)
                     filtered_results = [
                         item for item in all_results
-                        if item.get("relevance_score", 0) >= score_threshold
+                        if item.get("relevance_score", 0) >= grade_score_threshold
                     ]
                     
                     if len(filtered_results) < original_count:
                         logger.info(
-                            f"应用斩杀线 {score_threshold}：过滤掉 {original_count - len(filtered_results)} 个低分文档，"
+                            f"应用斩杀线 {grade_score_threshold}：过滤掉 {original_count - len(filtered_results)} 个低分文档，"
                             f"保留 {len(filtered_results)} 个高质量文档"
                         )
                 
                 # 2. 应用top_n限制
-                if top_n is not None and len(filtered_results) > top_n:
-                    filtered_results = filtered_results[:top_n]
-                    logger.info(f"应用top_n={top_n}：返回前 {top_n} 个文档")
+                if grade_top_n is not None and len(filtered_results) > grade_top_n:
+                    filtered_results = filtered_results[:grade_top_n]
+                    logger.info(f"应用top_n={grade_top_n}：返回前 {grade_top_n} 个文档")
                 
                 # 更新结果
                 result["output"]["results"] = filtered_results
@@ -198,7 +198,7 @@ async def main():
         result_topn = await rerank(
             query=test_query,
             documents=test_documents,
-            top_n=3,  # 只返回前3个
+            grade_top_n=3,  # 只返回前3个
             return_documents=True
         )
         print(f"查询: {test_query}\n")
@@ -221,7 +221,7 @@ async def main():
         result_threshold = await rerank(
             query=test_query,
             documents=test_documents,
-            score_threshold=0.5,  # 只要分数>=0.5的
+            grade_score_threshold=0.5,  # 只要分数>=0.5的
             return_documents=True
         )
         print(f"查询: {test_query}\n")
@@ -247,8 +247,8 @@ async def main():
         result_combined = await rerank(
             query=test_query,
             documents=test_documents,
-            top_n=3,
-            score_threshold=0.3,
+            grade_top_n=3,
+            grade_score_threshold=0.3,
             return_documents=True
         )
         print(f"查询: {test_query}\n")

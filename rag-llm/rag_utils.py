@@ -10,11 +10,13 @@ RAG Service - 多角度查询与并行处理的异步RAG服务
 import asyncio
 import logging
 import os
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, List, Tuple
 
+import numpy as np
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, AIMessage
 from pydantic import BaseModel, Field
+from sklearn.cluster import KMeans
 
 from aiohttp_utils import rerank
 from milvus_utils import MilvusClientManager
@@ -22,6 +24,57 @@ from utils import get_llm_instance, get_embedding_instance, get_structured_data_
     get_display_docs, reasoning_content_wrapper
 
 logger = logging.getLogger(__name__)
+
+
+def filter_grade_threshold(
+        docs: List[Document],
+        high_score_threshold: float = 0.7
+) -> Tuple[Tuple[float, float], List[Document]]:
+    # 提取分数
+    scores = []
+    valid_docs = []
+    for doc in docs:
+        score = doc.metadata.get('rerank_score', 0.0)
+        if isinstance(score, (int, float)):
+            scores.append(float(score))
+            valid_docs.append(doc)
+
+    if not scores:
+        return (0.0, 0.0), []
+
+    # 降序排序
+    scores = np.array(scores)
+    order = np.argsort(scores)[::-1]
+    sorted_scores = scores[order]
+    sorted_docs = [valid_docs[i] for i in order]
+    n = len(sorted_scores)
+
+    if n < 2:
+        return (1, sorted_scores[0]), sorted_docs
+
+    if sorted_scores.min() >= high_score_threshold:  # 阈值可根据业务调整
+        return (1, sorted_scores.min()), sorted_docs  # 保留全部文档
+
+    # K-Means聚类
+    kmeans = KMeans(n_clusters=2, random_state=42, n_init=10)
+    kmeans.fit(sorted_scores.reshape(-1, 1))
+
+    # 获取标签与中心
+    labels = kmeans.labels_
+    centers_raw = kmeans.cluster_centers_.flatten()
+
+    # 按中心值排序并同步计数
+    sorted_idx = np.argsort(centers_raw)
+    sorted_centers = centers_raw[sorted_idx]
+    sorted_counts = np.array([np.sum(labels == label) for label in sorted_idx])
+
+    # 插值法计算阈值：在两中心间按高分簇比例定位
+    high_ratio = sorted_counts[1] / n
+    kmeans_threshold = sorted_centers[0] + (sorted_centers[1] - sorted_centers[0]) * high_ratio
+
+    # 过滤
+    filtered_docs = [doc for s, doc in zip(sorted_scores, sorted_docs) if s >= kmeans_threshold]
+    return (high_ratio, kmeans_threshold), filtered_docs
 
 
 # ============= Pydantic Models =============
@@ -291,8 +344,8 @@ class RAGService:
             documents: list[Document],
             query: str,
             model_info: dict = None,
-            top_n: int = 5,
-            score_threshold: float = 0.3
+            grade_top_n: int = 5,
+            grade_score_threshold: float = 0.3
     ) -> list[Document]:
         """
         使用Rerank模型评估文档相关性（替代LLM评分）
@@ -301,8 +354,8 @@ class RAGService:
             documents: 文档列表
             query: 原始查询
             model_info: 模型配置信息（保留参数以兼容旧接口，但不使用）
-            top_n: 返回前N个最相关的文档，默认5个
-            score_threshold: 相关性分数阈值（斩杀线），默认0.3，低于此分数的文档将被过滤
+            grade_top_n: 返回前N个最相关的文档，默认5个
+            grade_score_threshold: 相关性分数阈值（斩杀线），默认0.3，低于此分数的文档将被过滤
 
         Returns:
             按相关性分数排序的文档列表
@@ -321,9 +374,9 @@ class RAGService:
             rerank_result = await rerank(
                 query=query,
                 documents=doc_contents,
-                top_n=min(top_n, len(documents)),
+                grade_top_n=min(grade_top_n, len(documents)),
                 return_documents=False,  # 不需要返回文档内容，节省带宽
-                score_threshold=score_threshold  # 应用斩杀线
+                grade_score_threshold=grade_score_threshold  # 应用斩杀线
             )
 
             # 根据rerank结果重新排序文档
@@ -337,13 +390,13 @@ class RAGService:
                 doc.metadata['rerank_score'] = relevance_score
                 ranked_docs.append(doc)
 
-            logger.info(f"Rerank评分完成，返回 {len(ranked_docs)} 个相关文档（斩杀线: {score_threshold}）")
+            logger.info(f"Rerank评分完成，返回 {len(ranked_docs)} 个相关文档（斩杀线: {grade_score_threshold}）")
             return ranked_docs
 
         except Exception as e:
             logger.error(f"Rerank评分失败: {e}，回退到返回所有文档")
             # 出错时返回原始文档列表（兜底策略）
-            return documents[:top_n] if len(documents) > top_n else documents
+            return documents[:grade_top_n] if len(documents) > grade_top_n else documents
 
     def merge_consecutive_chunks(self, docs: list[Document]) -> list[Document]:
         """合并同一文档的连续切片，去除重叠部分"""
@@ -459,13 +512,12 @@ class RAGService:
             user_id: Optional[int] = None,
             system_prompt: Optional[str] = None,
             options: dict = None,
-            top_k: int = 15,
+            retrieve_k: int = 15,
 
             grade_top_n: int = 50,
+            grade_score_threshold: float = 0.3,
 
-            grade_score_threshold: float = 0.35,
-
-            top_n: int = 10,
+            context_top_n: int = 10,
     ) -> AsyncGenerator[dict, None]:
         """
         带过程信息的流式RAG响应生成器
@@ -478,8 +530,8 @@ class RAGService:
             user_id: 用户ID（可选）
             system_prompt: 自定义系统提示词（可选）
             options: 其他选项（如启用Web搜索等）
-            top_k: 每个查询检索的文档数量
-            top_n: Rerank后返回的文档数量
+            retrieve_k: 每个查询检索的文档数量
+            context_top_n: 最终参数上下文构建的文档数量
             grade_top_n: Rerank评分时考虑的文档数量
             grade_score_threshold: Rerank相关性分数阈值
 
@@ -529,7 +581,7 @@ class RAGService:
                 }
 
                 logger.info("开始并行检索...")
-                all_docs = await self.parallel_retrieve(query_list, user_id, kb_id, top_k=top_k)
+                all_docs = await self.parallel_retrieve(query_list, user_id, kb_id, top_k=retrieve_k)
 
                 yield {
                     "type": "process",
@@ -555,13 +607,12 @@ class RAGService:
                     }
 
                     logger.info("开始Rerank文档重排序...")
-                    # 这里的 top_n 传入较大值 (如 50)，以便获取更多候选文档用于后续拼接，
-                    # 避免因过早截断导致连续切片丢失。最终的 top_n 截断放在拼接之后。
+                    # 这里的 grade_top_n 传入较大值 (如 50)，以便获取更多候选文档用于后续拼接，
                     graded_docs = await self.parallel_grade_documents(
                         all_docs,
                         grade_query,
-                        top_n=grade_top_n,
-                        score_threshold=grade_score_threshold
+                        grade_top_n=grade_top_n,
+                        grade_score_threshold=grade_score_threshold
                     )
 
                 yield {
@@ -569,7 +620,7 @@ class RAGService:
                     "payload": {
                         "step": "rerank",
                         "title": "评估文档相关性",
-                        "description": f"筛选出 {len(graded_docs)} 个相关文档",
+                        "description": f"简单相关性：{grade_score_threshold:.2f}， 筛选出 {len(graded_docs)} 个相关文档",
                         "status": "completed"
                     }
                 }
@@ -578,12 +629,13 @@ class RAGService:
                 consecutive_docs = 0
                 merged_docs = []
                 if graded_docs:
+                    (high_ratio, threshold), graded_docs = filter_grade_threshold(graded_docs)
                     yield {
                         "type": "process",
                         "payload": {
                             "step": "reformat",
                             "title": "构建上下文",
-                            "description": f"正在合并文档切片...",
+                            "description": f"动态相关性：{threshold:.2f}，高分占比：{high_ratio * 100:.2f}%，进一步筛选得到 {len(graded_docs)} 个文档。正在合并文档切片...",
                             "status": "running"
                         }
                     }
@@ -592,7 +644,7 @@ class RAGService:
                     consecutive_docs = len(merged_docs)
 
                     # 最终应用 top_n 限制
-                    merged_docs = merged_docs[:top_n]
+                    merged_docs = merged_docs[:context_top_n]
 
                     context = "\n\n".join([
                         f"[文档{i + 1}]: {doc.page_content} (来源: {doc.metadata.get('fileName', '未命名文件')})"
@@ -607,10 +659,10 @@ class RAGService:
                     "payload": {
                         "step": "reformat",
                         "title": "构建上下文",
-                        "description": f"基于检索和评分结果构建回答上下文，合并后共有 {consecutive_docs} 个文档， 选择前 {len(merged_docs)} 个用于回答。",
+                        "description": f"基于检索和评分结果构建回答上下文，合并后共有 {consecutive_docs} 份文档， 选择前 {len(merged_docs)} 份用于回答。",
                         "status": "completed",
                         "content": "\n\n---\n\n".join(
-                            [f"## 部分检索到的信息如下（{len(display_docs)}份）"] + [
+                            [f"## 部分检索到的信息如下（仅展示前 {len(display_docs)} 份）"] + [
                                 f"```document\n[文档{i + 1}] [来源: {doc.metadata.get('fileName', '未命名文件')}] [相关性：{doc.metadata.get('rerank_score', 0):.3f}]: {doc.page_content}\n```"
                                 for i, doc in enumerate(display_docs)
                             ]
