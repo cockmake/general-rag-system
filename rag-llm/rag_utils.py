@@ -687,7 +687,7 @@ class RAGService:
                             "title": "动态过滤文档",
                             "description": f"动态相关性：{threshold:.2f}，高分占比：{high_ratio * 100:.2f}%，筛选得到 {len(graded_docs)} 个文档。" +
                                            (
-                                               f"高分区域边界：{min_high_score}，低分区域边界：{max_low_score}。"
+                                               f"高分区域边界：{min_high_score:.2f}，低分区域边界：{max_low_score:.2f}。"
                                                if min_high_score is not None and max_low_score is not None else ""
                                            ) +
                                            (
