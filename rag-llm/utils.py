@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import logging
@@ -21,6 +22,7 @@ from langchain_text_splitters import (
 )
 
 from gemini_utils import GeminiInstance
+from openai_utils import OpenAIInstance
 
 logger = logging.getLogger(__name__)
 try:
@@ -29,6 +31,9 @@ try:
     TESSERACT_AVAILABLE = True
 except ImportError:
     TESSERACT_AVAILABLE = False
+
+
+# 统一返回结构
 
 
 @lru_cache(maxsize=1)
@@ -180,8 +185,20 @@ def markdown_split(markdown_text: str, headers_to_split_on: list = None):
         headers_to_split_on=headers_to_split_on,
         strip_headers=False
     )
-    # markdown_text = markdown_text.replace('\n\n', '\n')
-    return markdown_splitter.split_text(markdown_text)
+    markdown_splits = markdown_splitter.split_text(markdown_text)
+    separators = [
+        "\n\n", "\n",
+        "。", "！", "？",
+        ".", "!", "?",
+        "，", ",", " "
+    ]
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=2048,
+        chunk_overlap=150,
+        separators=separators,
+        add_start_index=True
+    )
+    return text_splitter.split_documents(markdown_splits)
 
 
 def json_split(json_data: dict, min_chunk_size: int = 100, max_chunk_size: int = 1000):
@@ -314,24 +331,87 @@ def pdf_split(
     )
 
 
-def image_split(
-        file_input, min_length: int = 20, chunk_size: int = 1000, chunk_overlap: int = 150,
+async def image_split(
+        file_input,
+        min_length: int = 20,
+        chunk_size: int = 1500,
+        chunk_overlap: int = 100,
         lang: str = 'chi_sim+eng'
 ):
-    if not TESSERACT_AVAILABLE:
-        raise ImportError("pytesseract not installed")
+    # 1. 读取图片数据并转Base64
+    image_data = None
+    if isinstance(file_input, str):
+        with open(file_input, "rb") as f:
+            image_data = f.read()
+    else:
+        # 假设是 file-like object
+        if hasattr(file_input, 'seek'):
+            file_input.seek(0)
+        image_data = file_input.read()
 
-    image = Image.open(file_input)
+    base64_image = base64.b64encode(image_data).decode('utf-8')
+
+    # 2. 获取配置 (优先读取配置，兜底使用 t.py 中的 key)
+    model_info = {
+        'name': 'qwen3-vl-flash',
+        'provider': 'qwen'
+    }
+    config = _load_config_cached()
+    config = config['chat']
+    provider_config = config.get(model_info['provider'])
+    if not provider_config:
+        raise ValueError(f"Provider '{model_info['provider']}' not found in configuration")
+    # 合并配置：公共配置 < 模型特定配置
+    settings = provider_config.get("settings", {}).copy()
+    model_specific_settings = provider_config.get(model_info['name'], {})
+    settings.update(model_specific_settings)
+
+    api_key = settings.get('api_key', None)
+    base_url = settings.get('base_url', None)
+
+    if not api_key or not base_url:
+        raise ValueError("API key and base URL must be provided in configuration for Qwen models.")
+
+    # 3. 初始化 LLM
+    llm = OpenAIInstance(
+        model_name=model_info['name'],
+        api_key=api_key,
+        base_url=base_url
+    )
+
+    # 4. 构造 Prompt
+    prompt = (
+        "你是一个图像详细描述生成模型，请根据提供的图片内容生成清晰的文本描述。\n"
+        "遵循以下要求：\n"
+        "1. 请详细描述这张图片的内容。如果图片为纯文字图，请完整转录文字；\n"
+        "2. 如果图片是架构图、流程图或图表等，请详细解释其结构、组件、关系和流程。\n"
+    )
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{base64_image}"
+                    },
+                },
+                {"type": "text", "text": prompt},
+            ],
+        },
+    ]
+
+    # 5. 调用模型
     try:
-        text = pytesseract.image_to_string(image, lang=lang)
-    except Exception:
-        text = pytesseract.image_to_string(image)
-
-    text = text.replace('\n', ' ')
-    if len(text.strip()) < min_length:
-        raise ValueError(f"Recognized text length ({len(text.strip())}) is less than minimum required ({min_length})")
-
-    return plain_text_split(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        response = await llm.ainvoke(messages)
+        text = response.content
+        logger.info(f"Image description generated, length: {len(text)}")
+    except Exception as e:
+        logger.error(f"Failed to generate image description: {e}")
+        # 降级处理：如果调用失败，尝试返回空或者报错，这里选择返回空列表
+        return []
+    return markdown_split(text)
+    # return plain_text_split(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
 
 def get_token_count(text: str, encoding_name: str = "cl100k_base") -> int:
@@ -354,7 +434,11 @@ def cut_history(history: list, model: dict):
     model_name = model.get("name", "")
 
     max_tokens = 15360
-    if model_name.startswith("gpt-5.2-chat") or model_name.startswith("gemini-3-pro") or model_name == "grok-4.1":
+    if (model_name.startswith("gpt-5.2-chat") or
+            model_name.startswith("gemini-3-pro") or
+            model_name == "grok-4.1" or
+            model_name.startswith("kimi-k2")
+    ):
         max_tokens = 12800
     elif model_name.startswith("gemini-3-flash"):
         max_tokens = 20480

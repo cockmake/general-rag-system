@@ -7,16 +7,9 @@ from google import genai
 from google.genai import types
 from google.genai.types import ThinkingConfig
 
+from wrapper import ResponseWrapper
+
 logger = logging.getLogger(__name__)
-
-
-# 统一返回结构
-class ResponseWrapper:
-    def __init__(self, content: str | list):
-        self.content = content
-
-    def __repr__(self):
-        return f"ResponseWrapper(content='{self.content}')"
 
 
 class GeminiInstance:

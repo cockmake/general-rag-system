@@ -107,12 +107,8 @@ class DocumentEmbeddingConsumer:
 
                         splits = await asyncio.to_thread(split_plain)
                     elif suffix.lower() in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]:
-                        def process_image():
-                            # Process image directly from bytes
-                            texts = utils.image_split(io.BytesIO(minio_byte))
-                            return [Document(page_content=t) for t in texts]
-
-                        splits = await asyncio.to_thread(process_image)
+                        # Process image directly from bytes
+                        splits = await utils.image_split(io.BytesIO(minio_byte))
                     else:
                         logger.warning(f"Unsupported file type: {suffix}")
                         return
