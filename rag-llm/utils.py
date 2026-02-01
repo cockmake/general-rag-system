@@ -174,7 +174,12 @@ def get_structured_data_agent(llm: BaseChatModel, data_type):
     )
 
 
-def markdown_split(markdown_text: str, headers_to_split_on: list = None):
+def markdown_split(
+        markdown_text: str,
+        headers_to_split_on: list = None,
+        chunk_size: int = 2048,
+        chunk_overlap: int = 150,
+):
     if headers_to_split_on is None:
         headers_to_split_on = [
             ("#", "Header 1"),
@@ -193,8 +198,8 @@ def markdown_split(markdown_text: str, headers_to_split_on: list = None):
         "，", ",", " "
     ]
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=2048,
-        chunk_overlap=150,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
         separators=separators,
         add_start_index=True
     )
@@ -277,7 +282,9 @@ def _extract_text_with_ocr(pdf_path: str, language: str = 'chi_sim+eng'):
 
 
 def pdf_split(
-        file_path: str, chunk_size: int = 1000, chunk_overlap: int = 150,
+        file_path: str,
+        chunk_size: int = 1000,
+        chunk_overlap: int = 150,
         text_threshold: int = 20,
         ocr_language: str = 'chi_sim+eng',
 ):
@@ -333,10 +340,8 @@ def pdf_split(
 
 async def image_split(
         file_input,
-        min_length: int = 20,
-        chunk_size: int = 1500,
-        chunk_overlap: int = 100,
-        lang: str = 'chi_sim+eng'
+        chunk_size: int = 2048,
+        chunk_overlap: int = 150,
 ):
     # 1. 读取图片数据并转Base64
     image_data = None
@@ -410,8 +415,7 @@ async def image_split(
         logger.error(f"Failed to generate image description: {e}")
         # 降级处理：如果调用失败，尝试返回空或者报错，这里选择返回空列表
         return []
-    return markdown_split(text)
-    # return plain_text_split(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    return markdown_split(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
 
 def get_token_count(text: str, encoding_name: str = "cl100k_base") -> int:
