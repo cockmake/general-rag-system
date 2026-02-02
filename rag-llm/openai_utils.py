@@ -96,7 +96,7 @@ class OpenAIInstance:
                 reasoning['summary'] = 'detailed'
             # 配置网页搜索
             if self.enable_web_search:
-                tools.append({"type": "web_search"})
+                tools.append({"type": "web_search_preview"})
         elif self.model_name.startswith("doubao-seed"):
             # 配置网页搜索
             if self.enable_web_search:
@@ -109,11 +109,16 @@ class OpenAIInstance:
                 reasoning['effort'] = "medium"
             else:
                 reasoning['effort'] = "minimal"
-        elif self.model_name.startswith("grok-4"):
+        elif "grok-4" in self.model_name:
             if self.enable_thinking:
                 reasoning_effort = "high"
             else:
                 reasoning_effort = "low"
+        elif "anthropic" == self.provider:
+            extra_body['thinking'] = {
+                "type": "enabled",
+                "budget_tokens": 2048
+            }
 
         r = {}
         if tools:
@@ -138,6 +143,7 @@ class OpenAIInstance:
                     or "moonshotai" == self.provider
                     or "minimax" == self.provider
                     or "xiaomi" == self.provider
+                    or "anthropic" == self.provider
 
             ):
                 # 只支持 chat api

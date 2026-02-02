@@ -457,9 +457,13 @@ def cut_history(history: list, model: dict):
     if (
             model_name.startswith("gpt-5.2-chat")
             or model_name.startswith("gemini-3-pro")
+            or "claude" in model_name.lower()
     ):
-        max_tokens = 12800
-    elif model_name.startswith("gemini-3-flash"):
+        max_tokens = 15360
+    elif (
+            model_name.startswith("gemini-3-flash")
+            or model_name == "grok-4.1-fast"
+    ):
         max_tokens = 30720
 
     for i in range(n, 1, -2):
