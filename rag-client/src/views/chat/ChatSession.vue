@@ -244,8 +244,8 @@ const handleStreamCallbacks = (assistantMsg, userMsg = null) => {
       } else if (data.type === 'thinking') {
         if (assistantMsg.loading) assistantMsg.loading = false
         // 收到思考内容时，自动展开
-        if (!assistantMsg.isThinkingExpanded) {
-             assistantMsg.isThinkingExpanded = true
+        if (!assistantMsg.thinkingCollapseKeys || assistantMsg.thinkingCollapseKeys.length === 0) {
+             assistantMsg.thinkingCollapseKeys = ['thinking-panel']
         }
         if (typeof assistantMsg.thinking === "string") {
           assistantMsg.thinking += data.content
@@ -289,7 +289,7 @@ const handleStreamCallbacks = (assistantMsg, userMsg = null) => {
         assistantMsg.loading = false
         // 思考结束，收起面板
         if (assistantMsg.thinking) {
-          assistantMsg.isThinkingExpanded = false
+          assistantMsg.thinkingCollapseKeys = []
         }
       } else if (data.type === 'usage') {
         // 处理 usage 信息
@@ -380,7 +380,7 @@ const loadSession = async (newSessionId) => {
       completionTokens: msg.completionTokens,
       options: options,
       thinking: msg.thinking,
-      isThinkingExpanded: false // 默认折叠
+      thinkingCollapseKeys: [] // 默认折叠
     }
   })
 
@@ -732,7 +732,7 @@ const onRetry = (userMsgIndex) => {
     ragProcess: [],
     latencyMs: 0,
     completionTokens: 0,
-    isThinkingExpanded: false // 默认折叠
+    thinkingCollapseKeys: [] // 默认折叠
   })
   const assistant = messages.value[messages.value.length - 1]
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
@@ -841,8 +841,7 @@ const roles = computed(() => ({
                       ghost
                       size="small"
                       :bordered="false"
-                      :activeKey="msg.isThinkingExpanded ? ['thinking-panel'] : []"
-                      @change="(keys) => { msg.isThinkingExpanded = keys.includes('thinking-panel') }"
+                      v-model:activeKey="msg.thinkingCollapseKeys"
                       expand-icon-position="start"
                   >
                     <template #expandIcon="{ isActive }">
@@ -857,7 +856,7 @@ const roles = computed(() => ({
                           <div class="thinking-title">
                             <BulbOutlined class="thinking-icon"/>
                             <span>深度思考过程</span>
-                            <span v-if="!msg.isThinkingExpanded && msg.thinking" class="thinking-preview">
+                            <span v-if="(!msg.thinkingCollapseKeys || msg.thinkingCollapseKeys.length === 0) && msg.thinking" class="thinking-preview">
                                - {{ msg.loading && !msg.content ? '思考中...' : '已折叠' }}
                             </span>
                           </div>
