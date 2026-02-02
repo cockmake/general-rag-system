@@ -39,7 +39,26 @@ const toolConfigs = {
 onMounted(async () => {
   // 默认选第一个模型
   models.value = await fetchAvailableModels().then()
-  selectedModel.value = selectedModel.value || models.value[0]?.modelId || null
+  
+  if (!selectedModel.value) {
+    const priorityNames = ["gpt-5.2-chat-latest", "gemini-3-pro-preview", "qwen3-max-2026-01-23"]
+    let foundModel = null
+    
+    // 按优先级查找
+    for (const name of priorityNames) {
+      foundModel = models.value.find(m => m.modelName === name)
+      if (foundModel) break
+    }
+    
+    // 如果找到了优先级列表中的模型，使用它的ID
+    if (foundModel) {
+      selectedModel.value = foundModel.modelId
+    } else {
+      // 否则回退到第一个可用模型
+      selectedModel.value = models.value[0]?.modelId || null
+    }
+  }
+
   // 加载知识库列表
   await loadKbs()
   
