@@ -94,6 +94,14 @@ const toggleThinking = () => {
   thinkingEnabled.value = !thinkingEnabled.value
 }
 
+const handleThinkingCollapseChange = (index, keys) => {
+  if (!Array.isArray(messages.value) || index < 0 || index >= messages.value.length) return
+  const msg = messages.value[index]
+  if (!msg) return
+  const normalized = Array.isArray(keys) ? keys : (keys ? [keys] : [])
+  msg.thinkingCollapseKeys = normalized
+}
+
 watch(selectedModel, () => {
   // 模型切换时，校验并重置工具
   const newSupported = availableTools.value
@@ -843,8 +851,8 @@ const roles = computed(() => ({
                       ghost
                       size="small"
                       :bordered="false"
-                      :activeKey="messages[index]?.thinkingCollapseKeys"
-                      @change="(keys) => { messages[index].thinkingCollapseKeys = Array.isArray(keys) ? keys : (keys ? [keys] : []) }"
+                      :activeKey="messages[index]?.thinkingCollapseKeys || []"
+                      @change="(keys) => handleThinkingCollapseChange(index, keys)"
                       expand-icon-position="start"
                   >
                     <template #expandIcon="{ isActive }">
