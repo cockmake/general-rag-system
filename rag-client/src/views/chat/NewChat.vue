@@ -4,9 +4,9 @@ import {useRouter} from 'vue-router'
 import {message} from 'ant-design-vue'
 import {Sender} from 'ant-design-x-vue'
 import {
-  CommentOutlined, 
-  RobotOutlined, 
-  DatabaseOutlined, 
+  CommentOutlined,
+  RobotOutlined,
+  DatabaseOutlined,
   ToolOutlined,
   GlobalOutlined,
   AppstoreOutlined,
@@ -19,7 +19,7 @@ import {awaitSessionTitle, fetchAvailableModels, startChat} from '@/api/chatApi'
 import {models, groupedModels, selectedModel, selectedKb, loadKbs} from "@/vars.js";
 import {events} from "@/events.js";
 import KbSelector from "@/components/KbSelector.vue";
-import { useThemeStore } from '@/stores/theme';
+import {useThemeStore} from '@/stores/theme';
 
 const router = useRouter()
 const themeStore = useThemeStore();
@@ -31,25 +31,25 @@ const isUserUncheckedWebSearch = ref(false)
 
 // 工具配置映射
 const toolConfigs = {
-  'webSearch': { icon: GlobalOutlined, label: '联网搜索', desc: '开启联网搜索能力，获取实时信息' },
-  'web_extractor': { icon: FileSearchOutlined, label: '网页提取', desc: '读取并分析指定网页内容' },
-  'code_interpreter': { icon: CodeOutlined, label: '代码解释器', desc: '执行代码进行计算或分析' },
+  'webSearch': {icon: GlobalOutlined, label: '联网搜索', desc: '开启联网搜索能力，获取实时信息'},
+  'web_extractor': {icon: FileSearchOutlined, label: '网页提取', desc: '读取并分析指定网页内容'},
+  'code_interpreter': {icon: CodeOutlined, label: '代码解释器', desc: '执行代码进行计算或分析'},
 }
 
 onMounted(async () => {
   // 默认选第一个模型
   models.value = await fetchAvailableModels().then()
-  
+
   if (!selectedModel.value) {
-    const priorityNames = ["gpt-5.2-chat-latest", "gemini-3-pro-preview", "qwen3-max-2026-01-23"]
+    const priorityNames = ["gpt-5.2-chat-latest", "qwen3-max-2026-01-23", "gemini-3-pro-preview"]
     let foundModel = null
-    
+
     // 按优先级查找
     for (const name of priorityNames) {
       foundModel = models.value.find(m => m.modelName === name)
       if (foundModel) break
     }
-    
+
     // 如果找到了优先级列表中的模型，使用它的ID
     if (foundModel) {
       selectedModel.value = foundModel.modelId
@@ -61,7 +61,7 @@ onMounted(async () => {
 
   // 加载知识库列表
   await loadKbs()
-  
+
   // 初始化时同步一次配置
   updateModelConfig()
 })
@@ -91,10 +91,10 @@ const updateModelConfig = () => {
   if (!isKbSupported.value) {
     selectedKb.value = null
   }
-  
+
   // 处理思考模型配置
   if (currentModel.value?.metadata?.thinking) {
-    const { default: isDefault } = currentModel.value.metadata.thinking
+    const {default: isDefault} = currentModel.value.metadata.thinking
     thinkingEnabled.value = isDefault
   } else {
     thinkingEnabled.value = false
@@ -105,12 +105,12 @@ const updateModelConfig = () => {
   // 如果支持，保留用户的选择（或者根据需求也可以全重置，这里选择保留支持的）
   const newSupported = availableTools.value
   selectedTools.value = selectedTools.value.filter(t => newSupported.includes(t))
-  
+
   // 如果支持 webSearch 且用户未手动取消，则默认选中
   if (newSupported.includes('webSearch')) {
-      if (!isUserUncheckedWebSearch.value && !selectedTools.value.includes('webSearch')) {
-          selectedTools.value.push('webSearch')
-      }
+    if (!isUserUncheckedWebSearch.value && !selectedTools.value.includes('webSearch')) {
+      selectedTools.value.push('webSearch')
+    }
   }
 }
 
@@ -121,17 +121,17 @@ watch(selectedModel, () => {
 
 const toggleTool = (toolKey) => {
   if (!availableTools.value.includes(toolKey)) return // Disabled
-  
+
   const index = selectedTools.value.indexOf(toolKey)
   if (index === -1) {
     selectedTools.value.push(toolKey)
     if (toolKey === 'webSearch') {
-       isUserUncheckedWebSearch.value = false
+      isUserUncheckedWebSearch.value = false
     }
   } else {
     selectedTools.value.splice(index, 1)
     if (toolKey === 'webSearch') {
-       isUserUncheckedWebSearch.value = true
+      isUserUncheckedWebSearch.value = true
     }
   }
 }
@@ -153,18 +153,18 @@ const onSend = async (text) => {
     if (selectedTools.value.includes('webSearch')) {
       options.webSearch = true
     }
-    
+
     // 思考模型参数
     let useThinking = thinkingEnabled.value
     // 如果不可编辑，强制使用默认值
     if (currentModel.value?.metadata?.thinking?.editable === false) {
       useThinking = currentModel.value.metadata.thinking.default
     }
-    
+
     if (currentModel.value?.metadata?.thinking && useThinking) {
       options.thinking = true
     }
-    
+
     const res = await startChat({
       modelId: selectedModel.value,
       question: text,
@@ -198,7 +198,7 @@ const onSend = async (text) => {
       <!-- 欢迎区域 -->
       <div class="welcome-section">
         <div class="welcome-icon">
-          <CommentOutlined />
+          <CommentOutlined/>
         </div>
         <h1 class="welcome-title">开始新的对话</h1>
         <p class="welcome-subtitle">选择模型和知识库，开启智能对话体验</p>
@@ -209,7 +209,7 @@ const onSend = async (text) => {
         <div class="config-section">
           <div class="config-item">
             <div class="config-label">
-              <RobotOutlined class="config-icon" />
+              <RobotOutlined class="config-icon"/>
               <span>选择模型</span>
             </div>
             <a-select
@@ -235,42 +235,42 @@ const onSend = async (text) => {
 
           <div class="config-item">
             <div class="config-label">
-              <ToolOutlined class="config-icon" />
+              <ToolOutlined class="config-icon"/>
               <span>功能选择</span>
             </div>
-            
+
             <div class="tools-container">
               <!-- 思考模型开关 -->
-              <a-tooltip 
-                v-if="currentModel?.metadata?.thinking" 
-                :title="currentModel.metadata.thinking.editable === false ? '当前模型强制开启或关闭思考，不可修改' : '开启深度思考模式，模型将进行详细推理'"
+              <a-tooltip
+                  v-if="currentModel?.metadata?.thinking"
+                  :title="currentModel.metadata.thinking.editable === false ? '当前模型强制开启或关闭思考，不可修改' : '开启深度思考模式，模型将进行详细推理'"
               >
-                <div 
-                  class="tool-btn" 
-                  :class="{ 
+                <div
+                    class="tool-btn"
+                    :class="{
                     active: thinkingEnabled,
                     disabled: currentModel.metadata.thinking.editable === false
                   }"
-                  @click="toggleThinking"
+                    @click="toggleThinking"
                 >
-                  <BulbOutlined />
+                  <BulbOutlined/>
                   <span class="tool-label">深度思考</span>
                 </div>
               </a-tooltip>
 
               <template v-for="toolKey in allKnownTools" :key="toolKey">
-                <a-tooltip 
-                  v-if="availableTools.includes(toolKey)"
-                  :title="toolConfigs[toolKey]?.desc || toolKey"
+                <a-tooltip
+                    v-if="availableTools.includes(toolKey)"
+                    :title="toolConfigs[toolKey]?.desc || toolKey"
                 >
-                  <div 
-                    class="tool-btn" 
-                    :class="{ 
+                  <div
+                      class="tool-btn"
+                      :class="{
                       active: selectedTools.includes(toolKey)
                     }"
-                    @click="toggleTool(toolKey)"
+                      @click="toggleTool(toolKey)"
                   >
-                    <component :is="toolConfigs[toolKey]?.icon || AppstoreOutlined" />
+                    <component :is="toolConfigs[toolKey]?.icon || AppstoreOutlined"/>
                     <span class="tool-label">{{ toolConfigs[toolKey]?.label || toolKey }}</span>
                   </div>
                 </a-tooltip>
@@ -280,11 +280,12 @@ const onSend = async (text) => {
 
           <div class="config-item">
             <div class="config-label">
-              <DatabaseOutlined class="config-icon" />
+              <DatabaseOutlined class="config-icon"/>
               <span>选择知识库</span>
-              <span style="font-size: 12px; color: #999; margin-left: 8px; font-weight: normal;">请在您需要检索知识库中信息时选用</span>
+              <span
+                  style="font-size: 12px; color: #999; margin-left: 8px; font-weight: normal;">请在您需要检索知识库中信息时选用</span>
             </div>
-            <KbSelector size="large" class="config-select" :disabled="!isKbSupported" />
+            <KbSelector size="large" class="config-select" :disabled="!isKbSupported"/>
             <div v-if="!isKbSupported && selectedModel" style="color: #faad14; font-size: 12px; margin-top: 4px;">
               当前模型不支持知识库功能
             </div>
@@ -468,16 +469,15 @@ const onSend = async (text) => {
 }
 
 
-
 @media (max-width: 768px) {
   .welcome-title {
     font-size: 28px;
   }
-  
+
   .welcome-icon {
     font-size: 48px;
   }
-  
+
   .tips-section {
     flex-direction: column;
     align-items: center;
@@ -486,11 +486,11 @@ const onSend = async (text) => {
   .config-select {
     width: 100% !important;
   }
-  
+
   .tools-container {
     justify-content: flex-start;
   }
-  
+
   .tool-btn {
     padding: 8px 12px;
   }
@@ -589,6 +589,7 @@ const onSend = async (text) => {
   border-color: #303030;
   color: #434343;
 }
+
 .new-chat-container.is-dark .tool-btn.disabled:hover {
   border-color: #303030;
   color: #434343;

@@ -533,7 +533,8 @@ const onSend = (text) => {
     loading: true,
     ragProcess: [],
     latencyMs: 0,
-    completionTokens: 0
+    completionTokens: 0,
+    isThinkingExpanded: false // 默认折叠
   })
   scrollToBottom()
   const assistant = messages.value[messages.value.length - 1]
@@ -730,7 +731,8 @@ const onRetry = (userMsgIndex) => {
     loading: true,
     ragProcess: [],
     latencyMs: 0,
-    completionTokens: 0
+    completionTokens: 0,
+    isThinkingExpanded: false // 默认折叠
   })
   const assistant = messages.value[messages.value.length - 1]
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
