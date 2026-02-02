@@ -243,6 +243,10 @@ const handleStreamCallbacks = (assistantMsg, userMsg = null) => {
         assistantMsg.content += data.content
       } else if (data.type === 'thinking') {
         if (assistantMsg.loading) assistantMsg.loading = false
+        // 收到思考内容时，自动展开
+        if (!assistantMsg.isThinkingExpanded) {
+             assistantMsg.isThinkingExpanded = true
+        }
         if (typeof assistantMsg.thinking === "string") {
           assistantMsg.thinking += data.content
         } else {
@@ -283,6 +287,10 @@ const handleStreamCallbacks = (assistantMsg, userMsg = null) => {
         }
         assistantMsg.status = 'completed'
         assistantMsg.loading = false
+        // 思考结束，收起面板
+        if (assistantMsg.thinking) {
+          assistantMsg.isThinkingExpanded = false
+        }
       } else if (data.type === 'usage') {
         // 处理 usage 信息
         if (data.payload) {
@@ -370,7 +378,9 @@ const loadSession = async (newSessionId) => {
       ragProcess: ragProcess,
       latencyMs: msg.latencyMs,
       completionTokens: msg.completionTokens,
-      options: options
+      options: options,
+      thinking: msg.thinking,
+      isThinkingExpanded: false // 默认折叠
     }
   })
 
@@ -829,7 +839,8 @@ const roles = computed(() => ({
                       ghost
                       size="small"
                       :bordered="false"
-                      :defaultActiveKey="['thinking-panel']"
+                      :activeKey="msg.isThinkingExpanded ? ['thinking-panel'] : []"
+                      @change="(keys) => { msg.isThinkingExpanded = keys.includes('thinking-panel') }"
                       expand-icon-position="start"
                   >
                     <template #expandIcon="{ isActive }">
@@ -844,6 +855,9 @@ const roles = computed(() => ({
                           <div class="thinking-title">
                             <BulbOutlined class="thinking-icon"/>
                             <span>深度思考过程</span>
+                            <span v-if="!msg.isThinkingExpanded && msg.thinking" class="thinking-preview">
+                               - {{ msg.loading && !msg.content ? '思考中...' : '已折叠' }}
+                            </span>
                           </div>
 
                           <div v-if="msg.loading && !msg.content" class="thinking-status">

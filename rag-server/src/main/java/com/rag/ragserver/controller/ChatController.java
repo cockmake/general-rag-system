@@ -122,7 +122,8 @@ public class ChatController {
                         ConversationMessages::getCreatedAt,
                         ConversationMessages::getLatencyMs,
                         ConversationMessages::getCompletionTokens,
-                        ConversationMessages::getOptions
+                        ConversationMessages::getOptions,
+                        ConversationMessages::getThinking
                 )
                 .eq(ConversationMessages::getSessionId, sessionId)
                 .and(w -> w.isNull(ConversationMessages::getIsDeleted).or().eq(ConversationMessages::getIsDeleted, 0))
@@ -336,6 +337,7 @@ public class ChatController {
         KnowledgeBases kb = knowledgeBasesService.getById(kbId);
 
         StringBuffer sb = new StringBuffer();
+        StringBuffer thinkingSb = new StringBuffer(); // Add thinking buffer
         List<Map<String, Object>> ragProcessList = new java.util.ArrayList<>();
         Map<String, Object> usageInfo = new java.util.HashMap<>(); // Store usage info
         ObjectMapper objectMapper = new ObjectMapper();
@@ -372,11 +374,11 @@ public class ChatController {
                 .doOnSubscribe(a -> updateMessageStatus(sessionId, currentUserMessageId, "generating"))
                 .doOnError(e -> updateMessageStatus(sessionId, currentUserMessageId, "pending"))
                 .doOnCancel(() -> updateMessageStatus(sessionId, currentUserMessageId, "pending"))
-                .concatMap(event -> processStreamEvent(event, sb, ragProcessList, objectMapper, usageInfo))
-                .concatWith(saveCompletedMessage(sessionId, userId, chatStream, currentUserMessageId, sb, ragProcessList, objectMapper, usageInfo));
+                .concatMap(event -> processStreamEvent(event, sb, thinkingSb, ragProcessList, objectMapper, usageInfo))
+                .concatWith(saveCompletedMessage(sessionId, userId, chatStream, currentUserMessageId, sb, thinkingSb, ragProcessList, objectMapper, usageInfo));
     }
 
-    private Flux<String> processStreamEvent(ServerSentEvent<String> event, StringBuffer sb,
+    private Flux<String> processStreamEvent(ServerSentEvent<String> event, StringBuffer sb, StringBuffer thinkingSb,
                                             List<Map<String, Object>> ragProcessList, ObjectMapper objectMapper, Map<String, Object> usageInfo) {
         String dataStr = event.data();
         if (dataStr == null || dataStr.isEmpty()) return Flux.empty();
@@ -391,6 +393,8 @@ public class ChatController {
                     String text = objectMapper.readValue(payloadJson, String.class);
                     if ("content".equals(type)) {
                         sb.append(text);
+                    } else if ("thinking".equals(type)) {
+                        thinkingSb.append(text);
                     }
                     return Flux.just(objectMapper.writeValueAsString(
                             Map.of("type", type, "content", text)
@@ -447,7 +451,7 @@ public class ChatController {
     }
 
     private Mono<String> saveCompletedMessage(Long sessionId, Long userId, ChatStream chatStream,
-                                              Long currentUserMessageId, StringBuffer sb,
+                                              Long currentUserMessageId, StringBuffer sb, StringBuffer thinkingSb,
                                               List<Map<String, Object>> ragProcessList, ObjectMapper objectMapper, Map<String, Object> usageInfo) {
         return Mono.defer(() -> Mono.fromCallable(() -> {
             ConversationMessages userMessage = conversationMessagesService.getById(currentUserMessageId);
@@ -461,6 +465,10 @@ public class ChatController {
             aiMessage.setUserId(userId);
             aiMessage.setRole("assistant");
             aiMessage.setContent(sb.toString());
+            // 保存思考内容
+            if (thinkingSb.length() > 0) {
+                aiMessage.setThinking(thinkingSb.toString());
+            }
             aiMessage.setKbId(chatStream.getKbId());
             aiMessage.setStatus("completed");
             aiMessage.setModelId(chatStream.getModelId());

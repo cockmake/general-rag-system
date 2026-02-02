@@ -3,13 +3,15 @@ package com.rag.ragserver.domain;
 import com.baomidou.mybatisplus.annotation.*;
 
 import java.util.Date;
+
 import lombok.Data;
 
 /**
  * RAG 对话消息历史表
+ *
  * @TableName conversation_messages
  */
-@TableName(value ="conversation_messages", autoResultMap = true)
+@TableName(value = "conversation_messages", autoResultMap = true)
 @Data
 public class ConversationMessages {
     /**
@@ -84,14 +86,16 @@ public class ConversationMessages {
     private Date createdAt;
 
     /**
-     * 
+     *
      */
     @TableLogic
     private Integer isDeleted;
 
     /**
-     * 
+     *
      */
+    private String thinking;
+
     @TableField(typeHandler = com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler.class)
     private Object options;
 
@@ -108,21 +112,21 @@ public class ConversationMessages {
         }
         ConversationMessages other = (ConversationMessages) that;
         return (this.getId() == null ? other.getId() == null : this.getId().equals(other.getId()))
-            && (this.getSessionId() == null ? other.getSessionId() == null : this.getSessionId().equals(other.getSessionId()))
-            && (this.getUserId() == null ? other.getUserId() == null : this.getUserId().equals(other.getUserId()))
-            && (this.getKbId() == null ? other.getKbId() == null : this.getKbId().equals(other.getKbId()))
-            && (this.getRole() == null ? other.getRole() == null : this.getRole().equals(other.getRole()))
-            && (this.getContent() == null ? other.getContent() == null : this.getContent().equals(other.getContent()))
-            && (this.getStatus() == null ? other.getStatus() == null : this.getStatus().equals(other.getStatus()))
-            && (this.getModelId() == null ? other.getModelId() == null : this.getModelId().equals(other.getModelId()))
-            && (this.getPromptTokens() == null ? other.getPromptTokens() == null : this.getPromptTokens().equals(other.getPromptTokens()))
-            && (this.getCompletionTokens() == null ? other.getCompletionTokens() == null : this.getCompletionTokens().equals(other.getCompletionTokens()))
-            && (this.getTotalTokens() == null ? other.getTotalTokens() == null : this.getTotalTokens().equals(other.getTotalTokens()))
-            && (this.getRagContext() == null ? other.getRagContext() == null : this.getRagContext().equals(other.getRagContext()))
-            && (this.getLatencyMs() == null ? other.getLatencyMs() == null : this.getLatencyMs().equals(other.getLatencyMs()))
-            && (this.getCreatedAt() == null ? other.getCreatedAt() == null : this.getCreatedAt().equals(other.getCreatedAt()))
-            && (this.getIsDeleted() == null ? other.getIsDeleted() == null : this.getIsDeleted().equals(other.getIsDeleted()))
-            && (this.getOptions() == null ? other.getOptions() == null : this.getOptions().equals(other.getOptions()));
+                && (this.getSessionId() == null ? other.getSessionId() == null : this.getSessionId().equals(other.getSessionId()))
+                && (this.getUserId() == null ? other.getUserId() == null : this.getUserId().equals(other.getUserId()))
+                && (this.getKbId() == null ? other.getKbId() == null : this.getKbId().equals(other.getKbId()))
+                && (this.getRole() == null ? other.getRole() == null : this.getRole().equals(other.getRole()))
+                && (this.getContent() == null ? other.getContent() == null : this.getContent().equals(other.getContent()))
+                && (this.getStatus() == null ? other.getStatus() == null : this.getStatus().equals(other.getStatus()))
+                && (this.getModelId() == null ? other.getModelId() == null : this.getModelId().equals(other.getModelId()))
+                && (this.getPromptTokens() == null ? other.getPromptTokens() == null : this.getPromptTokens().equals(other.getPromptTokens()))
+                && (this.getCompletionTokens() == null ? other.getCompletionTokens() == null : this.getCompletionTokens().equals(other.getCompletionTokens()))
+                && (this.getTotalTokens() == null ? other.getTotalTokens() == null : this.getTotalTokens().equals(other.getTotalTokens()))
+                && (this.getRagContext() == null ? other.getRagContext() == null : this.getRagContext().equals(other.getRagContext()))
+                && (this.getLatencyMs() == null ? other.getLatencyMs() == null : this.getLatencyMs().equals(other.getLatencyMs()))
+                && (this.getCreatedAt() == null ? other.getCreatedAt() == null : this.getCreatedAt().equals(other.getCreatedAt()))
+                && (this.getIsDeleted() == null ? other.getIsDeleted() == null : this.getIsDeleted().equals(other.getIsDeleted()))
+                && (this.getOptions() == null ? other.getOptions() == null : this.getOptions().equals(other.getOptions()));
     }
 
     @Override
