@@ -47,13 +47,7 @@ def _load_config_cached():
         return json.load(f)
 
 
-def get_llm_instance(
-        model_info: dict,
-        temperature: float = None,
-        enable_web_search: bool = False,
-        timeout: int = 60,
-        max_retries: int = 5,
-):
+def _get_model_setting(model_info: dict):
     """根据模型信息加载配置并初始化 LLM"""
     provider = model_info.get("provider")
     model_name = model_info.get("name")
@@ -73,10 +67,25 @@ def get_llm_instance(
     model_specific_settings = provider_config.get(model_name, {})
     settings.update(model_specific_settings)
 
+    return settings
+
+
+def get_official_llm(
+        model_info: dict,
+        enable_web_search: bool = False,
+        enable_thinking: bool = False,
+        timeout: int = 60,
+        max_retries: int = 5,
+):
+    """根据模型信息加载配置并初始化 LLM"""
+    settings = _get_model_setting(model_info)
+    provider = model_info.get("provider")
+    model_name = model_info.get("name")
+
     api_key = settings.get("api_key")
     base_url = settings.get("base_url")
 
-    if model_name.startswith("gemini"):
+    if provider == "gemini":
         return GeminiInstance(
             model_name=model_name,
             api_key=api_key,
@@ -85,52 +94,27 @@ def get_llm_instance(
             timeout=timeout,
             max_retries=max_retries,
         )
-    # 初始化 LangChain ChatModel
-    llm = init_chat_model(
-        model=model_name,
+    # if (
+    #         "deepseek" in provider.lower()
+    #         or "qwen" in provider.lower()
+    #         or "bytedance" in provider.lower()
+    #         or "xiaomi" in provider.lower()
+    #         or "minimax" in provider.lower()
+    #         or "moonshotai" in provider.lower()
+    #         or "z-ai" in provider.lower()
+    #         or "x-ai" in provider.lower()
+    #         or "openai" in provider.lower()
+    # ):
+    return OpenAIInstance(
+        model_name=model_name,
         api_key=api_key,
-        base_url=settings["response_base_url"] if enable_web_search and "response_base_url" in settings else base_url,
-        temperature=temperature if temperature is not None else temperature,
-        model_provider=settings['model_provider'] if "model_provider" in settings else None,
+        base_url=base_url,
         timeout=timeout,
         max_retries=max_retries,
+        enable_web_search=enable_web_search,
+        enable_thinking=enable_thinking,
+        provider=model_info['provider']
     )
-    # thinking配置
-    if model_name.startswith("gpt-5.2-chat"):
-        llm = llm.bind(
-            reasoning={
-                "effort": "medium",
-                "summary": "detailed"
-            },
-        )
-    # tools配置
-    if enable_web_search:
-        if model_name == "qwen3-max":
-            llm = llm.bind(
-                extra_body={"enable_search": True}
-            )
-        elif model_name == "qwen3-max-2026-01-23":
-            llm = llm.bind(
-                tools=[
-                    {"type": "web_search"},
-                    {"type": "web_extractor"},
-                    {"type": "code_interpreter"},
-                ],
-                extra_body={"enable_thinking": True}
-            )
-        elif model_name.startswith("gpt-5.2-chat"):
-            llm = llm.bind(
-                tools=[
-                    {"type": "web_search_preview"},
-                ],
-            )
-        elif model_name.startswith("doubao-seed"):
-            llm = llm.bind(
-                tools=[
-                    {"type": "web_search"},
-                ]
-            )
-    return llm
 
 
 def get_embedding_instance(embedding_info: dict):
@@ -167,7 +151,38 @@ def get_embedding_instance(embedding_info: dict):
     )
 
 
-def get_structured_data_agent(llm: BaseChatModel, data_type):
+def get_langchain_llm(
+        model_info: dict,
+        enable_thinking: bool = False,
+        timeout: int = 60,
+        max_retries: int = 5,
+):
+    # 初始化langchain类型的LLM
+    settings = _get_model_setting(model_info)
+    model_name = model_info.get("name")
+    api_key = settings.get("api_key")
+    base_url = settings.get("base_url")
+    extra_body = {}
+
+    if enable_thinking:
+        extra_body = {"enable_thinking": True},
+
+    llm = init_chat_model(
+        model=model_name,
+        api_key=api_key,
+        base_url=base_url,
+        model_provider=settings['model_provider'] if "model_provider" in settings else None,
+        timeout=timeout,
+        max_retries=max_retries,
+        extra_body=extra_body
+    )
+    return llm
+
+
+def get_structured_data_agent(
+        llm: BaseChatModel,
+        data_type,
+):
     return create_agent(
         model=llm,
         response_format=data_type
@@ -381,7 +396,8 @@ async def image_split(
     llm = OpenAIInstance(
         model_name=model_info['name'],
         api_key=api_key,
-        base_url=base_url
+        base_url=base_url,
+        provider=model_info['provider']
     )
 
     # 4. 构造 Prompt
@@ -437,15 +453,14 @@ def cut_history(history: list, model: dict):
     n = len(previous_msgs)
     model_name = model.get("name", "")
 
-    max_tokens = 15360
-    if (model_name.startswith("gpt-5.2-chat") or
-            model_name.startswith("gemini-3-pro") or
-            model_name == "grok-4.1" or
-            model_name.startswith("kimi-k2")
+    max_tokens = 20480
+    if (
+            model_name.startswith("gpt-5.2-chat")
+            or model_name.startswith("gemini-3-pro")
     ):
         max_tokens = 12800
     elif model_name.startswith("gemini-3-flash"):
-        max_tokens = 20480
+        max_tokens = 30720
 
     for i in range(n, 1, -2):
         pair = previous_msgs[i - 2: i]
@@ -513,3 +528,24 @@ def reasoning_content_wrapper(chunk):
             if reasoning_content:
                 return [{"type": "reasoning", "text": reasoning_content}]
     return ""
+
+
+async def unified_llm_stream(model_instance, messages):
+    """统一的LLM流式生成器"""
+    try:
+        async for chunk in model_instance.astream(messages):
+            content = chunk.content or reasoning_content_wrapper(chunk)
+            if content:
+                think_content, text_content = content_extractor(content)
+                if think_content:
+                    yield {
+                        "type": "thinking",
+                        "payload": think_content
+                    }
+                if text_content:
+                    yield {
+                        "type": "content",
+                        "payload": text_content
+                    }
+    except Exception as e:
+        logger.error(f"LLM streaming error: {e}")

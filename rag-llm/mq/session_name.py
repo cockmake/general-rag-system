@@ -2,15 +2,19 @@ import json
 import logging
 
 from aio_pika.abc import AbstractIncomingMessage
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
-from langchain_core.messages import HumanMessage, SystemMessage
 
 from mq.connection import rabbit_async_client
-from utils import get_llm_instance
+from utils import get_langchain_llm, get_structured_data_agent
 
 
 # 配置模型参数 (复用 services/chat.py 中的配置)
+
+class SessionTitle(BaseModel):
+    """请根据用户的输入内容，生成一个简短的标题。"""
+    title: str = Field(..., description="会话标题")
 
 
 class SessionNameGenerator:
@@ -21,18 +25,18 @@ class SessionNameGenerator:
         if not content or not llm:
             return "新的对话"
         try:
-
             messages = [
-                SystemMessage(
-                    content="1. 请根据用户的输入内容，生成一个简短的标题。"
-                            "2. 直接返回标题，不要包含引号或其他多余文字。"
-                            "3. 注意不是回答用户内容，而是生成一个概括性的标题。"
-                ),
-                HumanMessage(content=f"用户输入内容: {content}")
+                {
+                    'role': 'user',
+                    'content': f"用户输入内容: {content}\n\n"
+                               "1. 请根据用户的输入内容，生成一个简短的标题。\n"
+                               "2. 直接返回标题，不要包含引号或其他多余文字。\n"
+                               "3. 注意不是回答用户内容，而是生成一个概括性的标题。\n"
+                },
             ]
 
-            response = await llm.ainvoke(messages)
-            return response.content.strip()
+            response = await llm.ainvoke({"messages": messages})
+            return response['structured_response'].title.strip()
         except Exception as e:
             logger.error(f"Error generating session name: {e}")
             return "新的对话"
@@ -58,7 +62,8 @@ class SessionNameGenerator:
                     'name': 'qwen3-max-2026-01-23',
                     'provider': 'qwen'
                 }
-                llm = get_llm_instance(model)
+                llm = get_langchain_llm(model)
+                llm = get_structured_data_agent(llm, SessionTitle)
                 # 调用 LLM 生成标题
                 session_key = await self.generate_session_name(content, llm)
 

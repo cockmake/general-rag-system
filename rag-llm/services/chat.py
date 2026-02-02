@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage, AIMessage
 
 from rag_utils import rag_service
-from utils import get_llm_instance, cut_history, get_token_count, content_extractor, reasoning_content_wrapper
+from utils import get_official_llm, cut_history, get_token_count, unified_llm_stream
 
 logger = logging.getLogger(__name__)
 
@@ -20,32 +20,20 @@ async def stream_generator(model_instance, messages, prompt_tokens: int = 0, opt
     cot_content = ""
     full_content = ""
     start_time = time.time()  # Start timing
-    try:
-        async for chunk in model_instance.astream(messages):
 
-            content = chunk.content or reasoning_content_wrapper(chunk)
+    async for item in unified_llm_stream(model_instance, messages):
+        content = item["payload"]
+        if item["type"] == "thinking":
+            cot_content += content
+        elif item["type"] == "content":
+            full_content += content
 
-            if content:
-                think_content, text_content = content_extractor(content)
-                if think_content != "":
-                    cot_content += think_content
-                    # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
-                    data = {
-                        "type": "thinking",
-                        "payload": json.dumps(think_content, ensure_ascii=False)
-                    }
-                    yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-                if text_content != "":
-                    full_content += text_content
-                    # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
-                    data = {
-                        "type": "content",
-                        "payload": json.dumps(text_content, ensure_ascii=False)
-                    }
-                    yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-    except Exception as e:
-        logger.error(e)
+        # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
+        data = {
+            "type": item["type"],
+            "payload": json.dumps(content, ensure_ascii=False)
+        }
+        yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
     end_time = time.time()
     latency_ms = int((end_time - start_time) * 1000)  # Calculate latency
@@ -252,21 +240,20 @@ async def chat_stream(
     # 否则使用纯LLM模式
     else:
         logger.info("使用纯LLM模式")
-        if len(history) > 1 and model['name'].startswith('doubao-seed'):
-            # 豆包只有第一轮允许网页搜索
-            options['webSearch'] = False
-        llm = get_llm_instance(model, enable_web_search=options.get('webSearch', False))
-
+        llm = get_official_llm(
+            model,
+            enable_web_search=options.get('webSearch', False),
+            enable_thinking=options.get('thinking', False)
+        )
         # 添加当前问题到消息列表
         all_messages = langchain_messages + [HumanMessage(content=current_question)]
 
         messages = []
         for msg in all_messages:
             if isinstance(msg, HumanMessage):
-                # 添加status兼容火山引擎
-                messages.append({"role": "user", "content": msg.content, "status": {}})
+                messages.append({"role": "user", "content": msg.content})
             elif isinstance(msg, AIMessage):
-                messages.append({"role": "assistant", "content": msg.content, "status": {}})
+                messages.append({"role": "assistant", "content": msg.content})
         return StreamingResponse(
             stream_generator(llm, messages, prompt_tokens=prompt_tokens, options=options),
             media_type="text/event-stream"

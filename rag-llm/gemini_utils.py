@@ -30,7 +30,7 @@ class GeminiInstance:
         :param base_url: API 基础地址
         """
         self.model_name = model_name
-        self.is_thinking = "thinking" in model_name  # 简单判断是否为思考模型
+        self.enable_thinking = "thinking" in model_name  # 简单判断是否为思考模型
         self.enable_web_search = enable_web_search
 
         # 保存原始配置供 astream 手动请求使用
@@ -96,7 +96,7 @@ class GeminiInstance:
             system_instruction=system_instruction,
             thinking_config=ThinkingConfig(
                 include_thoughts=True
-            ) if self.is_thinking else None
+            ) if self.enable_thinking else None
         )
 
     async def ainvoke(self, messages: list) -> ResponseWrapper:
@@ -165,7 +165,7 @@ class GeminiInstance:
 
         # 添加 Generation Config
         generation_config = {}
-        if self.is_thinking:
+        if self.enable_thinking:
             generation_config["thinkingConfig"] = {
                 "includeThoughts": True,
             }

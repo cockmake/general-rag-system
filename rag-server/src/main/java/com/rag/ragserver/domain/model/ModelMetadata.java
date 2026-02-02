@@ -13,4 +13,5 @@ import java.util.HashMap;
 @Data
 public class ModelMetadata {
     private List<String> tools;
+    private Map<String, Object> thinking;
 }

@@ -16,10 +16,15 @@ class OpenAIInstance:
             base_url: str,
             timeout: int = 30,
             max_retries: int = 2,
-            enable_thinking: bool = False
+            enable_thinking: bool = False,
+            enable_web_search: bool = False,
+            provider: str = "openai",
     ):
         self.model_name = model_name
+        self.provider = provider
         self.enable_thinking = enable_thinking
+        self.enable_web_search = enable_web_search
+
         self.client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -27,17 +32,31 @@ class OpenAIInstance:
             max_retries=max_retries
         )
 
-    async def ainvoke(self, messages: list) -> ResponseWrapper:
-        extra_body = {}
-        if self.enable_thinking:
-            extra_body['enable_thinking'] = True
+    def response_api_extract(self, chunk):
+        if chunk.type == 'response.reasoning_summary_text.delta':
+            return ResponseWrapper(content=[{"type": "reasoning", "text": chunk.delta}])
+        elif chunk.type == 'response.output_text.delta':
+            return ResponseWrapper(content=chunk.delta)
+        return None
 
+    def chat_api_extract(self, chunk):
+        delta = chunk.choices[0].delta
+
+        # Handle reasoning content
+        if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+            return ResponseWrapper(content=[{"type": "reasoning", "text": delta.reasoning_content}])
+
+        if delta.content:
+            return ResponseWrapper(content=delta.content)
+
+        return None
+
+    async def ainvoke(self, messages: list) -> ResponseWrapper:
         try:
             response = await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 stream=False,
-                extra_body=extra_body if extra_body else None
             )
             content = response.choices[0].message.content
             return ResponseWrapper(content=content)
@@ -45,30 +64,107 @@ class OpenAIInstance:
             logger.error(f"OpenAI ainvoke error: {e}")
             raise e
 
-    async def astream(self, messages: list) -> AsyncGenerator[ResponseWrapper, None]:
+    def get_generate_config(self):
+        # 包含tools, extra_body, thinking, reasoning等配置
+        tools = []
         extra_body = {}
-        if self.enable_thinking:
-            extra_body['enable_thinking'] = True
+        reasoning = {}
+        reasoning_effort = {}
 
+        if self.model_name.startswith("qwen3-max"):
+            # 配置思考
+            if self.enable_thinking:
+                extra_body['enable_thinking'] = True
+            # 配置网页搜索
+            if self.enable_web_search:
+                extra_body['enable_search'] = True
+        elif (
+                self.provider == "deepseek"
+                or self.provider == "z-ai"
+                or self.provider == "minimax"
+                or self.provider == "xiaomi"
+        ):
+            # 配置思考
+            if self.enable_thinking:
+                extra_body['thinking'] = {"type": "enabled"}
+            else:
+                extra_body['thinking'] = {"type": "disabled"}
+        elif self.model_name.startswith("gpt-5.2"):
+            # 配置思考
+            if self.enable_thinking:
+                reasoning['effort'] = "medium"
+                reasoning['summary'] = 'detailed'
+            # 配置网页搜索
+            if self.enable_web_search:
+                tools.append({"type": "web_search"})
+        elif self.model_name.startswith("doubao-seed"):
+            # 配置网页搜索
+            if self.enable_web_search:
+                tools.append({
+                    "type": "web_search",
+                    "max_keyword": 3,
+                })
+            # 配置思考
+            if self.enable_thinking:
+                reasoning['effort'] = "medium"
+            else:
+                reasoning['effort'] = "minimal"
+        elif self.model_name.startswith("grok-4"):
+            if self.enable_thinking:
+                reasoning_effort = "high"
+            else:
+                reasoning_effort = "low"
+
+        r = {}
+        if tools:
+            r['tools'] = tools
+        if extra_body:
+            r['extra_body'] = extra_body
+        if reasoning:
+            r['reasoning'] = reasoning
+        if reasoning_effort:
+            r['reasoning_effort'] = reasoning_effort
+        return r
+
+    async def astream(self, messages: list) -> AsyncGenerator[ResponseWrapper, None]:
+        generate_config = self.get_generate_config()
+        logger.info(f"generate_config: {generate_config}")
         try:
-            stream = await self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                stream=True,
-                extra_body=extra_body if extra_body else None
-            )
+            if (
+                    "deepseek" == self.provider
+                    or "qwen" == self.provider
+                    or "x-ai" == self.provider
+                    or "z-ai" == self.provider
+                    or "moonshotai" == self.provider
+                    or "minimax" == self.provider
+                    or "xiaomi" == self.provider
 
-            async for chunk in stream:
-                if not chunk.choices:
-                    continue
-                delta = chunk.choices[0].delta
+            ):
+                # 只支持 chat api
+                stream = await self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    stream=True,
+                    **generate_config
+                )
+                async for chunk in stream:
+                    if not chunk.choices:
+                        continue
+                    item = self.chat_api_extract(chunk)
+                    if item:
+                        yield item
+            else:
+                stream = await self.client.responses.create(
+                    model=self.model_name,
+                    input=messages,
+                    stream=True,
+                    **generate_config
+                )
+                async for chunk in stream:
+                    response = self.response_api_extract(chunk)
+                    if response:
+                        yield response
 
-                # Handle reasoning content (e.g., DeepSeek/Qwen)
-                if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
-                    yield ResponseWrapper(content=[{"type": "reasoning", "text": delta.reasoning_content}])
-
-                if delta.content:
-                    yield ResponseWrapper(content=delta.content)
 
         except Exception as e:
             logger.error(f"OpenAI astream error: {e}")

@@ -1,16 +1,32 @@
-# 这是一个示例 Python 脚本。
-
-# 按 Shift+F10 执行或将其替换为您的代码。
-# 按 双击 Shift 在所有地方搜索类、文件、工具窗口、操作和设置。
-
-
-def print_hi(name):
-    # 在下面的代码行中使用断点来调试脚本。
-    print(f'Hi, {name}')  # 按 Ctrl+F8 切换断点。
+# Embedding and Rerank
+# Requires vllm>=0.8.5
+import torch
+import vllm
+from vllm import LLM
 
 
-# 按装订区域中的绿色按钮以运行脚本。
-if __name__ == '__main__':
-    print_hi('PyCharm')
+def get_detailed_instruct(task_description: str, query: str) -> str:
+    return f'Instruct: {task_description}\nQuery:{query}'
 
-# 访问 https://www.jetbrains.com/help/pycharm/ 获取 PyCharm 帮助
+
+# Each query must come with a one-sentence instruction that describes the task
+task = 'Given a web search query, retrieve relevant passages that answer the query'
+
+queries = [
+    get_detailed_instruct(task, 'What is the capital of China?'),
+    get_detailed_instruct(task, 'Explain gravity')
+]
+# No need to add instruction for retrieval documents
+documents = [
+    "The capital of China is Beijing.",
+    "Gravity is a force that attracts two bodies towards each other. It gives weight to physical objects and is responsible for the movement of planets around the sun."
+]
+input_texts = queries + documents
+
+model = LLM(model="Qwen/Qwen3-Embedding-4B", convert="embed")
+
+outputs = model.embed(input_texts)
+embeddings = torch.tensor([o.outputs.embedding for o in outputs])
+scores = (embeddings[:2] @ embeddings[2:].T)
+print(scores.tolist())
+# [[0.7620252966880798, 0.14078938961029053], [0.1358368694782257, 0.6013815999031067]]

@@ -20,8 +20,8 @@ from sklearn.cluster import KMeans
 
 from aiohttp_utils import rerank
 from milvus_utils import MilvusClientManager
-from utils import get_llm_instance, get_embedding_instance, get_structured_data_agent, content_extractor, \
-    get_display_docs, reasoning_content_wrapper
+from utils import get_official_llm, get_embedding_instance, get_structured_data_agent, get_display_docs, \
+    unified_llm_stream, get_langchain_llm
 
 logger = logging.getLogger(__name__)
 
@@ -181,8 +181,7 @@ class RAGService:
 当前问题：{question}
 
 请生成6-10个不同角度的查询，以及一个grade_query。"""
-
-        llm = get_llm_instance(model_info)
+        llm = get_langchain_llm(model_info)
         structured_agent = get_structured_data_agent(llm, MultiQueryList)
         # 使用异步调用
         result = await structured_agent.ainvoke({"messages": [{"role": "user", "content": system_prompt}]})
@@ -782,33 +781,14 @@ class RAGService:
         # 添加当前问题
         conversation.append({"role": "user", "content": question})
 
-        # 获取LLM实例并流式生成
-        if len(conversation) > 2 and model_info['name'].startswith('doubao-seed'):
-            # 因为有system_prompt所以 > 2
-            # 豆包只有第一轮允许网页搜索
-            options['webSearch'] = False
-        llm = get_llm_instance(model_info, enable_web_search=options.get('webSearch', False) if options else False)
-
+        llm = get_official_llm(
+            model_info,
+            enable_web_search=options.get('webSearch', False),
+            enable_thinking=options.get('thinking', False)
+        )
         # 使用异步流式生成
-        try:
-            async for chunk in llm.astream(conversation):
-
-                content = chunk.content or reasoning_content_wrapper(chunk)
-
-                if content:
-                    think_content, text_content = content_extractor(content)
-                    if think_content:
-                        yield {
-                            "type": "thinking",
-                            "payload": think_content
-                        }
-                    if text_content:
-                        yield {
-                            "type": "content",
-                            "payload": text_content
-                        }
-        except Exception as e:
-            logger.error(e)
+        async for item in unified_llm_stream(llm, conversation):
+            yield item
 
 
 # 全局RAG服务实例

@@ -56,6 +56,9 @@ const isAutoScrolling = ref(false)
 
 // 选中的工具
 const selectedTools = ref([])
+const thinkingEnabled = ref(false)
+const isRestoring = ref(false) // 标记是否正在恢复会话状态
+const isUserUncheckedWebSearch = ref(false) // 标记用户是否手动取消了webSearch
 const allKnownTools = ['webSearch']
 const toolConfigs = {
   'webSearch': {icon: GlobalOutlined, label: '联网', desc: '开启联网搜索'},
@@ -79,15 +82,42 @@ const toggleTool = (toolKey) => {
   const index = selectedTools.value.indexOf(toolKey)
   if (index === -1) {
     selectedTools.value.push(toolKey)
+    if (toolKey === 'webSearch') isUserUncheckedWebSearch.value = false
   } else {
     selectedTools.value.splice(index, 1)
+    if (toolKey === 'webSearch') isUserUncheckedWebSearch.value = true
   }
+}
+
+const toggleThinking = () => {
+  if (currentModel.value?.metadata?.thinking?.editable === false) return
+  thinkingEnabled.value = !thinkingEnabled.value
 }
 
 watch(selectedModel, () => {
   // 模型切换时，校验并重置工具
   const newSupported = availableTools.value
   selectedTools.value = selectedTools.value.filter(t => newSupported.includes(t))
+
+  // 如果支持 webSearch，且用户没有手动取消（isUserUncheckedWebSearch 为 false），则默认勾选
+  // 注意：在恢复模式下 (isRestoring=true) 不要自动勾选，完全信任 loadSession 的恢复逻辑
+  if (!isRestoring.value && newSupported.includes('webSearch')) {
+     if (!isUserUncheckedWebSearch.value && !selectedTools.value.includes('webSearch')) {
+       selectedTools.value.push('webSearch')
+     }
+  }
+
+  // 仅在非恢复状态下重置思考模型配置
+  if (!isRestoring.value) {
+    if (currentModel.value?.metadata?.thinking) {
+      const {default: isDefault, editable} = currentModel.value.metadata.thinking
+      // 如果不可编辑，必须强制设为默认值；如果可编辑，也重置为默认值（因为切换模型了）
+      // 所以这里逻辑一样，但为了代码清晰和未来维护，保持 isDefault 赋值
+      thinkingEnabled.value = isDefault
+    } else {
+      thinkingEnabled.value = false
+    }
+  }
 })
 
 // 编辑相关
@@ -288,6 +318,7 @@ const handleStreamCallbacks = (assistantMsg, userMsg = null) => {
 
 const loadSession = async (newSessionId) => {
   loading.value = true
+  isRestoring.value = true
   messages.value = []
   models.value = await fetchAvailableModels().then()
   await loadKbs()
@@ -330,7 +361,6 @@ const loadSession = async (newSessionId) => {
         console.error('Failed to parse options:', e)
       }
     }
-
     return {
       id: msg.id,
       role: msg.role,
@@ -352,11 +382,50 @@ const loadSession = async (newSessionId) => {
     selectedTools.value = []
     if (opts.webSearch) {
       selectedTools.value.push('webSearch')
+      isUserUncheckedWebSearch.value = false
+    } else {
+      // 存在 options 但 webSearch 为 false/undefined，说明之前可能用户取消了
+      // 如果支持webSearch但opts里没有，视为用户取消
+      if (currentModel.value?.metadata?.tools?.includes('webSearch')) {
+         isUserUncheckedWebSearch.value = true
+      }
     }
+
+    // 恢复思考状态
+    if (opts.thinking) {
+      thinkingEnabled.value = true
+    } else {
+      thinkingEnabled.value = false
+    }
+
+    // 如果模型配置了 thinking 且 editable 为 false，强制使用 default 值
+    if (currentModel.value?.metadata?.thinking?.editable === false) {
+      thinkingEnabled.value = currentModel.value.metadata.thinking.default
+    }
+
     // 后续如果有其他 tool，也在这里添加逻辑
   } else {
     // 如果没有历史 options，默认清空 (或者保留默认值? 根据需求，这里先清空以保持一致性)
+    // 修改策略：如果是新会话（无options），且支持webSearch，则默认选中
     selectedTools.value = []
+    if (availableTools.value.includes('webSearch')) {
+       selectedTools.value.push('webSearch')
+       isUserUncheckedWebSearch.value = false
+    } else {
+       isUserUncheckedWebSearch.value = false
+    }
+
+    // 默认初始化思考状态
+    if (currentModel.value?.metadata?.thinking) {
+      thinkingEnabled.value = currentModel.value.metadata.thinking.default
+    } else {
+      thinkingEnabled.value = false
+    }
+
+    // 如果存在历史消息但没有options (旧数据)，尝试推断
+    if (lastUserMsg) {
+      thinkingEnabled.value = false
+    }
   }
 
   if (data.length > 0) {
@@ -393,6 +462,10 @@ const loadSession = async (newSessionId) => {
   userScrolledUp.value = false
   nextTick(() => {
     scrollToBottom('auto') // 使用 auto 立即跳转到底部
+    // 延迟重置恢复标记，确保 watcher 执行完毕
+    setTimeout(() => {
+      isRestoring.value = false
+    }, 0)
   })
 }
 
@@ -460,6 +533,11 @@ const onSend = (text) => {
   const options = {}
   if (selectedTools.value.includes('webSearch')) {
     options.webSearch = true
+  }
+
+  // 思考模型参数
+  if (currentModel.value?.metadata?.thinking && thinkingEnabled.value) {
+    options.thinking = true
   }
 
   startChatStream(sessionId.value, selectedModel.value, text, isKbSupported.value ? (selectedKb.value || undefined) : undefined, options, onOpen, onMessage, onError, onClose)
@@ -600,6 +678,11 @@ const confirmEdit = () => {
     options.webSearch = true
   }
 
+  // 思考模型参数
+  if (currentModel.value?.metadata?.thinking && thinkingEnabled.value) {
+    options.thinking = true
+  }
+
   // 调用编辑接口
   editMessageStream(
       userMsg.id,
@@ -646,6 +729,11 @@ const onRetry = (userMsgIndex) => {
   const options = {}
   if (selectedTools.value.includes('webSearch')) {
     options.webSearch = true
+  }
+
+  // 思考模型参数
+  if (currentModel.value?.metadata?.thinking && thinkingEnabled.value) {
+    options.thinking = true
   }
 
   // 调用重试接口
@@ -847,23 +935,39 @@ const roles = computed(() => ({
         >
           <!-- 工具栏 (Header插槽) -->
           <template #header>
-            <div class="sender-header-tools" v-if="allKnownTools.length > 0">
+            <div class="sender-header-tools" v-if="allKnownTools.length > 0 || currentModel?.metadata?.thinking">
               <div class="header-tools-wrapper">
-                <div
-                    v-for="toolKey in allKnownTools"
-                    :key="toolKey"
-                    class="header-tool-item"
-                    :class="{
-                    active: selectedTools.includes(toolKey),
-                    disabled: !availableTools.includes(toolKey)
+                <!-- 思考模型开关 -->
+                <div 
+                  v-if="currentModel?.metadata?.thinking" 
+                  class="header-tool-item"
+                  :class="{ 
+                    active: thinkingEnabled,
+                    disabled: currentModel.metadata.thinking.editable === false
                   }"
-                    @click="toggleTool(toolKey)"
-                    :title="!availableTools.includes(toolKey) ? '当前模型不支持' : (toolConfigs[toolKey]?.desc || toolKey)"
+                  @click="toggleThinking"
+                  :title="currentModel.metadata.thinking.editable === false ? '当前模型强制开启或关闭思考，不可修改' : '开启深度思考模式'"
                 >
-                  <component :is="toolConfigs[toolKey]?.icon || AppstoreOutlined"/>
-                  <span>{{ toolConfigs[toolKey]?.label || toolKey }}</span>
-                  <CheckOutlined v-if="selectedTools.includes(toolKey)" style="font-size: 10px; margin-left: 2px;"/>
+                  <BulbOutlined />
+                  <span>深度思考</span>
+                  <CheckOutlined v-if="thinkingEnabled" style="font-size: 10px; margin-left: 2px;"/>
                 </div>
+
+                <template v-for="toolKey in allKnownTools" :key="toolKey">
+                  <div
+                      v-if="availableTools.includes(toolKey)"
+                      class="header-tool-item"
+                      :class="{
+                        active: selectedTools.includes(toolKey)
+                      }"
+                      @click="toggleTool(toolKey)"
+                      :title="toolConfigs[toolKey]?.desc || toolKey"
+                  >
+                    <component :is="toolConfigs[toolKey]?.icon || AppstoreOutlined"/>
+                    <span>{{ toolConfigs[toolKey]?.label || toolKey }}</span>
+                    <CheckOutlined v-if="selectedTools.includes(toolKey)" style="font-size: 10px; margin-left: 2px;"/>
+                  </div>
+                </template>
               </div>
             </div>
           </template>
@@ -1000,8 +1104,14 @@ const roles = computed(() => ({
 }
 
 @keyframes messageSlideIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .thought-chain {
@@ -1010,8 +1120,12 @@ const roles = computed(() => ({
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .message-content {
@@ -1333,6 +1447,7 @@ const roles = computed(() => ({
 .chat-session-container.is-dark .chat-sender {
   background: #1e1e1e;
 }
+
 .chat-session-container.is-dark .header-card {
   background: rgba(30, 30, 30, 0.9);
 }
@@ -1438,9 +1553,15 @@ const roles = computed(() => ({
 }
 
 @keyframes pulse {
-  0% { opacity: 0.4; }
-  50% { opacity: 1; }
-  100% { opacity: 0.4; }
+  0% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.4;
+  }
 }
 
 /* 内容区域 */

@@ -76,7 +76,11 @@ public class ChatController {
 
         // 保存 options
         if (chatStart.getOptions() != null) {
-            conversationMessage.setOptions(chatStart.getOptions());
+            Map<String, Object> opts = chatStart.getOptions();
+            if (opts.containsKey("thinking") && Boolean.FALSE.equals(opts.get("thinking"))) {
+                opts.remove("thinking");
+            }
+            conversationMessage.setOptions(opts);
         }
 
         conversationMessagesService.save(conversationMessage);
@@ -190,7 +194,11 @@ public class ChatController {
         if (userMsg != null && userMsg.getUserId().equals(userId)) {
             userMsg.setContent(dto.getNewContent());
             if (dto.getOptions() != null) {
-                userMsg.setOptions(dto.getOptions());
+                Map<String, Object> opts = dto.getOptions();
+                if (opts.containsKey("thinking") && Boolean.FALSE.equals(opts.get("thinking"))) {
+                    opts.remove("thinking");
+                }
+                userMsg.setOptions(opts);
             }
             conversationMessagesService.updateById(userMsg);
         }
@@ -221,7 +229,11 @@ public class ChatController {
         if (dto.getOptions() != null) {
             ConversationMessages userMsg = conversationMessagesService.getById(userMessageId);
             if (userMsg != null) {
-                userMsg.setOptions(dto.getOptions());
+                Map<String, Object> opts = dto.getOptions();
+                if (opts.containsKey("thinking") && Boolean.FALSE.equals(opts.get("thinking"))) {
+                    opts.remove("thinking");
+                }
+                userMsg.setOptions(opts);
                 conversationMessagesService.updateById(userMsg);
             }
         }
@@ -301,11 +313,11 @@ public class ChatController {
 
             // 保存 options
             if (chatStream.getOptions() != null) {
-                try {
-                    newUserMessage.setOptions(new ObjectMapper().writeValueAsString(chatStream.getOptions()));
-                } catch (JsonProcessingException e) {
-                    log.error("序列化 options 失败", e);
+                Map<String, Object> opts = chatStream.getOptions();
+                if (opts.containsKey("thinking") && Boolean.FALSE.equals(opts.get("thinking"))) {
+                    opts.remove("thinking");
                 }
+                newUserMessage.setOptions(opts);
             }
 
             conversationMessagesService.save(newUserMessage);
@@ -331,7 +343,11 @@ public class ChatController {
         Map<String, Object> options = new java.util.HashMap<>();
         // 合并用户传递的 options
         if (chatStream.getOptions() != null) {
-            options.putAll(chatStream.getOptions());
+            Map<String, Object> userOpts = new java.util.HashMap<>(chatStream.getOptions());
+            if (userOpts.containsKey("thinking") && Boolean.FALSE.equals(userOpts.get("thinking"))) {
+                userOpts.remove("thinking");
+            }
+            options.putAll(userOpts);
         }
 
         if (kbId != null && kb != null) {

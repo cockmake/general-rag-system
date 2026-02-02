@@ -11,7 +11,8 @@ import {
   GlobalOutlined,
   AppstoreOutlined,
   CodeOutlined,
-  FileSearchOutlined
+  FileSearchOutlined,
+  BulbOutlined
 } from '@ant-design/icons-vue'
 
 import {awaitSessionTitle, fetchAvailableModels, startChat} from '@/api/chatApi'
@@ -25,6 +26,8 @@ const themeStore = useThemeStore();
 
 const loading = ref(false)
 const selectedTools = ref([])
+const thinkingEnabled = ref(false)
+const isUserUncheckedWebSearch = ref(false)
 
 // 工具配置映射
 const toolConfigs = {
@@ -39,6 +42,9 @@ onMounted(async () => {
   selectedModel.value = selectedModel.value || models.value[0]?.modelId || null
   // 加载知识库列表
   await loadKbs()
+  
+  // 初始化时同步一次配置
+  updateModelConfig()
 })
 
 const isKbSupported = computed(() => {
@@ -62,16 +68,37 @@ const availableTools = computed(() => {
 // 所有已知工具列表，用于渲染UI（即使模型不支持也显示，但禁用）
 const allKnownTools = ['webSearch']
 
-watch(selectedModel, () => {
+const updateModelConfig = () => {
   if (!isKbSupported.value) {
     selectedKb.value = null
   }
+  
+  // 处理思考模型配置
+  if (currentModel.value?.metadata?.thinking) {
+    const { default: isDefault } = currentModel.value.metadata.thinking
+    thinkingEnabled.value = isDefault
+  } else {
+    thinkingEnabled.value = false
+  }
+
   // 切换模型时，检查已选工具是否仍被支持
   // 如果不支持，则移除；
   // 如果支持，保留用户的选择（或者根据需求也可以全重置，这里选择保留支持的）
   const newSupported = availableTools.value
   selectedTools.value = selectedTools.value.filter(t => newSupported.includes(t))
+  
+  // 如果支持 webSearch 且用户未手动取消，则默认选中
+  if (newSupported.includes('webSearch')) {
+      if (!isUserUncheckedWebSearch.value && !selectedTools.value.includes('webSearch')) {
+          selectedTools.value.push('webSearch')
+      }
+  }
+}
+
+watch(selectedModel, () => {
+  updateModelConfig()
 })
+
 
 const toggleTool = (toolKey) => {
   if (!availableTools.value.includes(toolKey)) return // Disabled
@@ -79,9 +106,20 @@ const toggleTool = (toolKey) => {
   const index = selectedTools.value.indexOf(toolKey)
   if (index === -1) {
     selectedTools.value.push(toolKey)
+    if (toolKey === 'webSearch') {
+       isUserUncheckedWebSearch.value = false
+    }
   } else {
     selectedTools.value.splice(index, 1)
+    if (toolKey === 'webSearch') {
+       isUserUncheckedWebSearch.value = true
+    }
   }
+}
+
+const toggleThinking = () => {
+  if (currentModel.value?.metadata?.thinking?.editable === false) return
+  thinkingEnabled.value = !thinkingEnabled.value
 }
 
 const onSend = async (text) => {
@@ -95,6 +133,17 @@ const onSend = async (text) => {
     const options = {}
     if (selectedTools.value.includes('webSearch')) {
       options.webSearch = true
+    }
+    
+    // 思考模型参数
+    let useThinking = thinkingEnabled.value
+    // 如果不可编辑，强制使用默认值
+    if (currentModel.value?.metadata?.thinking?.editable === false) {
+      useThinking = currentModel.value.metadata.thinking.default
+    }
+    
+    if (currentModel.value?.metadata?.thinking && useThinking) {
+      options.thinking = true
     }
     
     const res = await startChat({
@@ -172,23 +221,41 @@ const onSend = async (text) => {
             </div>
             
             <div class="tools-container">
+              <!-- 思考模型开关 -->
               <a-tooltip 
-                v-for="toolKey in allKnownTools" 
-                :key="toolKey" 
-                :title="!availableTools.includes(toolKey) ? '当前模型不支持此功能' : (toolConfigs[toolKey]?.desc || toolKey)"
+                v-if="currentModel?.metadata?.thinking" 
+                :title="currentModel.metadata.thinking.editable === false ? '当前模型强制开启或关闭思考，不可修改' : '开启深度思考模式，模型将进行详细推理'"
               >
                 <div 
                   class="tool-btn" 
                   :class="{ 
-                    active: selectedTools.includes(toolKey),
-                    disabled: !availableTools.includes(toolKey)
+                    active: thinkingEnabled,
+                    disabled: currentModel.metadata.thinking.editable === false
                   }"
-                  @click="toggleTool(toolKey)"
+                  @click="toggleThinking"
                 >
-                  <component :is="toolConfigs[toolKey]?.icon || AppstoreOutlined" />
-                  <span class="tool-label">{{ toolConfigs[toolKey]?.label || toolKey }}</span>
+                  <BulbOutlined />
+                  <span class="tool-label">深度思考</span>
                 </div>
               </a-tooltip>
+
+              <template v-for="toolKey in allKnownTools" :key="toolKey">
+                <a-tooltip 
+                  v-if="availableTools.includes(toolKey)"
+                  :title="toolConfigs[toolKey]?.desc || toolKey"
+                >
+                  <div 
+                    class="tool-btn" 
+                    :class="{ 
+                      active: selectedTools.includes(toolKey)
+                    }"
+                    @click="toggleTool(toolKey)"
+                  >
+                    <component :is="toolConfigs[toolKey]?.icon || AppstoreOutlined" />
+                    <span class="tool-label">{{ toolConfigs[toolKey]?.label || toolKey }}</span>
+                  </div>
+                </a-tooltip>
+              </template>
             </div>
           </div>
 
@@ -457,6 +524,14 @@ const onSend = async (text) => {
   color: #00000040;
   box-shadow: none;
 }
+
+.tool-btn.active.disabled {
+  background: #e6f7ff;
+  border-color: #1890ff;
+  color: #1890ff;
+  opacity: 0.6;
+}
+
 .tool-btn.disabled:hover {
   transform: none;
   box-shadow: none;
@@ -481,6 +556,13 @@ const onSend = async (text) => {
   background: rgba(23, 125, 220, 0.2);
   border-color: #177ddc;
   color: #177ddc;
+}
+
+.new-chat-container.is-dark .tool-btn.active.disabled {
+  background: rgba(23, 125, 220, 0.2);
+  border-color: #177ddc;
+  color: #177ddc;
+  opacity: 0.6;
 }
 
 .new-chat-container.is-dark .tool-btn.disabled {
