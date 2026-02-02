@@ -1,0 +1,404 @@
+/* ================= 布局与容器 ================= */
+.chat-session-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(to bottom, #f5f7fa 0%, #e8ecf1 100%);
+}
+
+.chat-header {
+  padding: 12px 24px;
+  flex-shrink: 0;
+}
+
+.header-card {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.3s ease;
+}
+
+.header-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.config-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-label-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  white-space: nowrap;
+}
+
+.model-select,
+.kb-select {
+  min-width: 200px;
+}
+
+/* ================= 消息区域 ================= */
+.messages-container {
+  flex: 1;
+  overflow: hidden;
+  padding: 12px 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.messages-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.bubble-list {
+  min-height: 100%;
+}
+
+.assistant-message,
+.user-message {
+  animation: messageSlideIn 0.3s ease-out;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.thought-chain {
+  margin-bottom: 16px;
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.message-content {
+  background: transparent;
+  line-height: 1.8;
+  font-size: 15px;
+}
+
+.user-message-content {
+  line-height: 1.6;
+  font-size: 15px;
+  white-space: pre-wrap;
+}
+
+/* 编辑模式样式 */
+.edit-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 300px;
+}
+
+.edit-textarea {
+  border-radius: 8px;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ================= 输入区域 & Sender ================= */
+.input-container {
+  flex-shrink: 0;
+  padding: 12px 24px 16px;
+}
+
+.input-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.chat-sender {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.chat-sender:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.chat-sender:focus-within {
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.25);
+}
+
+.sender-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 8px 4px;
+}
+
+.sender-config {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  overflow-x: auto;
+  gap: 4px;
+}
+
+.sender-config::-webkit-scrollbar {
+  display: none;
+}
+
+.sender-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: 8px;
+}
+
+.model-select-footer {
+  min-width: 120px;
+}
+
+.kb-select-footer {
+  min-width: 160px;
+  width: 180px; /* Default desktop width */
+}
+
+.sender-header-tools {
+  padding: 8px 12px 4px;
+}
+
+.header-tools-wrapper {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.header-tool-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #666;
+  background: #f5f5f5;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.header-tool-item:hover:not(.disabled) {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+.header-tool-item.active {
+  background: #e6f7ff;
+  color: #1890ff;
+  border-color: #1890ff;
+  font-weight: 500;
+}
+
+.header-tool-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f9f9f9;
+  color: #999;
+}
+
+/* ================= Markdown 内部样式优化 ================= */
+:deep(.markdown-body) {
+  color: #24292f;
+}
+
+:deep(.markdown-body p) {
+  margin-bottom: 0.8em;
+  margin-top: 0;
+}
+
+:deep(.markdown-body h1),
+:deep(.markdown-body h2),
+:deep(.markdown-body h3) {
+  margin-top: 1.2em;
+  margin-bottom: 0.6em;
+  font-weight: 600;
+}
+
+:deep(.markdown-body code) {
+  background: rgba(175, 184, 193, 0.2);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+:deep(.markdown-body pre) {
+  background: #f6f8fa;
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+:deep(.markdown-body blockquote) {
+  border-left: 4px solid #667eea;
+  padding-left: 1em;
+  margin: 1em 0;
+  color: #666;
+}
+
+:deep(.markdown-body ul),
+:deep(.markdown-body ol) {
+  padding-left: 2em;
+  margin: 0.8em 0;
+}
+
+:deep(.markdown-body li) {
+  margin: 0.4em 0;
+}
+
+:deep(.markdown-body table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+
+:deep(.markdown-body th),
+:deep(.markdown-body td) {
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+}
+
+:deep(.markdown-body th) {
+  background: #f6f8fa;
+  font-weight: 600;
+}
+
+/* ================= 滚动条样式 ================= */
+.messages-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.messages-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.messages-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.messages-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+:deep(.ant-spin-nested-loading),
+:deep(.ant-spin-container) {
+  height: 100%;
+}
+
+/* ================= 暗色模式 (Scoped部分) ================= */
+/* 工具项暗色适配 */
+.chat-session-container.is-dark .header-tool-item {
+  background: rgba(255, 255, 255, 0.05);
+  color: #a6a6a6;
+}
+
+.chat-session-container.is-dark .header-tool-item:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #177ddc;
+}
+
+.chat-session-container.is-dark .header-tool-item.active {
+  background: rgba(23, 125, 220, 0.2);
+  color: #177ddc;
+  border-color: #177ddc;
+}
+
+.chat-session-container.is-dark .header-tool-item.disabled {
+  background: rgba(255, 255, 255, 0.02);
+  color: #434343;
+}
+
+/* Sender Footer 暗色适配 */
+.chat-session-container.is-dark .sender-footer {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ================= 响应式设计 (合并) ================= */
+@media (max-width: 768px) {
+  .chat-header,
+  .messages-container {
+    padding: 8px 16px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .config-group {
+    width: 100%;
+  }
+
+  .model-select,
+  .kb-select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .messages-wrapper {
+    padding: 16px;
+  }
+
+  .input-container {
+    padding: 8px 16px 12px;
+  }
+
+  /* Sender配置移动端适配 */
+  .model-select-footer {
+    width: auto !important;
+    flex: 1;
+    min-width: 90px;
+  }
+
+  .kb-wrapper {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .kb-select-footer {
+    width: 100% !important;
+    min-width: 100px;
+  }
+
+  .sender-config {
+    flex-wrap: nowrap;
+  }
+}

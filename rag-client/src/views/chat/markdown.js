@@ -1,0 +1,44 @@
+import markdownit from 'markdown-it'
+import taskLists from 'markdown-it-task-lists'
+import mj from 'markdown-it-mathjax3'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/atom-one-light.css'
+
+const langAliases = {
+  'js': 'javascript',
+  'ts': 'typescript',
+  'py': 'python',
+  'h5': 'html',
+  'rb': 'ruby',
+  'sh': 'bash',
+  'c++': 'cpp',
+}
+
+export const md = markdownit({
+  html: true,
+  linkify: true,
+  typographer: true,
+  highlight: function (str, lang) {
+    lang = langAliases[lang] || lang
+    if (lang && hljs.getLanguage(lang)) {
+      try {
+        return '<pre class="hljs"><code>'
+            + hljs.highlight(str, {language: lang, ignoreIllegals: true}).value +
+            '</code></pre>'
+      } catch (__) {
+      }
+    }
+    const result = hljs.highlightAuto(str)
+    return '<pre class="hljs"><code>' + result.value + '</code></pre>'
+  }
+}).use(mj, {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+    ignoreHtmlClass: 'tex2jax_ignore'
+  }
+}).use(taskLists)
