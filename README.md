@@ -35,23 +35,25 @@ General RAG System 是一个基于检索增强生成（Retrieval-Augmented Gener
 
 ```
 general-rag-system/
-├── rag-client/          # 前端界面（Vue.js 3 + Vite）
-├── rag-server/          # 业务后端（Spring Boot）
-└── rag-llm/             # AI服务（FastAPI + LangChain）
+├── rag-client/          # 前端界面（Vue 3 + Vite + Ant Design Vue）
+├── rag-server/          # 业务后端（Spring Boot + MyBatis Plus）
+├── rag-llm/             # AI服务（FastAPI + LangChain + LangGraph）
+└── embedding_rerank/    # 向量化与重排序服务（vLLM）
 ```
 
 ### 技术选型
 
 | 模块 | 技术栈 | 说明 |
 |------|--------|------|
-| **前端** | Vue.js 3、Vite、Axios | 响应式UI，支持深色模式 |
+| **前端** | Vue 3、Vite、Ant Design Vue 4、Pinia | 响应式UI，支持深色模式 |
 | **后端** | Spring Boot 2.7、MyBatis Plus、JWT | RESTful API，统一鉴权 |
 | **AI服务** | FastAPI、LangChain、LangGraph | 异步处理，流式响应 |
-| **向量数据库** | Milvus 2.x | 高性能向量检索 |
-| **对象存储** | MinIO | 文档文件存储 |
-| **关系数据库** | MySQL 5.7+ | 业务数据持久化 |
+| **向量化服务** | vLLM 0.8.5+、PyTorch | 本地向量化与重排序 |
+| **向量数据库** | Milvus 2.6+ | 高性能向量检索 |
+| **对象存储** | MinIO 8.x | 文档文件存储 |
+| **关系数据库** | MySQL 8.0+ | 业务数据持久化 |
 | **缓存** | Redis 6.x | Session、Token缓存 |
-| **消息队列** | RabbitMQ | 异步任务处理 |
+| **消息队列** | RabbitMQ 3.x | 异步任务处理 |
 
 ### 系统架构图
 
@@ -87,10 +89,11 @@ general-rag-system/
 ### 核心功能
 
 - 📄 **文档管理**
-  - 支持 PDF、TXT、Word 等多种格式
+  - 支持 PDF、TXT、Markdown 等多种格式
   - 自动解析文档内容和结构
   - 智能分块（Chunk）和向量化
   - 文档版本管理和更新
+  - MinIO 对象存储，支持大文件
 
 - 🔍 **智能检索**
   - 语义相似度搜索
@@ -111,8 +114,10 @@ general-rag-system/
   - 操作审计日志
 
 - 🎨 **用户体验**
-  - Markdown 渲染
-  - 代码高亮
+  - Markdown 渲染（markdown-it）
+  - 代码高亮（highlight.js）
+  - 数学公式支持（MathJax3）
+  - 任务列表、Emoji 支持
   - 深色/浅色主题
   - 响应式布局
 
@@ -122,11 +127,12 @@ general-rag-system/
 
 | 软件 | 版本要求 | 说明 |
 |------|----------|------|
-| Node.js | 16+ | 前端开发环境 |
-| Java | 11+ | 后端运行环境 |
+| Node.js | 18+ | 前端开发环境 |
+| Java | 11 | 后端运行环境（必须11） |
 | Python | 3.8+ | AI服务运行环境 |
 | Maven | 3.6+ | Java项目构建工具 |
-| Docker | 20+ | 依赖服务容器化（可选）|
+| Docker | 20+ | 依赖服务容器化（推荐）|
+| GPU | 可选 | vLLM本地向量化需要（embedding_rerank）|
 
 ### 依赖服务部署
 
@@ -138,11 +144,11 @@ docker-compose up -d
 ```
 
 或手动安装：
-- MySQL 5.7+
-- Redis 6.x
-- Milvus 2.x
-- MinIO
-- RabbitMQ 3.x
+- MySQL 8.0+（推荐 8.0.x 或更高版本）
+- Redis 6.x 或 7.x
+- Milvus 2.6+（需要配置认证）
+- MinIO（Latest）
+- RabbitMQ 3.x（需配置用户名密码）
 
 ### 配置文件
 
@@ -181,6 +187,12 @@ cp model_config.json.example model_config.json
 # - 通义千问（Qwen）
 # - Gemini
 # - 其他模型服务
+
+# 注意：main.py 中包含基础设施连接配置：
+# - RabbitMQ 连接信息
+# - MinIO 访问密钥
+# - Milvus 认证令牌
+# 生产环境请修改这些硬编码配置或使用环境变量
 ```
 
 📚 **详细配置说明请参考 [SECURITY.md](./SECURITY.md)**
@@ -210,8 +222,11 @@ mvn spring-boot:run
 ```bash
 cd rag-llm
 pip install -r requirements.txt
+# 使用 uvicorn 启动服务（推荐）
+uvicorn main:app --host 0.0.0.0 --port 8888 --workers 2
+# 或直接使用 python
 python main.py
-# LLM服务运行在 http://localhost:8000
+# LLM服务运行在 http://localhost:8888
 ```
 
 ### 数据库初始化
@@ -220,9 +235,18 @@ python main.py
 -- 创建数据库
 CREATE DATABASE general_rag DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- 导入表结构（如提供了SQL文件）
--- source schema.sql
+-- 导入表结构和初始数据
+source 1_general_rag.sql
 ```
+
+**说明**：`1_general_rag.sql` 文件位于项目根目录，包含完整的数据库表结构定义，包括：
+- 用户表（users）
+- 工作空间表（workspaces）
+- 知识库表（knowledgebases）
+- 文档表（documents）
+- 会话表（conversations、conversation_messages）
+- 审计日志表（audit_logs）
+- 等更多表...
 
 ## 📁 项目结构
 
@@ -237,7 +261,7 @@ general-rag-system/
 │   │   ├── components/              # 公共组件
 │   │   ├── views/                   # 页面视图
 │   │   ├── router/                  # 路由配置
-│   │   ├── stores/                  # 状态管理
+│   │   ├── stores/                  # 状态管理（Pinia）
 │   │   └── utils/                   # 工具函数
 │   ├── package.json
 │   └── vite.config.js
@@ -253,22 +277,33 @@ general-rag-system/
 │   ├── src/main/resources/
 │   │   ├── application.yml          # 主配置
 │   │   ├── application-dev.yml.example   # 开发环境配置模板
-│   │   └── application-prod.yml.example  # 生产环境配置模板
+│   │   ├── application-prod.yml.example  # 生产环境配置模板
+│   │   └── com/rag/ragserver/mapper/     # MyBatis XML映射文件
 │   └── pom.xml
 │
-├── rag-llm/                         # LLM服务
+├── rag-llm/                         # LLM服务（端口: 8888）
 │   ├── services/                    # 业务服务
+│   │   └── chat/                    # 聊天服务
 │   ├── mq/                          # 消息队列处理
 │   ├── main.py                      # 入口文件
 │   ├── rag_utils.py                 # RAG工具函数
 │   ├── milvus_utils.py              # Milvus操作
 │   ├── minio_utils.py               # MinIO操作
+│   ├── gemini_utils.py              # Gemini API集成
+│   ├── openai_utils.py              # OpenAI API集成
 │   ├── requirements.txt             # Python依赖
 │   └── model_config.json.example    # 模型配置模板
 │
+├── embedding_rerank/                # 向量化与重排序服务
+│   └── main.py                      # vLLM向量化示例（Qwen3-Embedding-4B）
+│
+├── 1_general_rag.sql                # 数据库初始化SQL
 ├── .gitignore                       # Git忽略配置
 ├── README.md                        # 项目说明（本文件）
-└── SECURITY.md                      # 安全配置指南
+├── SECURITY.md                      # 安全配置指南
+├── CONTRIBUTING.md                  # 贡献指南
+├── LICENSE                          # Apache 2.0 开源协议
+└── CLEAN_GIT_HISTORY.md             # Git历史清理说明
 ```
 
 </details>
@@ -369,11 +404,12 @@ docker-compose up -d
 
 ## 📚 文档链接
 
-- [前端开发文档](./rag-client/README.md)
-- [后端开发文档](./rag-server/README.md)
-- [LLM服务文档](./rag-llm/README.md)
-- [安全配置指南](./SECURITY.md)
-- [贡献指南](./CONTRIBUTING.md)
+- [前端开发文档](./rag-client/README.md) - Vue 3 开发指南
+- [后端开发文档](./rag-server/README.md) - Spring Boot API 文档
+- [LLM服务文档](./rag-llm/README.md) - FastAPI 服务说明
+- [安全配置指南](./SECURITY.md) - 敏感信息配置说明
+- [贡献指南](./CONTRIBUTING.md) - 如何参与项目开发
+- [Git历史清理](./CLEAN_GIT_HISTORY.md) - 仓库清理记录
 
 ## 📄 开源协议
 
@@ -436,17 +472,44 @@ A: 可以，本项目基于 LangChain，理论上支持：
 <summary><b>Q: 支持哪些文档格式？</b></summary>
 
 A: 当前支持：
-- PDF（通过 PyMuPDF）
-- TXT、MD（纯文本）
+- **PDF**（通过 PyMuPDF / pdfplumber）
+- **TXT、MD**（纯文本、Markdown）
 - 图片OCR（通过 Tesseract，需要额外安装）
 
-可通过扩展 `rag_utils.py` 支持更多格式（Word、Excel等）
+可通过扩展 `rag_utils.py` 支持更多格式（Word、Excel、HTML等）
 </details>
+
+<details>
+<summary><b>Q: LLM服务为什么运行在8888端口？</b></summary>
+
+A: 这是在 `main.py` 中配置的，建议使用：
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8888 --workers 2
+```
+可根据需要修改端口，但需同步更新 `rag-server` 中的配置。
+</details>
+
+<details>
+<summary><b>Q: embedding_rerank 模块的作用是什么？</b></summary>
+
+A: 这是可选的本地向量化服务模块，使用 vLLM 加速本地 Embedding 模型推理（如 Qwen3-Embedding-4B）。适用于：
+- 不想依赖外部 API 的场景
+- 需要更高数据隐私的环境
+- 有 GPU 资源的情况
+
+需要 vLLM >= 0.8.5 和 GPU 支持。
+</details>
+
+## 📊 项目状态
+
+![GitHub last commit](https://img.shields.io/github/last-commit/yourusername/general-rag-system)
+![GitHub issues](https://img.shields.io/github/issues/yourusername/general-rag-system)
+![GitHub stars](https://img.shields.io/github/stars/yourusername/general-rag-system)
 
 ## 📧 联系方式
 
 - 提交 Issue: [GitHub Issues](../../issues)
-- 邮件联系: your-email@example.com（如果愿意公开）
+- 讨论交流: [GitHub Discussions](../../discussions)
 
 ---
 
@@ -457,5 +520,14 @@ A: 当前支持：
 Made with ❤️ by General RAG System Contributors
 
 [Apache License 2.0](./LICENSE) © 2026
+
+---
+
+### 技术支持
+
+- 📖 [完整文档](../../wiki)
+- 💬 [常见问题](../../issues?q=label%3Aquestion)
+- 🐛 [报告Bug](../../issues/new?template=bug_report.md)
+- 💡 [功能建议](../../issues/new?template=feature_request.md)
 
 </div>

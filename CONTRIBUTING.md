@@ -85,11 +85,12 @@
 
 ```
 general-rag-system/
-├── rag-client/      # Vue 3 前端
-├── rag-server/      # Spring Boot 后端
-├── rag-llm/         # Python FastAPI LLM 服务
-├── docs/            # 文档
-└── README.md
+├── rag-client/          # Vue 3 前端（端口: 5173）
+├── rag-server/          # Spring Boot 后端（端口: 8080）
+├── rag-llm/             # Python FastAPI LLM 服务（端口: 8888）
+├── embedding_rerank/    # vLLM 本地向量化服务（可选）
+├── 1_general_rag.sql    # 数据库初始化 SQL
+└── docs/                # 文档
 ```
 
 ### 运行测试
@@ -97,19 +98,23 @@ general-rag-system/
 **前端测试**
 ```bash
 cd rag-client
-npm test
+npm run test  # 如果配置了测试
+npm run lint  # 代码检查
 ```
 
 **后端测试**
 ```bash
 cd rag-server
 mvn test
+mvn checkstyle:check  # 代码规范检查
 ```
 
 **Python 测试**
 ```bash
 cd rag-llm
-pytest
+pytest  # 如果配置了测试
+flake8 .  # 代码规范检查
+black . --check  # 格式检查
 ```
 
 ## 代码规范
@@ -118,22 +123,28 @@ pytest
 
 - 使用 ESLint 和 Prettier
 - 遵循 Vue 3 Composition API 风格
-- 组件命名使用 PascalCase
+- 组件命名使用 PascalCase（如 `ChatMessage.vue`）
+- 文件命名使用 kebab-case（如 `chat-message.vue`）
+- 优先使用 `<script setup>` 语法
 
 ```bash
 cd rag-client
 npm run lint
+npm run lint:fix  # 自动修复
 ```
 
 ### Java
 
-- 遵循 Google Java Style Guide
+- 遵循阿里巴巴 Java 开发手册
 - 使用 Maven Checkstyle 插件
 - 类命名使用 PascalCase，方法使用 camelCase
+- **重要**：修改 Mapper 接口时，必须同步更新 XML 文件
+  - XML 位置：`src/main/resources/com/rag/ragserver/mapper/`
 
 ```bash
 cd rag-server
 mvn checkstyle:check
+mvn spotless:check  # 如果配置了 Spotless
 ```
 
 ### Python
@@ -200,19 +211,30 @@ Closes #123
 提交 PR 前请确认：
 
 - [ ] 代码遵循项目规范
-- [ ] 通过所有测试
-- [ ] 添加了必要的测试
-- [ ] 更新了相关文档
+- [ ] 通过所有测试（如有）
+- [ ] 添加了必要的测试（如有新功能）
+- [ ] 更新了相关文档（README、SECURITY 等）
 - [ ] PR 描述清晰，关联了相关 Issue
-- [ ] Commit 信息符合规范
+- [ ] Commit 信息符合 Conventional Commits 规范
 - [ ] 没有合并冲突
+- [ ] **没有提交敏感信息**（密码、API Keys 等）
+- [ ] 配置文件使用了 `.example` 模板
+- [ ] MyBatis XML 文件已同步更新（如修改了 Mapper）
 
 ## 📞 联系方式
 
 如有任何问题，欢迎通过以下方式联系：
 
-- GitHub Issues: [提交 Issue](https://github.com/cockmake/general-rag-system/issues)
-- Email: [您的邮箱]
+- **GitHub Issues**: [提交 Issue](https://github.com/cockmake/general-rag-system/issues)
+- **GitHub Discussions**: [参与讨论](https://github.com/cockmake/general-rag-system/discussions)
+
+## 📚 参考资料
+
+- [Vue 3 风格指南](https://vuejs.org/style-guide/)
+- [阿里巴巴 Java 开发手册](https://github.com/alibaba/p3c)
+- [PEP 8 - Python 代码风格指南](https://pep8.org/)
+- [Conventional Commits](https://www.conventionalcommits.org/)
+- [语义化版本](https://semver.org/)
 
 ## 📄 许可证
 

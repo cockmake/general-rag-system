@@ -112,11 +112,41 @@ git grep "sk-e34cc6e3056045bea1da92160035e0df" $(git rev-list --all)
 
 ### 5. 预防措施
 
-- [x] 已更新 `.gitignore` 排除 `*_example.py` 文件
+#### 已完成
+- [x] 已更新 `.gitignore` 排除敏感配置文件
+- [x] 已创建 `.example` 模板文件
+- [x] 已添加 SECURITY.md 安全配置指南
+- [x] 已更新所有 README 文档说明配置方式
+
+#### 建议实施
 - [ ] 设置 pre-commit hook 扫描敏感信息
-- [ ] 使用环境变量或密钥管理服务存储API密钥
-- [ ] 启用 GitHub Secret Scanning（如果使用GitHub）
+- [ ] 使用环境变量或密钥管理服务（如 Vault）
+- [ ] 启用 GitHub Secret Scanning（如果使用 GitHub）
 - [ ] 定期审计代码库中的敏感信息
+- [ ] 团队培训：不要硬编码敏感信息
+
+#### ⚠️ 特别注意
+
+`rag-llm/main.py` 中仍包含硬编码的基础设施连接信息：
+
+```python
+os.environ["RABBITMQ_HOST"] = "192.168.188.6"
+os.environ["RABBITMQ_PORT"] = "5678"
+os.environ["RABBITMQ_USERNAME"] = "make"
+os.environ["RABBITMQ_PASSWORD"] = "make20260101"
+
+os.environ["MINIO_ENDPOINT"] = "192.168.188.6:9002"
+os.environ["MINIO_ACCESS_KEY"] = "make"
+os.environ["MINIO_SECRET_KEY"] = "make20260101"
+
+os.environ["MILVUS_URI"] = "http://192.168.188.6:19530"
+os.environ["MILVUS_TOKEN"] = "make:make5211314"
+```
+
+**生产环境部署前务必修改！** 建议：
+1. 改为从环境变量读取
+2. 使用配置文件（已在 .gitignore 中）
+3. 使用配置管理工具
 
 ## Pre-commit Hook 示例
 
@@ -158,7 +188,31 @@ chmod +x .git/hooks/pre-commit
 
 ## 时间线
 
-- **2026-01-13**: 发现泄露，删除文件，更新.gitignore和SECURITY.md
-- **待执行**: 撤销API密钥
-- **待执行**: 清理Git历史
-- **待执行**: 通知协作者
+- **2026-01-13**: 发现泄露，删除文件，更新 .gitignore 和 SECURITY.md
+- **2026-02-02**: 全面更新项目文档，添加配置安全说明
+  - 更新根目录 README.md
+  - 更新所有子项目 README（rag-client、rag-server、rag-llm）
+  - 新增 embedding_rerank/README.md
+  - 更新 SECURITY.md（增加 main.py 配置警告）
+  - 更新 CONTRIBUTING.md（增加开发规范）
+  - 更新 CLEAN_GIT_HISTORY.md（本文件）
+- **待执行**: 撤销泄露的 API 密钥
+- **待执行**: 清理 Git 历史（可选，如需彻底清除）
+- **待执行**: 重构 `rag-llm/main.py` 配置方式
+
+## 后续改进计划
+
+1. **配置管理优化**
+   - 将 `main.py` 中的硬编码配置改为环境变量
+   - 创建统一的配置加载模块
+   - 支持多环境配置切换（dev/test/prod）
+
+2. **安全加固**
+   - 实施 pre-commit hooks
+   - 集成 Secret Scanning 工具
+   - 添加配置文件加密方案
+
+3. **文档维护**
+   - 定期更新版本号和依赖版本
+   - 保持所有 README 与实际代码同步
+   - 添加更多使用示例和最佳实践
