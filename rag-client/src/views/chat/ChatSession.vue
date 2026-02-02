@@ -1,5 +1,5 @@
 <script setup>
-import {h, onMounted, onUnmounted, ref, watch, nextTick, computed} from 'vue'
+import {h, onMounted, onUnmounted, ref, watch, nextTick, computed, reactive} from 'vue'
 import {
   UserOutlined,
   CopyOutlined,
@@ -369,7 +369,7 @@ const loadSession = async (newSessionId) => {
         console.error('Failed to parse options:', e)
       }
     }
-    return {
+    return reactive({
       id: msg.id,
       role: msg.role,
       content: msg.content,
@@ -381,7 +381,7 @@ const loadSession = async (newSessionId) => {
       options: options,
       thinking: msg.thinking,
       thinkingCollapseKeys: [] // 默认折叠
-    }
+    })
   })
 
   // 初始化时，根据最后一条用户消息的 options 同步工具选择状态
@@ -443,14 +443,15 @@ const loadSession = async (newSessionId) => {
     if (lastMsg.role === 'user' && lastMsg.status === 'pending') {
       // 找到最后一条用户消息的引用
       const userMsg = messages.value[messages.value.length - 1]
-      messages.value.push({
+      messages.value.push(reactive({
         role: 'assistant',
         content: '',
         loading: true,
         ragProcess: [],
         latencyMs: 0,
-        completionTokens: 0
-      })
+        completionTokens: 0,
+        thinkingCollapseKeys: [] // 默认折叠
+      }))
       const assistant = messages.value[messages.value.length - 1]
       const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
       isGenerating.value = true
@@ -525,17 +526,17 @@ const onSend = (text) => {
   question.value = ''
   // 发送新消息时重置滚动状态
   userScrolledUp.value = false
-  const userMsg = {role: 'user', content: text, status: 'pending'}
+  const userMsg = reactive({role: 'user', content: text, status: 'pending'})
   messages.value.push(userMsg)
-  messages.value.push({
+  messages.value.push(reactive({
     role: 'assistant',
     content: '',
     loading: true,
     ragProcess: [],
     latencyMs: 0,
     completionTokens: 0,
-    isThinkingExpanded: false // 默认折叠
-  })
+    thinkingCollapseKeys: [] // 默认折叠
+  }))
   scrollToBottom()
   const assistant = messages.value[messages.value.length - 1]
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
@@ -672,14 +673,15 @@ const confirmEdit = () => {
   }
 
   // 添加新的助手消息占位
-  messages.value.push({
+  messages.value.push(reactive({
     role: 'assistant',
     content: '',
     loading: true,
     ragProcess: [],
     latencyMs: 0,
-    completionTokens: 0
-  })
+    completionTokens: 0,
+    thinkingCollapseKeys: [] // 默认折叠
+  }))
   const assistant = messages.value[messages.value.length - 1]
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
 
@@ -725,7 +727,7 @@ const onRetry = (userMsgIndex) => {
   }
 
   // 添加新的助手消息占位
-  messages.value.push({
+  messages.value.push(reactive({
     role: 'assistant',
     content: '',
     loading: true,
@@ -733,7 +735,7 @@ const onRetry = (userMsgIndex) => {
     latencyMs: 0,
     completionTokens: 0,
     thinkingCollapseKeys: [] // 默认折叠
-  })
+  }))
   const assistant = messages.value[messages.value.length - 1]
   const {onOpen, onMessage, onError, onClose} = handleStreamCallbacks(assistant, userMsg)
 
@@ -841,7 +843,8 @@ const roles = computed(() => ({
                       ghost
                       size="small"
                       :bordered="false"
-                      v-model:activeKey="msg.thinkingCollapseKeys"
+                      :activeKey="messages[index]?.thinkingCollapseKeys"
+                      @change="(keys) => { messages[index].thinkingCollapseKeys = Array.isArray(keys) ? keys : (keys ? [keys] : []) }"
                       expand-icon-position="start"
                   >
                     <template #expandIcon="{ isActive }">
@@ -856,7 +859,7 @@ const roles = computed(() => ({
                           <div class="thinking-title">
                             <BulbOutlined class="thinking-icon"/>
                             <span>深度思考过程</span>
-                            <span v-if="(!msg.thinkingCollapseKeys || msg.thinkingCollapseKeys.length === 0) && msg.thinking" class="thinking-preview">
+                            <span v-if="(!messages[index]?.thinkingCollapseKeys || messages[index].thinkingCollapseKeys.length === 0) && msg.thinking" class="thinking-preview">
                                - {{ msg.loading && !msg.content ? '思考中...' : '已折叠' }}
                             </span>
                           </div>
