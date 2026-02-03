@@ -771,6 +771,12 @@ class RAGService:
 参考文档：
 {context}"""
 
+        # 发送系统提示词用于token统计
+        yield {
+            "type": "system_prompt",
+            "payload": final_system_prompt
+        }
+
         # 构建对话消息
         conversation = [{"role": "system", "content": final_system_prompt}]
         for msg in history:

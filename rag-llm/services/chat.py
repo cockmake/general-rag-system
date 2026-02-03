@@ -37,7 +37,8 @@ async def stream_generator(model_instance, messages, prompt_tokens: int = 0, opt
 
     end_time = time.time()
     latency_ms = int((end_time - start_time) * 1000)  # Calculate latency
-    completion_tokens = get_token_count(full_content)
+    # 计算输出token：包括思考内容和回答内容
+    completion_tokens = get_token_count(cot_content) + get_token_count(full_content)
     usage_data = {
         "type": "usage",
         "payload": {
@@ -70,6 +71,7 @@ async def rag_stream_generator(
     4. 流式生成答案
     """
     full_content = ""
+    cot_content = ""
     rag_process_data = []
     start_time = time.time()  # Start timing
 
@@ -99,17 +101,33 @@ async def rag_stream_generator(
                 "payload": json.dumps(item["payload"], ensure_ascii=False)
             }
             yield f"data: {json.dumps(process_data, ensure_ascii=False)}\n\n"
-        elif item["type"] == "content" or item["type"] == "thinking":
+        elif item["type"] == "thinking":
+            # 思考内容
+            content = item["payload"]
+            if content:
+                cot_content += content
+                # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
+                data = {
+                    "type": "thinking",
+                    "payload": json.dumps(content, ensure_ascii=False)
+                }
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+        elif item["type"] == "content":
             # 答案内容
             content = item["payload"]
             if content:
                 full_content += content
                 # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
                 data = {
-                    "type": item["type"],
+                    "type": "content",
                     "payload": json.dumps(content, ensure_ascii=False)
                 }
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+        elif item["type"] == "system_prompt":
+            # 接收系统提示词，用于计算token数
+            system_prompt_text = item["payload"]
+            # 将系统提示词的token数计入prompt_tokens
+            prompt_tokens += get_token_count(system_prompt_text)
 
     # 发送RAG过程汇总
     if rag_process_data:
@@ -123,7 +141,8 @@ async def rag_stream_generator(
     # 发送使用统计
     end_time = time.time()
     latency_ms = int((end_time - start_time) * 1000)  # Calculate latency
-    completion_tokens = get_token_count(full_content)
+    # 计算输出token：包括思考内容和回答内容
+    completion_tokens = get_token_count(cot_content) + get_token_count(full_content)
     usage_data = {
         "type": "usage",
         "payload": {
@@ -199,7 +218,7 @@ async def chat_stream(
     if history:
         history, prompt_tokens = cut_history(history, model)
 
-    logger.info(f"保留历史对话消息数: {len(history) // 2} + 1")
+    logger.info(f"保留历史对话消息数: {len(history) // 2} + 1，输入Token数: {prompt_tokens}")
     # 构建LangChain消息列表（不包含最后一条用户消息）
     langchain_messages = build_langchain_messages(history[:-1] if history else [])
 
