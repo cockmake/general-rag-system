@@ -1,11 +1,12 @@
 """
 Embedding Service 启动脚本
 """
-import os
-import sys
 import logging
+import sys
+
 import uvicorn
-from config import config
+
+from config.embedding_config import config
 
 # 配置日志
 logging.basicConfig(
@@ -31,10 +32,10 @@ def main():
     logger.info(f"Max Batch Size: {config.max_batch_size}")
     logger.info(f"Log Level: {config.log_level}")
     logger.info("=" * 70)
-    
+
     # 启动服务
     uvicorn.run(
-        "app:app",
+        "service.embedding_service:app",
         host=config.host,
         port=config.port,
         workers=config.workers,
