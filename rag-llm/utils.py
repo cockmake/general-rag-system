@@ -226,17 +226,32 @@ def json_split(json_data: dict, min_chunk_size: int = 100, max_chunk_size: int =
     return json_splitter.split_json(json_data)
 
 
-def code_split(code_text: str, language: str, chunk_size: int = 1500, chunk_overlap: int = 200):
+def code_split(code_text: str, language: str, chunk_size: int = 3072, chunk_overlap: int = 200):
     language = Language(language)
     code_splitter = RecursiveCharacterTextSplitter.from_language(
         language=language, chunk_size=chunk_size, chunk_overlap=chunk_overlap
     )
+    if language == Language.PYTHON:
+        # 针对Python代码，增加特殊的切分逻辑
+        code_splitter._separators = [
+            # First, try to split along class definitions
+            "\nclass ",
+            "\nasync def ",
+            "\n\tasync def ",
+            "\ndef ",
+            "\n\tdef ",
+            # Now split by the normal type of lines
+            "\n\n",
+            "\n",
+            " ",
+            "",
+        ]
     return code_splitter.split_text(code_text)
 
 
 def plain_text_split(
         plain_text: str,
-        chunk_size: int = 1000, chunk_overlap: int = 150,
+        chunk_size: int = 1500, chunk_overlap: int = 150,
         separators: list = None, force_split: bool = False,
         add_start_index: bool = True
 ):
@@ -298,7 +313,7 @@ def _extract_text_with_ocr(pdf_path: str, language: str = 'chi_sim+eng'):
 
 def pdf_split(
         file_path: str,
-        chunk_size: int = 1000,
+        chunk_size: int = 1500,
         chunk_overlap: int = 150,
         text_threshold: int = 20,
         ocr_language: str = 'chi_sim+eng',
@@ -465,18 +480,21 @@ def cut_history(history: list, model: dict):
     n = len(previous_msgs)
     model_name = model.get("name", "")
 
-    max_tokens = 30720
+    base_token = 10240  # 10k
+
+    max_tokens = base_token * 9
     if (
             model_name.startswith("gpt-5.2-chat")
             or model_name.startswith("gemini-3-pro")
             or "claude" in model_name.lower()
     ):
-        max_tokens = 20480
+        max_tokens = base_token * 3
     elif (
             model_name.startswith("gemini-3-flash")
             or model_name == "grok-4.1-fast"
+            or model_name == "gpt-5.2-codex"
     ):
-        max_tokens = 40960
+        max_tokens = base_token * 6
 
     for i in range(n, 1, -2):
         pair = previous_msgs[i - 2: i]

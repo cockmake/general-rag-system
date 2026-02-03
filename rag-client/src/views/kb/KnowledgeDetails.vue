@@ -956,6 +956,28 @@ onUnmounted(() => {
         :maskClosable="false" 
         width="600px"
     >
+      <!-- 整体进度统计 -->
+      <div style="padding: 12px; background: #f5f5f5; border-radius: 4px; margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span style="font-weight: 500;">整体进度</span>
+          <span style="font-size: 16px; font-weight: 600; color: #1890ff;">
+            {{ uploadProgressList.filter(item => item.status === 'done').length }} / {{ uploadProgressList.length }}
+          </span>
+        </div>
+        <a-progress 
+          :percent="Math.round((uploadProgressList.filter(item => item.status === 'done').length / uploadProgressList.length) * 100)" 
+          :status="uploadProgressList.some(item => item.status === 'error') ? 'exception' : (uploadProgressList.filter(item => item.status === 'done').length === uploadProgressList.length ? 'success' : 'active')"
+          :show-info="false"
+        />
+        <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 12px; color: #666;">
+          <span>✅ 成功: {{ uploadProgressList.filter(item => item.status === 'done').length }}</span>
+          <span>⏳ 进行中: {{ uploadProgressList.filter(item => item.status === 'uploading').length }}</span>
+          <span v-if="uploadProgressList.filter(item => item.status === 'error').length > 0" style="color: #ff4d4f;">
+            ❌ 失败: {{ uploadProgressList.filter(item => item.status === 'error').length }}
+          </span>
+        </div>
+      </div>
+      
       <div style="max-height: 400px; overflow-y: auto;">
         <a-list :data-source="uploadProgressList" item-layout="horizontal">
           <template #renderItem="{ item }">
