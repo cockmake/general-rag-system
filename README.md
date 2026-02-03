@@ -38,7 +38,10 @@ general-rag-system/
 ├── rag-client/          # 前端界面（Vue 3 + Vite + Ant Design Vue）
 ├── rag-server/          # 业务后端（Spring Boot + MyBatis Plus）
 ├── rag-llm/             # AI服务（FastAPI + LangChain + LangGraph）
-└── embedding_rerank/    # 向量化与重排序服务（vLLM）
+└── embedding_rerank/    # 本地向量化与重排序服务（vLLM + FastAPI）
+    ├── service/         # 服务实现（Embedding & Rerank）
+    ├── config/          # 配置模块
+    └── test/            # 测试套件
 ```
 
 ### 技术选型
@@ -48,7 +51,7 @@ general-rag-system/
 | **前端** | Vue 3、Vite、Ant Design Vue 4、Pinia | 响应式UI，支持深色模式 |
 | **后端** | Spring Boot 2.7、MyBatis Plus、JWT | RESTful API，统一鉴权 |
 | **AI服务** | FastAPI、LangChain、LangGraph | 异步处理，流式响应 |
-| **向量化服务** | vLLM 0.8.5+、PyTorch | 本地向量化与重排序 |
+| **向量化服务** | vLLM 0.8.5+、FastAPI、PyTorch | 本地Embedding与Rerank |
 | **向量数据库** | Milvus 2.6+ | 高性能向量检索 |
 | **对象存储** | MinIO 8.x | 文档文件存储 |
 | **关系数据库** | MySQL 8.0+ | 业务数据持久化 |
@@ -229,6 +232,37 @@ python main.py
 # LLM服务运行在 http://localhost:8888
 ```
 
+#### 4. 启动本地向量化服务（可选）
+
+如果需要使用本地向量化和重排序服务（不依赖外部API），需要GPU支持：
+
+```bash
+cd embedding_rerank
+
+# 安装依赖
+pip install vllm>=0.8.5 fastapi uvicorn[standard]
+
+# 启动 Embedding 服务（默认端口: 8890）
+python embedding_start.py
+
+# 启动 Rerank 服务（默认端口: 8891）
+python rerank_start.py
+```
+
+**系统要求**：
+- GPU: NVIDIA GPU (推荐4GB+显存)
+- CUDA: 11.8+
+- Python: 3.8+
+- vLLM: 0.8.5+
+
+**模型说明**：
+- **Embedding服务**: 使用 `Qwen/Qwen3-Embedding-0.6B` 模型进行文本向量化
+- **Rerank服务**: 使用 `Qwen/Qwen3-Reranker-0.6B` 模型进行文档重排序
+
+详细配置和使用说明请参考：
+- [Embedding服务文档](./embedding_rerank/EmbeddingREADME.md)
+- [Rerank服务文档](./embedding_rerank/RerankREADME.md)
+
 ### 数据库初始化
 
 ```sql
@@ -294,8 +328,24 @@ general-rag-system/
 │   ├── requirements.txt             # Python依赖
 │   └── model_config.json.example    # 模型配置模板
 │
-├── embedding_rerank/                # 向量化与重排序服务
-│   └── main.py                      # vLLM向量化示例（Qwen3-Embedding-4B）
+├── embedding_rerank/                # 本地向量化与重排序服务
+│   ├── service/                     # 服务实现
+│   │   ├── embedding_service.py     # Embedding服务（Qwen3-Embedding-0.6B）
+│   │   └── rerank_service.py        # Rerank服务（Qwen3-Reranker-0.6B）
+│   ├── config/                      # 配置模块
+│   │   ├── embedding_config.py      # Embedding配置
+│   │   └── rerank_config.py         # Rerank配置
+│   ├── test/                        # 测试套件
+│   │   ├── test_embedding_service.py
+│   │   └── test_rerank_service.py
+│   ├── embedding_start.py           # Embedding服务启动入口
+│   ├── rerank_start.py              # Rerank服务启动入口
+│   ├── EmbeddingREADME.md          # Embedding服务完整文档
+│   ├── EmbeddingQUICKSTART.md      # Embedding快速开始
+│   ├── EmbeddingAPI.md             # Embedding API文档
+│   ├── RerankREADME.md             # Rerank服务完整文档
+│   ├── RerankQUICKSTART.md         # Rerank快速开始
+│   └── RerankAPI.md                # Rerank API文档
 │
 ├── 1_general_rag.sql                # 数据库初始化SQL
 ├── .gitignore                       # Git忽略配置
@@ -337,7 +387,102 @@ openssl rand -base64 16
 
 ## 🐳 部署
 
+### 本地向量化服务部署
+
+`embedding_rerank` 模块提供了本地向量化和重排序能力，适合对数据隐私有高要求或希望降低API调用成本的场景。
+
+#### 部署架构
+
+```
+┌─────────────────────────────────────────┐
+│  General RAG System                     │
+├─────────────────────────────────────────┤
+│                                         │
+│  rag-llm (8888)                        │
+│    │                                    │
+│    ├──► External LLM APIs              │
+│    │    (OpenAI, DeepSeek, Qwen...)   │
+│    │                                    │
+│    └──► Local Services (Optional)      │
+│         ├─► Embedding (8890)           │
+│         │   Qwen3-Embedding-0.6B       │
+│         └─► Rerank (8891)              │
+│             Qwen3-Reranker-0.6B        │
+└─────────────────────────────────────────┘
+```
+
+#### 快速部署
+
+1. **确保GPU环境**
+
+```bash
+# 检查NVIDIA GPU
+nvidia-smi
+
+# 确认CUDA版本 (需要11.8+)
+nvcc --version
+```
+
+2. **安装依赖**
+
+```bash
+cd embedding_rerank
+
+# 安装核心依赖
+pip install vllm>=0.8.5
+pip install fastapi uvicorn[standard]
+pip install pydantic pydantic-settings
+```
+
+3. **启动服务**
+
+```bash
+# 方式1：分别启动（推荐）
+python embedding_start.py    # Terminal 1
+python rerank_start.py        # Terminal 2
+
+# 方式2：后台运行
+nohup python embedding_start.py > embedding.log 2>&1 &
+nohup python rerank_start.py > rerank.log 2>&1 &
+```
+
+4. **验证服务**
+
+```bash
+# 测试 Embedding 服务
+curl http://localhost:8890/health
+
+# 测试 Rerank 服务
+curl http://localhost:8891/health
+```
+
+#### 配置说明
+
+服务支持环境变量和配置文件两种方式：
+
+```bash
+# Embedding 服务配置
+export EMBEDDING_MODEL_NAME="Qwen/Qwen3-Embedding-0.6B"
+export EMBEDDING_PORT=8890
+export EMBEDDING_GPU_MEMORY_UTILIZATION=0.4
+export EMBEDDING_MAX_MODEL_LEN=3072
+
+# Rerank 服务配置
+export RERANK_MODEL_NAME="Qwen/Qwen3-Reranker-0.6B"
+export RERANK_PORT=8891
+export RERANK_GPU_MEMORY_UTILIZATION=0.4
+export RERANK_MAX_MODEL_LEN=3072
+```
+
+详细文档：
+- 📖 [Embedding服务完整指南](./embedding_rerank/EmbeddingREADME.md)
+- 📖 [Rerank服务完整指南](./embedding_rerank/RerankREADME.md)
+- 🚀 [快速开始](./embedding_rerank/EmbeddingQUICKSTART.md)
+- 📡 [API文档](./embedding_rerank/EmbeddingAPI.md)
+
 ### Docker Compose 一键部署
+
+基础设施服务Docker部署配置：
 
 ```yaml
 version: '3.8'
@@ -407,6 +552,8 @@ docker-compose up -d
 - [前端开发文档](./rag-client/README.md) - Vue 3 开发指南
 - [后端开发文档](./rag-server/README.md) - Spring Boot API 文档
 - [LLM服务文档](./rag-llm/README.md) - FastAPI 服务说明
+- **[Embedding服务文档](./embedding_rerank/EmbeddingREADME.md)** - 本地向量化服务指南
+- **[Rerank服务文档](./embedding_rerank/RerankREADME.md)** - 本地重排序服务指南
 - [安全配置指南](./SECURITY.md) - 敏感信息配置说明
 - [贡献指南](./CONTRIBUTING.md) - 如何参与项目开发
 - [Git历史清理](./CLEAN_GIT_HISTORY.md) - 仓库清理记录
@@ -492,12 +639,76 @@ uvicorn main:app --host 0.0.0.0 --port 8888 --workers 2
 <details>
 <summary><b>Q: embedding_rerank 模块的作用是什么？</b></summary>
 
-A: 这是可选的本地向量化服务模块，使用 vLLM 加速本地 Embedding 模型推理（如 Qwen3-Embedding-4B）。适用于：
-- 不想依赖外部 API 的场景
-- 需要更高数据隐私的环境
-- 有 GPU 资源的情况
+A: `embedding_rerank` 提供本地向量化和重排序服务，包含两个独立的微服务：
 
-需要 vLLM >= 0.8.5 和 GPU 支持。
+**Embedding 服务** (端口: 8890)
+- 基于 Qwen3-Embedding-0.6B 模型
+- 将文本转换为768维向量
+- 支持批量向量化（最多1024条/次）
+- 兼容 OpenAI Embeddings API 格式
+
+**Rerank 服务** (端口: 8891)
+- 基于 Qwen3-Reranker-0.6B 模型
+- 对检索结果进行精确重排序
+- 提高召回文档的相关性
+- 支持批量重排序
+
+**适用场景**：
+- ✅ 对数据隐私有严格要求
+- ✅ 希望降低外部API调用成本
+- ✅ 有本地GPU资源（推荐4GB+显存）
+- ✅ 需要完全离线部署
+
+**技术栈**：
+- vLLM 0.8.5+ (高性能推理引擎)
+- FastAPI (异步Web框架)
+- PyTorch (深度学习框架)
+
+**性能参考**：
+- Embedding: ~100条/秒 (单GPU, batch_size=32)
+- Rerank: ~50对/秒 (单GPU, batch_size=16)
+
+详见: [Embedding文档](./embedding_rerank/EmbeddingREADME.md) | [Rerank文档](./embedding_rerank/RerankREADME.md)
+</details>
+
+<details>
+<summary><b>Q: 如何在 rag-llm 中使用本地向量化服务？</b></summary>
+
+A: 配置 `rag-llm/main.py` 或使用环境变量：
+
+```python
+# 在 main.py 中配置
+EMBEDDING_SERVICE_URL = "http://localhost:8890"
+RERANK_SERVICE_URL = "http://localhost:8891"
+
+# 或使用环境变量
+export EMBEDDING_SERVICE_URL="http://localhost:8890"
+export RERANK_SERVICE_URL="http://localhost:8891"
+```
+
+然后在 RAG 流程中调用本地服务替代外部API。
+</details>
+
+<details>
+<summary><b>Q: 本地向量化服务需要什么硬件配置？</b></summary>
+
+A: **最低配置**：
+- GPU: NVIDIA GPU (4GB显存，如GTX 1650)
+- CPU: 4核
+- 内存: 8GB
+- 硬盘: 10GB
+
+**推荐配置**：
+- GPU: NVIDIA GPU (8GB+显存，如RTX 3060)
+- CPU: 8核+
+- 内存: 16GB+
+- 硬盘: 20GB+ SSD
+- CUDA: 11.8+
+
+**性能对比**：
+- 4GB显存: 可运行，需调低 `gpu_memory_utilization`
+- 8GB显存: 流畅运行，推荐配置
+- 16GB+显存: 可同时运行多个服务或更大模型
 </details>
 
 ## 📊 项目状态
