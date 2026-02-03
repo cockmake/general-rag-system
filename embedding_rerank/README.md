@@ -2,6 +2,138 @@
 
 基于 vLLM 的高性能本地向量化和重排序服务，支持使用 GPU 加速的 Embedding 模型推理。
 
+## 🆕 FastAPI服务模式（推荐）
+
+现在支持通过 FastAPI 提供标准的 REST API 服务，兼容 OpenAI Embeddings API 格式。
+
+### 快速启动
+
+```bash
+# 1. 安装依赖
+pip install -r requirements.txt
+
+# 2. 配置环境变量（可选）
+cp .env.example .env
+# 编辑 .env 文件修改配置
+
+# 3. 启动服务
+python start.py
+
+# 或使用脚本启动
+# Linux/Mac: bash run.sh
+# Windows: run.bat
+```
+
+### API接口
+
+#### 1. 健康检查
+```bash
+curl http://localhost:8890/health
+```
+
+#### 2. 生成Embedding（单个文本）
+```bash
+curl -X POST http://localhost:8890/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "What is the capital of China?"
+  }'
+```
+
+#### 3. 生成Embedding（批量）
+```bash
+curl -X POST http://localhost:8890/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": [
+      "What is the capital of China?",
+      "Explain gravity"
+    ]
+  }'
+```
+
+#### 4. 带指令的Embedding
+```bash
+curl -X POST http://localhost:8890/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": ["What is the capital of China?"],
+    "instruction": "Given a web search query, retrieve relevant passages that answer the query"
+  }'
+```
+
+### 响应格式
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "embedding",
+      "index": 0,
+      "embedding": [0.123, -0.456, ...]
+    }
+  ],
+  "model": "Qwen/Qwen3-Embedding-0.6B",
+  "usage": {
+    "prompt_tokens": 10,
+    "total_tokens": 10
+  }
+}
+```
+
+### 配置说明
+
+通过环境变量配置（在 `.env` 文件中设置）：
+
+| 环境变量 | 默认值 | 说明 |
+|---------|--------|------|
+| `EMBEDDING_MODEL_NAME` | `Qwen/Qwen3-Embedding-0.6B` | 模型名称 |
+| `EMBEDDING_GPU_MEMORY_UTILIZATION` | `0.4` | GPU显存占用比例（0-1） |
+| `EMBEDDING_MAX_MODEL_LEN` | `3072` | 最大token长度 |
+| `EMBEDDING_PORT` | `8890` | 服务端口 |
+| `EMBEDDING_HOST` | `0.0.0.0` | 服务监听地址 |
+| `EMBEDDING_DTYPE` | `float16` | 数据类型 |
+
+### 测试服务
+
+```bash
+# 运行测试脚本
+python test_service.py
+```
+
+### 集成到 rag-llm
+
+在 `rag-llm` 项目的配置文件中添加：
+
+```json
+{
+  "embedding": {
+    "local": {
+      "settings": {
+        "base_url": "http://localhost:8890/v1",
+        "api_key": "dummy",
+        "provider": "openai",
+        "dimensions": 1024
+      },
+      "text-embedding-0.6b": {}
+    }
+  }
+}
+```
+
+然后在代码中使用：
+
+```python
+embedding_config = {
+    'name': 'text-embedding-0.6b',
+    'provider': 'local'
+}
+embeddings = get_embedding_instance(embedding_config)
+```
+
+---
+
 ## 简介
 
 这是一个可选的本地向量化服务模块，适用于：

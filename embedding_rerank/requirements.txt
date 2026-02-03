@@ -1,0 +1,21 @@
+# Embedding Service 依赖包
+
+# 核心依赖
+vllm>=0.8.5
+torch>=2.0.0
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# 可选依赖（用于性能优化）
+# flash-attn>=2.0.0  # Flash Attention（需要编译，可选）
+
+# 工具依赖
+python-dotenv>=1.0.0
+httpx>=0.26.0
+
+# 开发依赖（可选）
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+requests>=2.31.0
