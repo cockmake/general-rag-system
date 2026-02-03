@@ -402,10 +402,22 @@ async def image_split(
 
     # 4. 构造 Prompt
     prompt = (
-        "你是一个图像详细描述生成模型，请根据提供的图片内容生成清晰的文本描述。\n"
-        "遵循以下要求：\n"
-        "1. 请详细描述这张图片的内容。如果图片为纯文字图，请完整转录文字；\n"
-        "2. 如果图片是架构图、流程图或图表等，请详细解释其结构、组件、关系和流程。\n"
+        "你是一个用于知识库构建的图像内容解析模型。"
+        "你的任务是将图片内容转换为结构化、客观、可用于向量检索的文本信息。\n\n"
+        "请严格遵循以下规则：\n"
+        "1. 如果图片包含文字，请完整、准确地转录所有可识别文字。\n"
+        "2. 如果图片是架构图、流程图、系统图或表格，请按以下结构输出信息。\n"
+        "3. 使用简洁、技术化、去修饰的语言，不要加入主观评价。\n"
+        "4. 不要使用“这张图片”“图中可以看到”等描述性开头。\n"
+        "5. 如果存在明确的技术名词、接口名、组件名，请原样保留。\n"
+        "6. 仅输出解析后的文本内容，不要输出任何解释说明。\n\n"
+        "请按照以下固定格式输出（即使某一项为空也要保留）：\n"
+        "【IMAGE_TYPE】\n"
+        "【TEXT_CONTENT】\n"
+        "【ENTITIES】\n"
+        "【RELATIONSHIPS】\n"
+        "【PROCESS_FLOW】\n"
+        "【KEY_TERMS】\n"
     )
     messages = [
         {
@@ -431,7 +443,7 @@ async def image_split(
         logger.error(f"Failed to generate image description: {e}")
         # 降级处理：如果调用失败，尝试返回空或者报错，这里选择返回空列表
         return []
-    return markdown_split(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    return markdown_split(text, chunk_size=4096, chunk_overlap=chunk_overlap)
 
 
 def get_token_count(text: str, encoding_name: str = "cl100k_base") -> int:
@@ -453,18 +465,18 @@ def cut_history(history: list, model: dict):
     n = len(previous_msgs)
     model_name = model.get("name", "")
 
-    max_tokens = 20480
+    max_tokens = 30720
     if (
             model_name.startswith("gpt-5.2-chat")
             or model_name.startswith("gemini-3-pro")
             or "claude" in model_name.lower()
     ):
-        max_tokens = 15360
+        max_tokens = 20480
     elif (
             model_name.startswith("gemini-3-flash")
             or model_name == "grok-4.1-fast"
     ):
-        max_tokens = 30720
+        max_tokens = 40960
 
     for i in range(n, 1, -2):
         pair = previous_msgs[i - 2: i]

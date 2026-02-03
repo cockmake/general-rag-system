@@ -20,7 +20,7 @@ async def rerank(
 ) -> dict:
     """
     文档重排序服务
-    
+
     Args:
         query: 查询文本
         documents: 待排序的文档列表
@@ -29,7 +29,7 @@ async def rerank(
         grade_top_n: 返回前N个文档，None则返回全部
         return_documents: 是否返回文档内容
         grade_score_threshold: 相关性分数阈值（斩杀线），低于此分数的文档将被过滤，默认None（不过滤）
-        
+
     Returns:
         {
             "results": [
@@ -41,7 +41,7 @@ async def rerank(
                 ...
             ]
         }
-    
+
     Example:
         # 基础使用
         result = await rerank(
@@ -52,7 +52,7 @@ async def rerank(
             ],
             top_n=1
         )
-        
+
         # 使用斩杀线
         result = await rerank(
             query="什么是机器学习",
@@ -115,11 +115,11 @@ async def rerank(
                     raise RuntimeError(f"Rerank API 请求失败: {response.status}")
 
                 result = await response.json()
-                
+
                 # 在本地应用过滤逻辑
                 all_results = result.get("output", {}).get("results", [])
                 filtered_results = all_results
-                
+
                 # 1. 应用分数阈值过滤（斩杀线）
                 if grade_score_threshold is not None:
                     original_count = len(all_results)
@@ -127,21 +127,21 @@ async def rerank(
                         item for item in all_results
                         if item.get("relevance_score", 0) >= grade_score_threshold
                     ]
-                    
+
                     if len(filtered_results) < original_count:
                         logger.info(
                             f"应用斩杀线 {grade_score_threshold}：过滤掉 {original_count - len(filtered_results)} 个低分文档，"
                             f"保留 {len(filtered_results)} 个高质量文档"
                         )
-                
+
                 # 2. 应用top_n限制
                 if grade_top_n is not None and len(filtered_results) > grade_top_n:
                     filtered_results = filtered_results[:grade_top_n]
                     logger.info(f"应用top_n={grade_top_n}：返回前 {grade_top_n} 个文档")
-                
+
                 # 更新结果
                 result["output"]["results"] = filtered_results
-                
+
                 logger.info(
                     f"重排序完成，处理了 {len(documents)} 个文档，"
                     f"返回 {len(filtered_results)} 个结果"

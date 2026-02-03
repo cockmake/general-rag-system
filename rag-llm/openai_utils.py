@@ -89,7 +89,7 @@ class OpenAIInstance:
                 extra_body['thinking'] = {"type": "enabled"}
             else:
                 extra_body['thinking'] = {"type": "disabled"}
-        elif self.model_name.startswith("gpt-5.2"):
+        elif self.model_name.startswith("gpt-5.2-chat"):
             # 配置思考
             if self.enable_thinking:
                 reasoning['effort'] = "medium"
@@ -97,6 +97,16 @@ class OpenAIInstance:
             # 配置网页搜索
             if self.enable_web_search:
                 tools.append({"type": "web_search_preview"})
+        elif self.model_name.startswith("gpt-5.2-codex"):
+            # 配置思考
+            if self.enable_thinking:
+                reasoning['effort'] = "high"
+                reasoning['summary'] = 'detailed'
+
+            # 配置网页搜索
+            if self.enable_web_search:
+                tools.append({"type": "web_search"})
+
         elif self.model_name.startswith("doubao-seed"):
             # 配置网页搜索
             if self.enable_web_search:
@@ -115,11 +125,15 @@ class OpenAIInstance:
             else:
                 reasoning_effort = "low"
         elif "anthropic" == self.provider:
-            extra_body['thinking'] = {
-                "type": "enabled",
-                "budget_tokens": 2048
-            }
-
+            if self.enable_thinking:
+                extra_body['thinking'] = {
+                    "type": "enabled",
+                    "budget_tokens": 4096
+                }
+            else:
+                extra_body['thinking'] = {
+                    "type": "disabled"
+                }
         r = {}
         if tools:
             r['tools'] = tools
