@@ -41,7 +41,7 @@ onMounted(async () => {
   models.value = await fetchAvailableModels().then()
 
   if (!selectedModel.value) {
-    const priorityNames = ["gpt-5.2-chat-latest", "qwen3-max-2026-01-23", "gemini-3-pro-preview"]
+    const priorityNames = ["qwen3-max-2026-01-23", "gpt-5.2-chat-latest", "gemini-3-pro-preview", "z-ai/glm-4.7", "claude-4.5-sonnet"]
     let foundModel = null
 
     // 按优先级查找

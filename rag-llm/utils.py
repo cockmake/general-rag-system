@@ -94,17 +94,6 @@ def get_official_llm(
             timeout=timeout,
             max_retries=max_retries,
         )
-    # if (
-    #         "deepseek" in provider.lower()
-    #         or "qwen" in provider.lower()
-    #         or "bytedance" in provider.lower()
-    #         or "xiaomi" in provider.lower()
-    #         or "minimax" in provider.lower()
-    #         or "moonshotai" in provider.lower()
-    #         or "z-ai" in provider.lower()
-    #         or "x-ai" in provider.lower()
-    #         or "openai" in provider.lower()
-    # ):
     return OpenAIInstance(
         model_name=model_name,
         api_key=api_key,
@@ -483,12 +472,13 @@ def cut_history(history: list, model: dict):
     base_token = 10240  # 10k
 
     max_tokens = base_token * 9
-    if (
+    if "claude" in model_name.lower():
+        max_tokens = base_token * 3
+    elif (
             model_name.startswith("gpt-5.2-chat")
             or model_name.startswith("gemini-3-pro")
-            or "claude" in model_name.lower()
     ):
-        max_tokens = base_token * 3
+        max_tokens = base_token * 2
     elif (
             model_name.startswith("gemini-3-flash")
             or model_name == "grok-4.1-fast"

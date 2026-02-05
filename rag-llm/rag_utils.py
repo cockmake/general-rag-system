@@ -163,24 +163,87 @@ class RAGService:
                 for m in recent_history
             ])
 
-        system_prompt = f"""你是一个查询优化专家。你的任务是根据用户的问题，从不同角度生成查询，涵盖中英文，以便全面检索相关信息。
+        system_prompt = f"""你是检索查询优化专家，负责将用户问题转换为多个高效检索查询。
 
-生成策略：
-1. 理解问题的核心意图，结合对话历史解析代词和上下文
-2. 提取历史对话和问题中的关键实体、专业术语或具体名称，保留在查询中以利于关键词匹配
-3. 从不同语义角度拆解问题（如：定义、应用、对比、原理等），生成的查询应该互补，覆盖问题的不同方面
-4. 中英文查询仅在确有必要时生成，避免机械翻译
-5. 每条语义查询所包含的语义应有明显差异，避免简单同义改写，只有关键词查询允许同义改写（如：[ragSystem rag-system rag_system 检索增强生成系统]）
-6. 查询应丰富明确，包含向量检索（语义）和关键词检索（精确），多个关键词间请用空格分隔
+## 任务要求
 
-另外，请额外生成一个'grade_query'，它是对用户当前问题的完整陈述性重写（指代消歧后），可直接用于判断检索到的文档是否相关。
-例如：如果用户说“继续”，grade_query 应该是上一轮话题的延续描述，如"关于XXX的进一步详细说明"。
+### 1. 生成 6-10 个查询，覆盖以下角度：
+- **定义类**：概念、是什么
+- **实现类**：如何做、技术栈、代码
+- **对比类**：差异、优缺点
+- **场景类**：应用、案例、最佳实践
+- **关键词类**（3-4个）：专有名词、API、技术术语（空格分隔）
 
-{'对话历史：\n' + history_context if history_context else '无对话历史'}
+### 2. 查询质量要求：
+✅ 语义明确、互补、包含足够上下文
+✅ 技术问题需中英文查询（如涉及API/术语）
+❌ 避免：过于宽泛、简单重复、过长啰嗦
 
-当前问题：{question}
+### 3. grade_query 生成规则：
+- 指代消歧（"它" → 具体对象）
+- 补全省略信息（结合历史）
+- 简洁陈述句（去掉疑问词）
+- 特殊处理："继续" → 延续上轮主题
 
-请生成6-10个不同角度的查询，以及一个grade_query。"""
+---
+
+## 示例
+
+**示例1：带上下文**
+```
+历史：
+用户: RAG系统是什么？
+助手: RAG是检索增强生成系统...
+当前问题: 它的检索流程是怎样的？
+
+输出：
+{{
+  "queries": [
+    "RAG系统的完整检索流程和步骤",
+    "多查询生成和并行检索的实现机制",
+    "向量检索与关键词检索的协同方式",
+    "RAG检索流程与传统搜索的对比",
+    "RAG retrieval pipeline implementation",
+    "检索流程 多查询 rerank 向量检索",
+    "generate_multi_queries parallel_retrieve"
+  ],
+  "grade_query": "RAG系统的检索流程",
+  "reasoning": "'它'指代RAG系统。生成了定义、实现、对比、技术术语查询，覆盖多查询、并行检索、rerank等关键概念。"
+}}
+```
+
+**示例2：继续类问题**
+```
+历史：
+用户: PDF是如何处理的？
+助手: PDF分文本型和图片型...用PyMuPDF和Tesseract...
+当前问题: 详细说说OCR部分
+
+输出：
+{{
+  "queries": [
+    "PDF文件OCR识别的实现步骤和流程",
+    "Tesseract OCR的配置参数和优化方法",
+    "图片型PDF识别准确率提升技巧",
+    "OCR识别后的文本清理和预处理",
+    "pytesseract Tesseract OCR DPI",
+    "chi_sim+eng language configuration"
+  ],
+  "grade_query": "PDF文件处理中OCR识别的实现细节",
+  "reasoning": "用户聚焦OCR部分。生成了实现步骤、工具配置、优化方法、后处理查询，提取pytesseract、Tesseract等关键工具。"
+}}
+```
+
+---
+
+## 当前任务
+
+**对话历史**：
+{history_context if history_context else '无对话历史'}
+
+**当前问题**：{question}
+
+**请输出**：严格JSON格式，包含 queries（6-10个）、grade_query、reasoning"""
         llm = get_langchain_llm(model_info)
         structured_agent = get_structured_data_agent(llm, MultiQueryList)
         # 使用异步调用

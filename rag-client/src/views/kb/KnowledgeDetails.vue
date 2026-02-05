@@ -7,9 +7,29 @@ import 'vue-pdf-embed/dist/styles/textLayer.css';
 import md from "@/utils/markdown.js";
 import {useRoute, useRouter} from "vue-router";
 import {message} from "ant-design-vue";
-import { LoadingOutlined, ArrowLeftOutlined, FolderOutlined, FileOutlined, HomeOutlined, MoreOutlined, DownOutlined } from '@ant-design/icons-vue';
-import {deleteDocument, previewDocument, listDocuments, uploadDocument, renameDocument, listChunks, inviteUserToKb, getInvitedUsers, removeInvitedUser, fetchAvailableKbs, updateKb} from "@/api/kbApi.js";
-import { useUserStore } from "@/stores/user";
+import {
+  LoadingOutlined,
+  ArrowLeftOutlined,
+  FolderOutlined,
+  FileOutlined,
+  HomeOutlined,
+  MoreOutlined,
+  DownOutlined
+} from '@ant-design/icons-vue';
+import {
+  deleteDocument,
+  previewDocument,
+  listDocuments,
+  uploadDocument,
+  renameDocument,
+  listChunks,
+  inviteUserToKb,
+  getInvitedUsers,
+  removeInvitedUser,
+  fetchAvailableKbs,
+  updateKb
+} from "@/api/kbApi.js";
+import {useUserStore} from "@/stores/user";
 
 const route = useRoute();
 const router = useRouter();
@@ -33,7 +53,7 @@ const getRelativePath = (fullPath) => {
 const displayList = computed(() => {
   const list = [];
   const folders = new Set();
-  
+
   if (!fileList.value) return [];
 
   // Sort files first to ensure consistent order
@@ -44,7 +64,7 @@ const displayList = computed(() => {
     const fileName = (file.fileName || '').replace(/\\/g, '/');
     const rel = getRelativePath(fileName);
     if (rel === null) return; // Not in current folder
-    
+
     // Ignore if it's exactly the folder itself (shouldn't happen with files but just in case)
     if (rel === '') return;
 
@@ -54,20 +74,20 @@ const displayList = computed(() => {
       const folderName = parts[0];
       if (!folders.has(folderName)) {
         folders.add(folderName);
-        
+
         // Calculate folder stats
         const prefix = (currentPathString.value ? currentPathString.value + '/' : '') + folderName + '/';
         const filesInFolder = fileList.value.filter(f => (f.fileName || '').replace(/\\/g, '/').startsWith(prefix));
-        
+
         let totalSize = 0;
         let status = 'ready';
         let hasProcessing = false;
         let hasFailed = false;
 
         filesInFolder.forEach(f => {
-            totalSize += (f.fileSize || 0);
-            if (f.status === 'failed') hasFailed = true;
-            if (f.status === 'processing') hasProcessing = true;
+          totalSize += (f.fileSize || 0);
+          if (f.status === 'failed') hasFailed = true;
+          if (f.status === 'processing') hasProcessing = true;
         });
 
         if (hasFailed) status = 'failed';
@@ -77,7 +97,7 @@ const displayList = computed(() => {
           id: 'folder-' + folderName, // unique key for UI
           fileName: folderName,
           isFolder: true,
-          fileSize: totalSize, 
+          fileSize: totalSize,
           status: status,
           createdAt: file.createdAt, // Just use one of the files' date
         });
@@ -90,7 +110,7 @@ const displayList = computed(() => {
       });
     }
   });
-  
+
   // Sort folders first, then files
   return list.sort((a, b) => {
     if (a.isFolder && !b.isFolder) return -1;
@@ -115,13 +135,13 @@ const handleDeleteFolder = async (folderName) => {
   const prefix = (currentPathString.value ? currentPathString.value + '/' : '') + folderName + '/';
   // Find all files that start with this prefix
   const filesToDelete = fileList.value.filter(f => {
-      const fn = (f.fileName || '').replace(/\\/g, '/');
-      return fn.startsWith(prefix);
+    const fn = (f.fileName || '').replace(/\\/g, '/');
+    return fn.startsWith(prefix);
   });
-  
+
   if (filesToDelete.length === 0) {
-      message.warning('空文件夹或无法找到文件');
-      return;
+    message.warning('空文件夹或无法找到文件');
+    return;
   }
 
   const hide = message.loading(`正在删除 ${filesToDelete.length} 个文件...`, 0);
@@ -130,7 +150,7 @@ const handleDeleteFolder = async (folderName) => {
     // Or parallel with limit. 
     // Since we don't have a batch delete API, we loop.
     for (const file of filesToDelete) {
-        await deleteDocument(kbId, file.id);
+      await deleteDocument(kbId, file.id);
     }
     message.success('文件夹删除成功');
     fetchDocuments();
@@ -234,7 +254,7 @@ let progressTimer = null;
 const startSimulatedProgress = () => {
   downloadProgress.value.percent = 0;
   if (progressTimer) clearInterval(progressTimer);
-  
+
   progressTimer = setInterval(() => {
     if (downloadProgress.value.percent < 99) {
       // Slow down as it gets higher
@@ -243,11 +263,11 @@ const startSimulatedProgress = () => {
       if (downloadProgress.value.percent > 50) increment = 2;
       if (downloadProgress.value.percent > 80) increment = 1;
       if (downloadProgress.value.percent > 95) {
-         // Very slow at the end, maybe stop at 99
-         if (Math.random() > 0.8) increment = 1;
-         else increment = 0;
+        // Very slow at the end, maybe stop at 99
+        if (Math.random() > 0.8) increment = 1;
+        else increment = 0;
       }
-      
+
       downloadProgress.value.percent = Math.min(99, downloadProgress.value.percent + increment);
     }
   }, 200);
@@ -258,7 +278,7 @@ const finishSimulatedProgress = () => {
   downloadProgress.value.percent = 100;
   // Delay slightly to show 100%
   setTimeout(() => {
-      downloadProgress.value.visible = false;
+    downloadProgress.value.visible = false;
   }, 500);
 };
 
@@ -317,13 +337,121 @@ const fetchKbInfo = async () => {
 };
 
 // 1. 上传逻辑
-const beforeUpload = (file) => {
+// 用于追踪文件夹上传的文件数量
+const folderUploadFileSet = ref(new Set());
+const folderUploadChecked = ref(false);
+const folderUploadBlocked = ref(false); // 标记本次文件夹上传是否已被阻止
+const MAX_FOLDER_FILES = 300;
+
+// 自动排除的文件夹列表
+const EXCLUDED_FOLDERS = [
+  'node_modules',
+  '.git',
+  '.venv',
+  'venv',
+  'dist',
+  'build',
+  '.idea',
+  '.vscode',
+  '__pycache__',
+  '.pytest_cache',
+  '.mypy_cache',
+  'target',
+  'vendor',
+  '.gradle',
+  '.next',
+  '.nuxt'
+];
+
+// 检查文件路径是否在排除列表中
+const isFileExcluded = (filePath) => {
+  const pathParts = filePath.split('/');
+  return EXCLUDED_FOLDERS.some(excluded => pathParts.includes(excluded));
+};
+
+const beforeUpload = (file, fileList) => {
   const extension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
   const allowed = acceptExtensions.split(',');
   if (!allowed.includes(extension)) {
     message.error(`不支持的文件类型: ${file.name}`);
     return false; // 阻止上传
   }
+
+  // 检测是否是文件夹上传（通过 webkitRelativePath 判断）
+  if (file.webkitRelativePath) {
+    // 检查文件是否在排除列表中
+    if (isFileExcluded(file.webkitRelativePath)) {
+      console.log(`文件已自动排除: ${file.webkitRelativePath}`);
+      return false; // 自动排除，不上传
+    }
+
+    // 如果本次文件夹上传已被阻止，直接返回 false，不再弹窗
+    if (folderUploadBlocked.value) {
+      return false;
+    }
+
+    // 首次检测到文件夹上传时，统计递归扫描的所有文件数量
+    if (!folderUploadChecked.value) {
+      folderUploadFileSet.value.clear();
+
+      // fileList 包含本次上传的所有文件（递归扫描文件夹及所有子文件夹）
+      if (fileList && fileList.length > 0) {
+        // 统计所有有效文件（排除自动排除列表中的文件夹）
+        let totalFiles = 0;
+        let excludedFiles = 0;
+
+        fileList.forEach(f => {
+          if (f.webkitRelativePath) {
+            if (isFileExcluded(f.webkitRelativePath)) {
+              excludedFiles++;
+            } else {
+              folderUploadFileSet.value.add(f.uid);
+              totalFiles++;
+            }
+          }
+        });
+
+        console.log(`文件夹递归扫描完成，有效文件数: ${totalFiles}，已排除文件数: ${excludedFiles}`);
+
+        // 如果排除了文件，提示用户
+        if (excludedFiles > 0) {
+          message.info(`已自动排除 ${excludedFiles} 个开发环境文件（如 node_modules、.git 等）`, 3);
+        }
+
+        // 检查文件总数是否超过限制
+        if (totalFiles > MAX_FOLDER_FILES) {
+          // 只弹出一次警告
+          message.warning(`检测到有效文件数量为 ${totalFiles}，超过最大限制 ${MAX_FOLDER_FILES}。请检查是否包含不必要的大文件或文件夹，最大文件数量为 ${MAX_FOLDER_FILES}。`, 5);
+          folderUploadChecked.value = false;
+          folderUploadBlocked.value = true; // 标记为已阻止
+          folderUploadFileSet.value.clear();
+
+          // 延迟重置阻止状态，为下次上传做准备
+          setTimeout(() => {
+            folderUploadBlocked.value = false;
+          }, 1000);
+
+          return false;
+        }
+      }
+
+      folderUploadChecked.value = true;
+    }
+
+    // 所有文件检查通过后，在最后一个文件处理完后重置状态
+    if (folderUploadFileSet.value.size > 0) {
+      folderUploadFileSet.value.delete(file.uid);
+      if (folderUploadFileSet.value.size === 0) {
+        folderUploadChecked.value = false;
+      }
+    }
+  } else {
+    // 单文件上传，重置文件夹上传状态
+    folderUploadChecked.value = false;
+    folderUploadFileSet.value.clear();
+    folderUploadBlocked.value = false;
+  }
+
   return true;
 };
 
@@ -339,8 +467,8 @@ const processQueue = async () => {
   while (uploadQueue.length > 0 && concurrentUploads.value < MAX_CONCURRENT_UPLOADS) {
     const task = uploadQueue.shift();
     concurrentUploads.value++;
-    
-    const { formData, file, onSuccess, onError } = task;
+
+    const {formData, file, onSuccess, onError} = task;
 
     try {
       await uploadDocument(kbId, formData, {
@@ -352,7 +480,7 @@ const processQueue = async () => {
           }
         }
       });
-      
+
       // Success
       const item = uploadProgressList.value.find(item => item.uid === file.uid);
       if (item) {
@@ -382,8 +510,8 @@ const processQueue = async () => {
 };
 
 const customRequest = async (options) => {
-  const { file, onSuccess, onError } = options;
-  
+  const {file, onSuccess, onError} = options;
+
   // Initialize file in progress list
   const fileItem = {
     uid: file.uid,
@@ -392,7 +520,7 @@ const customRequest = async (options) => {
     percent: 0,
     error: null
   };
-  
+
   // Add to list
   uploadProgressList.value.push(fileItem);
   uploadProgressModalVisible.value = true;
@@ -408,13 +536,13 @@ const customRequest = async (options) => {
   formData.append('files', file, fullPath);
 
   // Add to queue and process
-  uploadQueue.push({ formData, file, onSuccess, onError });
+  uploadQueue.push({formData, file, onSuccess, onError});
   processQueue();
 };
 
 // 2. 预览逻辑
 const handlePreview = async (record) => {
-  downloadProgress.value = { visible: true, percent: 0, title: '正在加载预览...' };
+  downloadProgress.value = {visible: true, percent: 0, title: '正在加载预览...'};
   startSimulatedProgress();
   try {
     const blob = await previewDocument(kbId, record.id);
@@ -432,8 +560,8 @@ const handlePreview = async (record) => {
       previewType.value = 'markdown';
       previewContent.value = await blob.text();
     } else if (fileName.match(/\.(jpeg|jpg|png|gif|bmp|webp)$/)) {
-        previewType.value = 'image';
-        previewContent.value = window.URL.createObjectURL(blob);
+      previewType.value = 'image';
+      previewContent.value = window.URL.createObjectURL(blob);
     } else {
       previewType.value = 'text';
       previewContent.value = await blob.text();
@@ -448,12 +576,12 @@ const handlePreview = async (record) => {
 };
 
 const handlePreviewCancel = () => {
-    previewVisible.value = false;
-    // Optional cleanup
-    if (['pdf', 'image'].includes(previewType.value)) {
-        URL.revokeObjectURL(previewContent.value);
-    }
-    previewContent.value = '';
+  previewVisible.value = false;
+  // Optional cleanup
+  if (['pdf', 'image'].includes(previewType.value)) {
+    URL.revokeObjectURL(previewContent.value);
+  }
+  previewContent.value = '';
 };
 
 const handlePdfLoaded = (doc) => {
@@ -498,7 +626,7 @@ const handleRename = async () => {
 
 // 5. 下载逻辑
 const handleDownload = async (record) => {
-  downloadProgress.value = { visible: true, percent: 0, title: '正在准备下载...' };
+  downloadProgress.value = {visible: true, percent: 0, title: '正在准备下载...'};
   startSimulatedProgress();
   try {
     const blob = await previewDocument(kbId, record.id);
@@ -581,7 +709,7 @@ const handleInviteSubmit = async () => {
     message.warning('请输入用户名或邮箱');
     return;
   }
-  
+
   inviteSubmitting.value = true;
   try {
     await inviteUserToKb(kbId, inviteFormData.value);
@@ -598,7 +726,7 @@ const handleInviteSubmit = async () => {
 const showInvitedUsersModal = async () => {
   invitedUsersModalVisible.value = true;
   loadingInvitedUsers.value = true;
-  
+
   try {
     invitedUsers.value = await getInvitedUsers(kbId);
   } catch (e) {
@@ -643,7 +771,9 @@ onUnmounted(() => {
     <div class="kb-header" style="flex-shrink: 0;">
       <div class="kb-title-container">
         <a-button @click="goBack" type="text" shape="circle">
-          <template #icon><arrow-left-outlined /></template>
+          <template #icon>
+            <arrow-left-outlined/>
+          </template>
         </a-button>
         <h2 class="kb-title">📄 文档管理 - {{ currentKb ? currentKb.name : '' }}</h2>
       </div>
@@ -688,89 +818,92 @@ onUnmounted(() => {
 
     <!-- Breadcrumb -->
     <div style="margin-bottom: 16px; flex-shrink: 0;">
-       <a-breadcrumb>
-         <a-breadcrumb-item>
-           <a @click="navToLevel(-1)"><home-outlined /> 根目录</a>
-         </a-breadcrumb-item>
-         <a-breadcrumb-item v-for="(folder, index) in currentPath" :key="index">
-           <a @click="navToLevel(index)">{{ folder }}</a>
-         </a-breadcrumb-item>
-       </a-breadcrumb>
+      <a-breadcrumb>
+        <a-breadcrumb-item>
+          <a @click="navToLevel(-1)">
+            <home-outlined/>
+            根目录</a>
+        </a-breadcrumb-item>
+        <a-breadcrumb-item v-for="(folder, index) in currentPath" :key="index">
+          <a @click="navToLevel(index)">{{ folder }}</a>
+        </a-breadcrumb-item>
+      </a-breadcrumb>
     </div>
 
-    <a-table :columns="columns" :data-source="displayList" row-key="id" :pagination="false" :scroll="{ x: 800, y: 'calc(100vh - 250px)' }">
+    <a-table :columns="columns" :data-source="displayList" row-key="id" :pagination="false"
+             :scroll="{ x: 800, y: 'calc(100vh - 250px)' }">
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'icon'">
-            <folder-outlined v-if="record.isFolder" style="color: #1890ff; font-size: 18px;" />
-            <file-outlined v-else style="color: #666; font-size: 18px;" />
+          <folder-outlined v-if="record.isFolder" style="color: #1890ff; font-size: 18px;"/>
+          <file-outlined v-else style="color: #666; font-size: 18px;"/>
         </template>
         <template v-if="column.key === 'fileName'">
-            <a v-if="record.isFolder" @click="enterFolder(record.fileName)" style="font-weight: bold;">
-                {{ record.fileName }}
-            </a>
-            <span v-else>{{ record.fileName.split('/').pop() }}</span>
+          <a v-if="record.isFolder" @click="enterFolder(record.fileName)" style="font-weight: bold;">
+            {{ record.fileName }}
+          </a>
+          <span v-else>{{ record.fileName.split('/').pop() }}</span>
         </template>
         <template v-if="column.key === 'fileSize'">
           <span>{{ (record.fileSize / (1024 * 1024)).toFixed(2) }} MB</span>
         </template>
         <template v-if="column.key === 'status'">
           <template v-if="record.isFolder">
-              <a-tag v-if="record.status === 'processing'" color="blue">
-                <loading-outlined />
-                向量化中
-              </a-tag>
-              <a-tag v-else-if="record.status === 'ready'" color="green">完成</a-tag>
-              <a-tag v-else-if="record.status === 'failed'" color="red">失败</a-tag>
+            <a-tag v-if="record.status === 'processing'" color="blue">
+              <loading-outlined/>
+              向量化中
+            </a-tag>
+            <a-tag v-else-if="record.status === 'ready'" color="green">完成</a-tag>
+            <a-tag v-else-if="record.status === 'failed'" color="red">失败</a-tag>
           </template>
           <template v-else>
-              <a-tag v-if="record.status === 'processing'" color="blue">
-                <loading-outlined />
-                向量化中
-              </a-tag>
-              <a-tag v-else-if="record.status === 'ready'" color="green">完成</a-tag>
-              <a-tag v-else-if="record.status === 'failed'" color="red">失败</a-tag>
-              <a-tag v-else color="default">{{ record.status }}</a-tag>
+            <a-tag v-if="record.status === 'processing'" color="blue">
+              <loading-outlined/>
+              向量化中
+            </a-tag>
+            <a-tag v-else-if="record.status === 'ready'" color="green">完成</a-tag>
+            <a-tag v-else-if="record.status === 'failed'" color="red">失败</a-tag>
+            <a-tag v-else color="default">{{ record.status }}</a-tag>
           </template>
         </template>
         <template v-if="column.key === 'action'">
           <template v-if="record.isFolder">
-              <a-popconfirm
+            <a-popconfirm
                 title="确定要删除这个文件夹及其所有内容吗？"
                 ok-text="确定"
                 cancel-text="取消"
                 @confirm="handleDeleteFolder(record.fileName)"
-              >
-                <a-button type="link" danger size="small">删除</a-button>
-              </a-popconfirm>
+            >
+              <a-button type="link" danger size="small">删除</a-button>
+            </a-popconfirm>
           </template>
           <template v-else>
-              <!-- Mobile View: Dropdown -->
-              <a-dropdown v-if="isMobile" :trigger="['click']">
-                <a-button type="text" size="small">
-                   <more-outlined />
-                </a-button>
-                <template #overlay>
-                  <a-menu>
-                    <a-menu-item @click="handlePreview(record)">预览</a-menu-item>
-                    <a-menu-item @click="handleDownload(record)">下载</a-menu-item>
-                    <a-menu-item @click="handlePreviewChunks(record)">预览切片</a-menu-item>
-                    <a-menu-item @click="openRenameModal(record)">重命名</a-menu-item>
-                    <a-menu-item danger>
-                        <a-popconfirm
-                            title="确定要删除这个文件吗？"
-                            ok-text="确定"
-                            cancel-text="取消"
-                            @confirm="handleDelete(record)"
-                        >
-                            <span>删除</span>
-                        </a-popconfirm>
-                    </a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
+            <!-- Mobile View: Dropdown -->
+            <a-dropdown v-if="isMobile" :trigger="['click']">
+              <a-button type="text" size="small">
+                <more-outlined/>
+              </a-button>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item @click="handlePreview(record)">预览</a-menu-item>
+                  <a-menu-item @click="handleDownload(record)">下载</a-menu-item>
+                  <a-menu-item @click="handlePreviewChunks(record)">预览切片</a-menu-item>
+                  <a-menu-item @click="openRenameModal(record)">重命名</a-menu-item>
+                  <a-menu-item danger>
+                    <a-popconfirm
+                        title="确定要删除这个文件吗？"
+                        ok-text="确定"
+                        cancel-text="取消"
+                        @confirm="handleDelete(record)"
+                    >
+                      <span>删除</span>
+                    </a-popconfirm>
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
 
-              <!-- Desktop View: Buttons -->
-              <span v-else>
+            <!-- Desktop View: Buttons -->
+            <span v-else>
                   <a-button type="link" size="small" @click="handlePreview(record)">预览</a-button>
                   <a-divider type="vertical"/>
                   <a-button type="link" size="small" @click="handlePreviewChunks(record)">切片</a-button>
@@ -778,7 +911,7 @@ onUnmounted(() => {
                   
                   <a-dropdown>
                     <a class="ant-dropdown-link" @click.prevent style="font-size: 12px">
-                      更多 <down-outlined />
+                      更多 <down-outlined/>
                     </a>
                     <template #overlay>
                       <a-menu>
@@ -808,11 +941,11 @@ onUnmounted(() => {
     </a-table>
 
     <a-modal
-      v-model:visible="renameModalVisible"
-      title="重命名文件"
-      @ok="handleRename"
+        v-model:visible="renameModalVisible"
+        title="重命名文件"
+        @ok="handleRename"
     >
-      <a-input v-model:value="newFileName" placeholder="请输入新文件名" />
+      <a-input v-model:value="newFileName" placeholder="请输入新文件名"/>
     </a-modal>
 
     <!-- 设置对话框 -->
@@ -831,43 +964,47 @@ onUnmounted(() => {
           <a-textarea v-model:value="settingsForm.description" placeholder="请输入描述" :rows="2"/>
         </a-form-item>
         <a-form-item label="系统提示词">
-            <template #help>
-                设置该知识库在对话时的默认系统提示词，用于控制 AI 的回答风格和行为。
-            </template>
+          <template #help>
+            设置该知识库在对话时的默认系统提示词，用于控制 AI 的回答风格和行为。
+          </template>
           <a-textarea v-model:value="settingsForm.systemPrompt" :placeholder="systemPromptPlaceholder" :rows="6"/>
         </a-form-item>
       </a-form>
     </a-modal>
 
     <a-modal
-      v-model:visible="previewVisible"
-      :title="previewTitle"
-      :width="isMobile ? '100%' : '800px'"
-      :footer="null"
-      @cancel="handlePreviewCancel"
-      :style="isMobile ? { top: 0, margin: 0, maxWidth: '100%' } : { top: '8vh' }"
-      :bodyStyle="isMobile ? { padding: '10px', height: 'calc(100vh - 55px)', overflow: 'hidden' } : {}"
+        v-model:visible="previewVisible"
+        :title="previewTitle"
+        :width="isMobile ? '100%' : '800px'"
+        :footer="null"
+        @cancel="handlePreviewCancel"
+        :style="isMobile ? { top: 0, margin: 0, maxWidth: '100%' } : { top: '8vh' }"
+        :bodyStyle="isMobile ? { padding: '10px', height: 'calc(100vh - 55px)', overflow: 'hidden' } : {}"
     >
-      <div v-if="previewType === 'pdf'" style="max-height: 80vh; overflow-y: scroll; display: flex; flex-direction: column; align-items: center;">
-         <div style="margin-bottom: 10px; display: flex; gap: 10px; align-items: center;">
-           <a-button :disabled="pdfPage <= 1" @click="changePage(-1)">上一页</a-button>
-           <span>{{ pdfPage }} / {{ pdfPageCount }}</span>
-           <a-button :disabled="pdfPage >= pdfPageCount" @click="changePage(1)">下一页</a-button>
-         </div>
-         <VuePdfEmbed
+      <div v-if="previewType === 'pdf'"
+           style="max-height: 80vh; overflow-y: scroll; display: flex; flex-direction: column; align-items: center;">
+        <div style="margin-bottom: 10px; display: flex; gap: 10px; align-items: center;">
+          <a-button :disabled="pdfPage <= 1" @click="changePage(-1)">上一页</a-button>
+          <span>{{ pdfPage }} / {{ pdfPageCount }}</span>
+          <a-button :disabled="pdfPage >= pdfPageCount" @click="changePage(1)">下一页</a-button>
+        </div>
+        <VuePdfEmbed
             :source="previewContent"
             :page="pdfPage"
             text-layer
             annotation-layer
             @loaded="handlePdfLoaded"
             style="width: 100%; border: 1px solid #eee;"
-         />
+        />
       </div>
-      <div v-else-if="previewType === 'markdown'" class="markdown-body" style="max-height: 70vh; overflow-y: auto;" v-html="md.render(previewContent)"></div>
+      <div v-else-if="previewType === 'markdown'" class="markdown-body" style="max-height: 70vh; overflow-y: auto;"
+           v-html="md.render(previewContent)"></div>
       <div v-else-if="previewType === 'image'" style="text-align: center;">
-          <img :src="previewContent" style="max-width: 100%; max-height: 70vh;" />
+        <img :src="previewContent" style="max-width: 100%; max-height: 70vh;"/>
       </div>
-      <pre v-else style="white-space: pre-wrap; word-wrap: break-word; max-height: 70vh; overflow-y: auto;">{{ previewContent }}</pre>
+      <pre v-else style="white-space: pre-wrap; word-wrap: break-word; max-height: 70vh; overflow-y: auto;">{{
+          previewContent
+        }}</pre>
     </a-modal>
 
     <a-drawer
@@ -882,8 +1019,11 @@ onUnmounted(() => {
       >
         <template #renderItem="{ item }">
           <a-list-item>
-            <a-list-item-meta :title="`Chunk #${item.chunkIndex}`" />
-            <div style="white-space: pre-wrap; background: #f5f5f5; padding: 10px; border-radius: 4px;">{{ item.text }}</div>
+            <a-list-item-meta :title="`Chunk #${item.chunkIndex}`"/>
+            <div style="white-space: pre-wrap; background: #f5f5f5; padding: 10px; border-radius: 4px;">{{
+                item.text
+              }}
+            </div>
             <div style="margin-top: 8px; color: #999; font-size: 12px;">Token Length: {{ item.tokenLength }}</div>
           </a-list-item>
         </template>
@@ -909,11 +1049,11 @@ onUnmounted(() => {
         <a-form-item label="用户名或邮箱" required>
           <a-input v-model:value="inviteFormData.userIdentifier" placeholder="请输入用户名或邮箱"/>
         </a-form-item>
-        <a-alert 
-          message="只有私有知识库可以邀请用户。被邀请的用户将获得查看和使用该知识库的权限，但无法上传或修改文档" 
-          type="info" 
-          show-icon 
-          style="margin-top: 12px;"
+        <a-alert
+            message="只有私有知识库可以邀请用户。被邀请的用户将获得查看和使用该知识库的权限，但无法上传或修改文档"
+            type="info"
+            show-icon
+            style="margin-top: 12px;"
         />
       </a-form>
     </a-modal>
@@ -953,7 +1093,7 @@ onUnmounted(() => {
         v-model:visible="uploadProgressModalVisible"
         title="上传进度"
         :footer="null"
-        :maskClosable="false" 
+        :maskClosable="false"
         width="600px"
     >
       <!-- 整体进度统计 -->
@@ -964,10 +1104,10 @@ onUnmounted(() => {
             {{ uploadProgressList.filter(item => item.status === 'done').length }} / {{ uploadProgressList.length }}
           </span>
         </div>
-        <a-progress 
-          :percent="Math.round((uploadProgressList.filter(item => item.status === 'done').length / uploadProgressList.length) * 100)" 
-          :status="uploadProgressList.some(item => item.status === 'error') ? 'exception' : (uploadProgressList.filter(item => item.status === 'done').length === uploadProgressList.length ? 'success' : 'active')"
-          :show-info="false"
+        <a-progress
+            :percent="Math.round((uploadProgressList.filter(item => item.status === 'done').length / uploadProgressList.length) * 100)"
+            :status="uploadProgressList.some(item => item.status === 'error') ? 'exception' : (uploadProgressList.filter(item => item.status === 'done').length === uploadProgressList.length ? 'success' : 'active')"
+            :show-info="false"
         />
         <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 12px; color: #666;">
           <span>✅ 成功: {{ uploadProgressList.filter(item => item.status === 'done').length }}</span>
@@ -977,17 +1117,18 @@ onUnmounted(() => {
           </span>
         </div>
       </div>
-      
+
       <div style="max-height: 400px; overflow-y: auto;">
         <a-list :data-source="uploadProgressList" item-layout="horizontal">
           <template #renderItem="{ item }">
             <a-list-item>
-               <a-list-item-meta :title="item.name">
-                  <template #description>
-                     <a-progress :percent="item.percent" :status="item.status === 'error' ? 'exception' : (item.status === 'done' ? 'success' : 'active')" />
-                     <div v-if="item.status === 'error'" style="color: red">{{ item.error }}</div>
-                  </template>
-               </a-list-item-meta>
+              <a-list-item-meta :title="item.name">
+                <template #description>
+                  <a-progress :percent="item.percent"
+                              :status="item.status === 'error' ? 'exception' : (item.status === 'done' ? 'success' : 'active')"/>
+                  <div v-if="item.status === 'error'" style="color: red">{{ item.error }}</div>
+                </template>
+              </a-list-item-meta>
             </a-list-item>
           </template>
         </a-list>
@@ -1008,7 +1149,7 @@ onUnmounted(() => {
         :centered="true"
     >
       <div style="padding: 24px 0; text-align: center;">
-        <a-progress :percent="downloadProgress.percent" status="active" />
+        <a-progress :percent="downloadProgress.percent" status="active"/>
         <div style="margin-top: 16px; color: #666;">
           正在使用魔法为你生成数据中...
         </div>
@@ -1021,20 +1162,21 @@ onUnmounted(() => {
 :deep(.markdown-body p) {
   margin-bottom: 0;
 }
+
 .markdown-body {
-    line-height: 1.6;
+  line-height: 1.6;
 }
 
 .kb-header {
-  margin-bottom: 16px; 
-  display: flex; 
-  justify-content: space-between; 
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
 }
 
 .kb-title-container {
-  display: flex; 
-  align-items: center; 
+  display: flex;
+  align-items: center;
   gap: 16px;
 }
 
@@ -1043,7 +1185,7 @@ onUnmounted(() => {
 }
 
 .kb-actions {
-  display: flex; 
+  display: flex;
   gap: 8px;
 }
 
@@ -1053,18 +1195,18 @@ onUnmounted(() => {
     align-items: flex-start;
     gap: 12px;
   }
-  
+
   .kb-title-container {
     width: 100%;
   }
-  
+
   .kb-title {
     font-size: 18px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  
+
   .kb-actions {
     width: 100%;
     justify-content: space-between;
@@ -1079,11 +1221,11 @@ onUnmounted(() => {
     justify-content: center;
     align-items: center;
   }
-  
+
   .kb-actions .ant-upload-wrapper {
     flex: 1;
   }
-  
+
   .kb-actions .ant-upload-wrapper .ant-btn {
     width: 100%;
   }
