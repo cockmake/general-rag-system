@@ -381,7 +381,6 @@ const beforeUpload = (file, fileList) => {
   if (file.webkitRelativePath) {
     // 检查文件是否在排除列表中
     if (isFileExcluded(file.webkitRelativePath)) {
-      console.log(`文件已自动排除: ${file.webkitRelativePath}`);
       return false; // 自动排除，不上传
     }
 

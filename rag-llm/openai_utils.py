@@ -97,7 +97,7 @@ class OpenAIInstance:
             # 配置网页搜索
             if self.enable_web_search:
                 tools.append({"type": "web_search_preview"})
-        elif self.model_name.startswith("gpt-5.2-codex"):
+        elif "codex" in self.model_name:
             # 配置思考
             if self.enable_thinking:
                 reasoning['effort'] = "high"

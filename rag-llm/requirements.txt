@@ -11,4 +11,3 @@ langgraph
 miniopy_async
 Pillow
 pydantic
-pytesseract

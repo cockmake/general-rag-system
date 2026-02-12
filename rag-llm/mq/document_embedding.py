@@ -7,9 +7,9 @@ import traceback
 
 from aio_pika.abc import AbstractIncomingMessage
 from langchain_core.documents import Document
-from langchain_milvus import Milvus
 
 import utils
+from milvus_utils import MilvusClientManager
 from minio_utils import minio_client
 from mq.connection import rabbit_async_client
 from utils import get_embedding_instance
@@ -72,7 +72,7 @@ class DocumentEmbeddingConsumer:
                 try:
                     if suffix.lower() == ".pdf":
                         # chunk_overlap=0 可确保不重复
-                        texts = await asyncio.to_thread(utils.pdf_split, tmp_path)
+                        texts = await utils.pdf_split(tmp_path)
                         splits = [Document(page_content=t) for t in texts]
                     elif suffix.lower() == ".txt":
                         def split_txt():
@@ -121,23 +121,14 @@ class DocumentEmbeddingConsumer:
                     # Embed and store
                     milvus_uri = os.environ.get("MILVUS_URI")
                     milvus_token = os.environ.get("MILVUS_TOKEN")
-                    db_name = f"group_{user_id // 1000}"
-                    collection_name = f"kb_{kb_id}"
                     # Create vector store
                     embedding_config = {
                         'name': 'text-embedding-v4',
                         'provider': 'qwen'
                     }
                     embeddings = get_embedding_instance(embedding_config)
-                    vector_store = Milvus(
-                        embedding_function=embeddings,
-                        connection_args={
-                            "uri": milvus_uri,
-                            "token": milvus_token,
-                            "db_name": db_name
-                        },
-                        collection_name=collection_name,
-                        auto_id=True,
+                    vector_store = await MilvusClientManager.get_instance(
+                        user_id, kb_id, milvus_uri, milvus_token, embeddings
                     )
                     max_batch = 10
 

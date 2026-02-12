@@ -1,18 +1,14 @@
 import base64
-import io
 import json
 import logging
 import os
 import re
 from functools import lru_cache
 
-import fitz  # PyMuPDF
 import tiktoken
-from PIL import Image
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langchain.embeddings import init_embeddings
-from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_core.language_models import BaseChatModel
 from langchain_text_splitters import (
     Language,
@@ -22,15 +18,10 @@ from langchain_text_splitters import (
 )
 
 from gemini_utils import GeminiInstance
+from ocr_utils import AsyncPDFOCR
 from openai_utils import OpenAIInstance
 
 logger = logging.getLogger(__name__)
-try:
-    import pytesseract
-
-    TESSERACT_AVAILABLE = True
-except ImportError:
-    TESSERACT_AVAILABLE = False
 
 
 # 统一返回结构
@@ -265,91 +256,82 @@ def plain_text_split(
     return text_splitter.split_text(plain_text)
 
 
-def _extract_text_with_ocr(pdf_path: str, language: str = 'chi_sim+eng'):
+async def _extract_text_with_ocr(
+        pdf_path: str,
+        ocr_model: str = "PaddleOCR-VL-1.5-0.9B",
+        ocr_base_url: str = "http://localhost:8765/v1",
+        ocr_api_key: str = "",
+        zoom: float = 1.5,
+        concurrency: int = 8,
+):
     """
-    使用OCR从图片型PDF中提取文本
+    使用本地部署的OCR模型从图片型PDF中提取文本
 
     Args:
         pdf_path: PDF文件路径
-        language: OCR识别语言，默认中英文 (chi_sim+eng)
+        ocr_model: OCR模型名称
+        ocr_base_url: OCR服务的base_url
+        ocr_api_key: OCR服务的API key
+        zoom: 图片放大倍数，提高OCR准确率
+        concurrency: 并发处理页数
 
     Returns:
         提取的文本内容
     """
-    if not TESSERACT_AVAILABLE:
-        raise ImportError("pytesseract not installed. Install with: pip install pytesseract")
+    ocr = AsyncPDFOCR(
+        model=ocr_model,
+        base_url=ocr_base_url,
+        api_key=ocr_api_key,
+        zoom=zoom,
+        concurrency=concurrency,
+    )
 
-    doc = fitz.open(pdf_path)
-    all_text = []
+    docs = await ocr.aocr(pdf_path)
+    all_text = [doc.page_content for doc in docs]
 
-    for page_num in range(len(doc)):
-        page = doc[page_num]
-
-        # 将页面转换为图片（使用较高DPI以提高OCR准确率）
-        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2倍放大
-        img_data = pix.tobytes("png")
-        img = Image.open(io.BytesIO(img_data))
-
-        # 使用pytesseract进行OCR识别
-        text = pytesseract.image_to_string(img, lang=language)
-        all_text.append(text)
-
-        logger.info(f"OCR处理进度: {page_num + 1}/{len(doc)}")
-
-    doc.close()
-    return "\n".join(all_text)
+    logger.info(f"OCR处理完成，共 {len(docs)} 页")
+    return "".join(all_text)
 
 
-def pdf_split(
+async def pdf_split(
         file_path: str,
         chunk_size: int = 1500,
         chunk_overlap: int = 150,
-        text_threshold: int = 20,
-        ocr_language: str = 'chi_sim+eng',
+        ocr_model: str = "PaddleOCR-VL-1.5-0.9B",
+        ocr_base_url: str = "http://localhost:8765/v1",
+        ocr_api_key: str = "",
+        zoom: float = 1.5,
+        concurrency: int = 8,
 ):
     """
-    对PDF进行完美划分：全文合并后切分，解决跨页段落问题。
-    自动检测图片型PDF并使用OCR提取文本。
+    使用本地部署的OCR模型从PDF中提取文本并切分
 
     Args:
         file_path: PDF文件路径
         chunk_size: 文本块大小
         chunk_overlap: 文本块重叠大小
-        ocr_language: OCR识别语言，默认中英文 (chi_sim+eng)
-        text_threshold: 文本长度阈值，低于此值则认为是图片型PDF
+        ocr_model: OCR模型名称
+        ocr_base_url: OCR服务的base_url
+        ocr_api_key: OCR服务的API key
+        zoom: 图片放大倍数，提高OCR准确率
+        concurrency: OCR并发处理页数
     Returns:
         切分后的文本块列表
     """
-    # 首先尝试常规文本提取
-    loader = PyMuPDFLoader(file_path)
-    docs = loader.load()
-    logger.info(f"PDF加载完成，页数：{len(docs)}")
+    try:
+        text = await _extract_text_with_ocr(
+            pdf_path=file_path,
+            ocr_model=ocr_model,
+            ocr_base_url=ocr_base_url,
+            ocr_api_key=ocr_api_key,
+            zoom=zoom,
+            concurrency=concurrency,
+        )
+        logger.info(f"OCR识别完成")
+    except Exception as e:
+        logger.error(f"OCR识别失败: {str(e)}")
+        return []
 
-    # 合并所有页面的文本
-    text = "".join([doc.page_content for doc in docs]).replace('\n', '')
-
-    # 检测是否为图片型PDF（文本内容过少）
-    if len(text.strip()) < text_threshold:
-        logger.info(f"检测到图片型PDF（文本长度: {len(text)}），启动OCR识别...")
-        if not TESSERACT_AVAILABLE:
-            logger.warning("警告: pytesseract未安装，无法进行OCR识别")
-            logger.warning("安装方法: pip install pytesseract")
-            logger.warning("还需要安装Tesseract-OCR: https://github.com/tesseract-ocr/tesseract")
-            return []
-
-        try:
-            # 放到线程中执行以避免阻塞
-            # text = _extract_text_with_ocr(file_path, ocr_language)
-            text = _extract_text_with_ocr(file_path, ocr_language)
-            text = text.replace('\n', ' ')
-            logger.info(f"OCR识别完成，提取文本长度: {len(text)}")
-        except Exception as e:
-            logger.error(f"OCR识别失败: {str(e)}")
-            return []
-    else:
-        logger.info(f"文本型PDF，直接提取文本（长度: {len(text)}）")
-
-    # 切分文本
     return plain_text_split(
         plain_text=text,
         chunk_size=chunk_size,
@@ -359,7 +341,7 @@ def pdf_split(
 
 async def image_split(
         file_input,
-        chunk_size: int = 2048,
+        chunk_size: int = 4096,
         chunk_overlap: int = 150,
 ):
     # 1. 读取图片数据并转Base64
@@ -375,7 +357,7 @@ async def image_split(
 
     base64_image = base64.b64encode(image_data).decode('utf-8')
 
-    # 2. 获取配置 (优先读取配置，兜底使用 t.py 中的 key)
+    # 2. 获取配置
     model_info = {
         'name': 'qwen3-vl-flash',
         'provider': 'qwen'
@@ -447,7 +429,7 @@ async def image_split(
         logger.error(f"Failed to generate image description: {e}")
         # 降级处理：如果调用失败，尝试返回空或者报错，这里选择返回空列表
         return []
-    return markdown_split(text, chunk_size=4096, chunk_overlap=chunk_overlap)
+    return markdown_split(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
 
 def get_token_count(text: str, encoding_name: str = "cl100k_base") -> int:
@@ -472,19 +454,22 @@ def cut_history(history: list, model: dict):
     base_token = 10240  # 10k
 
     max_tokens = base_token * 9
-    if "claude" in model_name.lower():
-        max_tokens = base_token * 3
+    if (
+            model_name.startswith("gemini-3-flash")
+            or model_name == "grok-4.1-fast"
+            or "codex" in model_name
+            or "haiku" in model_name.lower()
+    ):
+        max_tokens = base_token * 6
+    elif "sonnet" in model_name.lower():
+        max_tokens = base_token * 4
+    elif "opus" in model_name.lower():
+        max_tokens = base_token * 2
     elif (
             model_name.startswith("gpt-5.2-chat")
             or model_name.startswith("gemini-3-pro")
     ):
-        max_tokens = base_token * 2
-    elif (
-            model_name.startswith("gemini-3-flash")
-            or model_name == "grok-4.1-fast"
-            or model_name == "gpt-5.2-codex"
-    ):
-        max_tokens = base_token * 6
+        max_tokens = base_token * 3
 
     for i in range(n, 1, -2):
         pair = previous_msgs[i - 2: i]
