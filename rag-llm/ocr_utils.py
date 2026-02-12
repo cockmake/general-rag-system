@@ -24,6 +24,7 @@ class AsyncPDFOCR:
             return_usage: bool = False,
             upscale_threshold: int = 1500,
             max_pixels: int = 2048 * 28 * 28,
+            remove_images: bool = False,
     ):
         self.model = model
         self.base_url = base_url
@@ -37,6 +38,7 @@ class AsyncPDFOCR:
         self.return_usage = return_usage
         self.upscale_threshold = upscale_threshold
         self.max_pixels = max_pixels
+        self.remove_images = remove_images
 
         self.client = AsyncOpenAI(
             api_key=self.api_key,
@@ -85,11 +87,39 @@ class AsyncPDFOCR:
         image.save(output, format='JPEG' if self.mime == 'jpeg' else 'PNG', quality=95)
         return output.getvalue()
 
+    @staticmethod
+    def _remove_images_from_page(page: fitz.Page) -> None:
+        """
+        移除PDF页面中的所有图片
+        
+        Args:
+            page: PyMuPDF页面对象
+        """
+        # 获取页面中的所有图片
+        image_list = page.get_images(full=True)
+        
+        # 遍历并删除每个图片
+        for img_index, img_info in enumerate(image_list):
+            xref = img_info[0]  # 图片的xref引用
+            try:
+                # 通过xref删除图片对象
+                page.parent.delete_object(xref)
+            except Exception:
+                # 某些情况下直接删除可能失败，尝试用其他方法
+                pass
+        
+        # 清理页面内容，移除图片引用
+        page.clean_contents()
+
     def _render_pdf_pages_once(self, pdf_path: str) -> List[Tuple[int, bytes]]:
         """只读取一次 PDF，渲染每页为图片字节，并进行预处理。"""
         pages: List[Tuple[int, bytes]] = []
         with fitz.open(pdf_path) as doc:
             for i, page in enumerate(doc):
+                # 如果需要移除图片，先处理页面
+                if self.remove_images:
+                    self._remove_images_from_page(page)
+                
                 pix = page.get_pixmap(matrix=fitz.Matrix(self.zoom, self.zoom), alpha=False)
                 image_bytes = pix.tobytes(self.mime)
                 # 预处理图片

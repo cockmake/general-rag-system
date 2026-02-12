@@ -263,6 +263,7 @@ async def _extract_text_with_ocr(
         ocr_api_key: str = "",
         zoom: float = 1.5,
         concurrency: int = 8,
+        remove_images: bool = False,
 ):
     """
     使用本地部署的OCR模型从图片型PDF中提取文本
@@ -274,6 +275,7 @@ async def _extract_text_with_ocr(
         ocr_api_key: OCR服务的API key
         zoom: 图片放大倍数，提高OCR准确率
         concurrency: 并发处理页数
+        remove_images: 是否在OCR前移除PDF中的图片
 
     Returns:
         提取的文本内容
@@ -284,6 +286,7 @@ async def _extract_text_with_ocr(
         api_key=ocr_api_key,
         zoom=zoom,
         concurrency=concurrency,
+        remove_images=remove_images,
     )
 
     docs = await ocr.aocr(pdf_path)
@@ -302,6 +305,7 @@ async def pdf_split(
         ocr_api_key: str = "",
         zoom: float = 1.5,
         concurrency: int = 8,
+        remove_images: bool = True,
 ):
     """
     使用本地部署的OCR模型从PDF中提取文本并切分
@@ -315,6 +319,7 @@ async def pdf_split(
         ocr_api_key: OCR服务的API key
         zoom: 图片放大倍数，提高OCR准确率
         concurrency: OCR并发处理页数
+        remove_images: 是否在OCR前移除PDF中的图片
     Returns:
         切分后的文本块列表
     """
@@ -326,6 +331,7 @@ async def pdf_split(
             ocr_api_key=ocr_api_key,
             zoom=zoom,
             concurrency=concurrency,
+            remove_images=remove_images,
         )
         logger.info(f"OCR识别完成")
     except Exception as e:
