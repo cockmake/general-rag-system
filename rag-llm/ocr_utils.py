@@ -1,8 +1,10 @@
 import asyncio
 import base64
+import io
 from typing import List, Tuple, Optional
 
 import fitz
+from PIL import Image
 from langchain_core.documents import Document
 from openai import AsyncOpenAI
 
@@ -20,6 +22,8 @@ class AsyncPDFOCR:
             concurrency: int = 8,
             max_retries: int = 3,
             return_usage: bool = False,
+            upscale_threshold: int = 1500,
+            max_pixels: int = 2048 * 28 * 28,
     ):
         self.model = model
         self.base_url = base_url
@@ -31,6 +35,8 @@ class AsyncPDFOCR:
         self.concurrency = concurrency
         self.max_retries = max_retries
         self.return_usage = return_usage
+        self.upscale_threshold = upscale_threshold
+        self.max_pixels = max_pixels
 
         self.client = AsyncOpenAI(
             api_key=self.api_key,
@@ -43,13 +49,52 @@ class AsyncPDFOCR:
         b64 = base64.b64encode(image_bytes).decode("ascii")
         return f"data:image/{mime};base64,{b64}"
 
+    def _preprocess_image(self, image_bytes: bytes) -> bytes:
+        """
+        预处理图片：调整尺寸以优化OCR识别效果
+        
+        - 对于小图片（宽高都小于upscale_threshold），放大2倍以提高识别率
+        - 对于大图片，按max_pixels限制进行缩放
+        """
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        orig_w, orig_h = image.size
+        
+        # 小图片放大处理
+        if orig_w < self.upscale_threshold and orig_h < self.upscale_threshold:
+            process_w, process_h = orig_w * 2, orig_h * 2
+            try:
+                resample_filter = Image.Resampling.LANCZOS
+            except AttributeError:
+                resample_filter = Image.LANCZOS
+            image = image.resize((process_w, process_h), resample_filter)
+        
+        # 大图片按max_pixels限制缩放
+        current_pixels = image.width * image.height
+        if current_pixels > self.max_pixels:
+            scale = (self.max_pixels / current_pixels) ** 0.5
+            new_w = int(image.width * scale)
+            new_h = int(image.height * scale)
+            try:
+                resample_filter = Image.Resampling.LANCZOS
+            except AttributeError:
+                resample_filter = Image.LANCZOS
+            image = image.resize((new_w, new_h), resample_filter)
+        
+        # 转换回bytes
+        output = io.BytesIO()
+        image.save(output, format='JPEG' if self.mime == 'jpeg' else 'PNG', quality=95)
+        return output.getvalue()
+
     def _render_pdf_pages_once(self, pdf_path: str) -> List[Tuple[int, bytes]]:
-        """只读取一次 PDF，渲染每页为图片字节。"""
+        """只读取一次 PDF，渲染每页为图片字节，并进行预处理。"""
         pages: List[Tuple[int, bytes]] = []
         with fitz.open(pdf_path) as doc:
             for i, page in enumerate(doc):
                 pix = page.get_pixmap(matrix=fitz.Matrix(self.zoom, self.zoom), alpha=False)
-                pages.append((i, pix.tobytes(self.mime)))
+                image_bytes = pix.tobytes(self.mime)
+                # 预处理图片
+                processed_bytes = self._preprocess_image(image_bytes)
+                pages.append((i, processed_bytes))
         return pages
 
     async def _ocr_one_page(
