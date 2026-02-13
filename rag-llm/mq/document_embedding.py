@@ -72,7 +72,7 @@ class DocumentEmbeddingConsumer:
                 try:
                     if suffix.lower() == ".pdf":
                         # chunk_overlap=0 可确保不重复
-                        texts = await utils.pdf_split(tmp_path)
+                        texts = await asyncio.to_thread(utils.pdf_split, tmp_path)
                         splits = [Document(page_content=t) for t in texts]
                     elif suffix.lower() == ".txt":
                         def split_txt():

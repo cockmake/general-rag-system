@@ -1,14 +1,18 @@
 import base64
+import io
 import json
 import logging
 import os
 import re
 from functools import lru_cache
 
+import fitz
 import tiktoken
+from PIL import Image
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langchain.embeddings import init_embeddings
+from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_core.language_models import BaseChatModel
 from langchain_text_splitters import (
     Language,
@@ -18,8 +22,15 @@ from langchain_text_splitters import (
 )
 
 from gemini_utils import GeminiInstance
-from ocr_utils import AsyncPDFOCR
 from openai_utils import OpenAIInstance
+
+# 尝试导入pytesseract，如果不存在则标记为不可用
+try:
+    import pytesseract
+
+    TESSERACT_AVAILABLE = True
+except ImportError:
+    TESSERACT_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -256,88 +267,89 @@ def plain_text_split(
     return text_splitter.split_text(plain_text)
 
 
-async def _extract_text_with_ocr(
-        pdf_path: str,
-        ocr_model: str = "PaddleOCR-VL-1.5-0.9B",
-        ocr_base_url: str = "http://localhost:8765/v1",
-        ocr_api_key: str = "",
-        zoom: float = 1.5,
-        concurrency: int = 8,
-        remove_images: bool = False,
-):
+def _extract_text_with_ocr(pdf_path: str, language: str = 'chi_sim+eng'):
     """
-    使用本地部署的OCR模型从图片型PDF中提取文本
+    使用OCR从图片型PDF中提取文本
 
     Args:
         pdf_path: PDF文件路径
-        ocr_model: OCR模型名称
-        ocr_base_url: OCR服务的base_url
-        ocr_api_key: OCR服务的API key
-        zoom: 图片放大倍数，提高OCR准确率
-        concurrency: 并发处理页数
-        remove_images: 是否在OCR前移除PDF中的图片
+        language: OCR识别语言，默认中英文 (chi_sim+eng)
 
     Returns:
         提取的文本内容
     """
-    ocr = AsyncPDFOCR(
-        model=ocr_model,
-        base_url=ocr_base_url,
-        api_key=ocr_api_key,
-        zoom=zoom,
-        concurrency=concurrency,
-        remove_images=remove_images,
-    )
+    if not TESSERACT_AVAILABLE:
+        raise ImportError("pytesseract not installed. Install with: pip install pytesseract")
 
-    docs = await ocr.aocr(pdf_path)
-    all_text = [doc.page_content for doc in docs]
+    doc = fitz.open(pdf_path)
+    all_text = []
 
-    logger.info(f"OCR处理完成，共 {len(docs)} 页")
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+
+        # 将页面转换为图片（使用较高DPI以提高OCR准确率）
+        pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))  # 1.5倍放大
+        img_data = pix.tobytes("png")
+        img = Image.open(io.BytesIO(img_data))
+
+        # 使用pytesseract进行OCR识别
+        text = pytesseract.image_to_string(img, lang=language)
+        all_text.append(text)
+
+        logger.info(f"OCR处理进度: {page_num + 1}/{len(doc)}")
+
+    doc.close()
     return "".join(all_text)
 
 
-async def pdf_split(
+def pdf_split(
         file_path: str,
-        chunk_size: int = 1500,
-        chunk_overlap: int = 150,
-        ocr_model: str = "PaddleOCR-VL-1.5-0.9B",
-        ocr_base_url: str = "http://localhost:8765/v1",
-        ocr_api_key: str = "",
-        zoom: float = 1.5,
-        concurrency: int = 8,
-        remove_images: bool = True,
+        chunk_size: int = 3072,
+        chunk_overlap: int = 200,
+        text_threshold: int = 20,
+        ocr_language: str = 'chi_sim+eng',
 ):
     """
-    使用本地部署的OCR模型从PDF中提取文本并切分
+    对PDF进行完美划分：全文合并后切分，解决跨页段落问题。
+    自动检测图片型PDF并使用OCR提取文本。
 
     Args:
         file_path: PDF文件路径
         chunk_size: 文本块大小
         chunk_overlap: 文本块重叠大小
-        ocr_model: OCR模型名称
-        ocr_base_url: OCR服务的base_url
-        ocr_api_key: OCR服务的API key
-        zoom: 图片放大倍数，提高OCR准确率
-        concurrency: OCR并发处理页数
-        remove_images: 是否在OCR前移除PDF中的图片
+        text_threshold: 文本长度阈值，低于此值则认为是图片型PDF
+        ocr_language: OCR识别语言，默认中英文 (chi_sim+eng)
     Returns:
         切分后的文本块列表
     """
-    try:
-        text = await _extract_text_with_ocr(
-            pdf_path=file_path,
-            ocr_model=ocr_model,
-            ocr_base_url=ocr_base_url,
-            ocr_api_key=ocr_api_key,
-            zoom=zoom,
-            concurrency=concurrency,
-            remove_images=remove_images,
-        )
-        logger.info(f"OCR识别完成")
-    except Exception as e:
-        logger.error(f"OCR识别失败: {str(e)}")
-        return []
+    # 首先尝试常规文本提取
+    loader = PyMuPDFLoader(file_path)
+    docs = loader.load()
+    logger.info(f"PDF加载完成，页数：{len(docs)}")
 
+    # 合并所有页面的文本
+    text = "".join([doc.page_content for doc in docs])
+
+    # 检测是否为图片型PDF（文本内容过少）
+    if len(text.strip()) < text_threshold:
+        logger.info(f"检测到图片型PDF（文本长度: {len(text)}），启动OCR识别...")
+        if not TESSERACT_AVAILABLE:
+            logger.warning("警告: pytesseract未安装，无法进行OCR识别")
+            logger.warning("安装方法: pip install pytesseract")
+            logger.warning("还需要安装Tesseract-OCR: https://github.com/tesseract-ocr/tesseract")
+            return []
+
+        try:
+            text = _extract_text_with_ocr(file_path, ocr_language)
+            logger.info(f"OCR识别完成，提取文本长度: {len(text)}")
+        except Exception as e:
+            logger.error(f"OCR识别失败: {str(e)}")
+            return []
+    else:
+        logger.info(f"文本型PDF，直接提取文本（长度: {len(text)}）")
+
+    # 切分文本
+    text = text.replace('\n', ' ')
     return plain_text_split(
         plain_text=text,
         chunk_size=chunk_size,

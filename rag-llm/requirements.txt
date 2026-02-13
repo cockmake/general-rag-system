@@ -1,7 +1,7 @@
 aio_pika
 aiohttp
 fastapi
-fitz
+PyMuPDF
 langchain
 langchain_community
 langchain_core
@@ -10,4 +10,6 @@ langchain_text_splitters
 langgraph
 miniopy_async
 Pillow
+pytesseract
 pydantic
+tiktoken
