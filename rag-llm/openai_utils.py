@@ -71,10 +71,12 @@ class OpenAIInstance:
         reasoning = {}
         reasoning_effort = {}
 
-        if self.model_name.startswith("qwen3-max"):
+        if self.model_name.startswith("qwen3"):
             # 配置思考
             if self.enable_thinking:
                 extra_body['enable_thinking'] = True
+            else:
+                extra_body['enable_thinking'] = False
             # 配置网页搜索
             if self.enable_web_search:
                 extra_body['enable_search'] = True

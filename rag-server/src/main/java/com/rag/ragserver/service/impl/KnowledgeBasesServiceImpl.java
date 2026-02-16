@@ -155,6 +155,12 @@ public class KnowledgeBasesServiceImpl extends ServiceImpl<KnowledgeBasesMapper,
             );
             schema.addField(
                     AddFieldReq.builder()
+                            .fieldName("maxChunkIndex")
+                            .dataType(DataType.Int64)
+                            .build()
+            );
+            schema.addField(
+                    AddFieldReq.builder()
                             .fieldName("fileName")
                             .dataType(DataType.VarChar)
                             .maxLength(1024)

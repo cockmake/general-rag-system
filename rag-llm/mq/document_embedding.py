@@ -117,6 +117,7 @@ class DocumentEmbeddingConsumer:
                     for i, doc in enumerate(splits):
                         doc.metadata["documentId"] = document_id
                         doc.metadata["chunkIndex"] = i
+                        doc.metadata["maxChunkIndex"] = len(splits) - 1
                         doc.metadata["fileName"] = file_name
                     # Embed and store
                     milvus_uri = os.environ.get("MILVUS_URI")

@@ -118,9 +118,6 @@ class GeminiInstance:
             return ResponseWrapper(content=f"Error: {str(e)}")
 
     async def astream(self, messages: list) -> AsyncGenerator[ResponseWrapper, None]:
-        """
-        异步流式返回 (重写：使用 aiohttp 手动实现 t.py 的逻辑)
-        """
         # 1. 构建 URL
         endpoint = f"/v1beta/models/{self.model_name}:streamGenerateContent?alt=sse"
         url = f"{self.base_url}{endpoint}"

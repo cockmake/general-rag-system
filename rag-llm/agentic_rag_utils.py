@@ -209,7 +209,7 @@ class AgenticRAGService:
                     content_parts.append(f"理由: {decision.reason}")
                 if decision.missing_info:
                     content_parts.append(f"缺失信息: {decision.missing_info}")
-                
+
                 yield {
                     "type": "process",
                     "payload": {
@@ -238,7 +238,7 @@ class AgenticRAGService:
                     content_parts.append(f"缺失信息: {decision.missing_info}")
                 content_parts.append(f"工具: {decision.tool}")
                 content_parts.append(f"参数: {decision.params}")
-                
+
                 yield {
                     "type": "process",
                     "payload": {
@@ -285,42 +285,42 @@ class AgenticRAGService:
             # yield每一轮的process信息
             # 统一使用content_parts列表构建content
             content_parts = []
-            
+
             # 1. 决策理由
             if decision.reason:
                 content_parts.append(f"理由: {decision.reason}")
-            
+
             # 2. 缺失信息
             if decision.missing_info:
                 content_parts.append(f"缺失信息: {decision.missing_info}")
-            
+
             # 3. 工具名称
             content_parts.append(f"工具: {decision.tool}")
-            
+
             # 4. 调用参数
             params_str = ", ".join([f"{k}={v}" for k, v in decision.params.items()])
             content_parts.append(f"参数: {params_str}")
-            
+
             # 5. 执行结果（根据工具类型格式化）
             if formatted_result.get("type") == "file_list":
                 # 文件列表工具
                 total_files = formatted_result.get('total_files', 0)
                 description = f"共 {total_files} 个文件"
                 content_parts.append(f"结果: 列出 {total_files} 个文件")
-                
+
             elif formatted_result.get("type") == "document_retrieval":
                 # 文档检索工具
                 retrieved = formatted_result.get('retrieved', 0)
                 new_added = formatted_result.get('new_added', 0)
                 accumulated = formatted_result.get('accumulated', 0)
-                
+
                 description = f"检索 {retrieved}，新增 {new_added}"
                 content_parts.append(f"结果: 检索 {retrieved} 个，新增 {new_added} 个，累计 {accumulated} 个")
             else:
                 # 其他情况
                 description = "执行完成"
                 content_parts.append(f"结果: {str(formatted_result)}")
-
+            content_parts = ["```"] + content_parts + ["```"]
             yield {
                 "type": "process",
                 "payload": {
