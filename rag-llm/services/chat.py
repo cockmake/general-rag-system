@@ -7,12 +7,97 @@ from fastapi import APIRouter, Body, Request
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage, AIMessage
 
+from agentic_rag_utils import AgenticRAGService
 from rag_utils import rag_service
 from utils import get_official_llm, cut_history, get_token_count, unified_llm_stream
 
 logger = logging.getLogger(__name__)
 
 chat_service = APIRouter(prefix="/chat", tags=["chat"])
+
+
+async def process_rag_stream_events(stream_iterator, prompt_tokens: int = 0):
+    """
+    处理RAG流式事件的通用逻辑
+    
+    处理所有类型的事件：process, thinking, content, system_prompt
+    并在结束时发送汇总和使用统计
+    
+    Args:
+        stream_iterator: 异步迭代器，产生各种类型的事件
+        prompt_tokens: 初始的prompt tokens数
+        
+    Yields:
+        SSE格式的流式数据
+    """
+    full_content = ""
+    cot_content = ""
+    rag_process_data = []
+    start_time = time.time()
+
+    # 处理流式事件
+    async for item in stream_iterator:
+        if item["type"] == "process":
+            # 检索过程信息
+            rag_process_data.append(item["payload"])
+            # 对payload进行json.dumps包裹，防止特殊字符导致JSON解析错误
+            process_data = {
+                "type": "process",
+                "payload": json.dumps(item["payload"], ensure_ascii=False)
+            }
+            yield f"data: {json.dumps(process_data, ensure_ascii=False)}\n\n"
+        elif item["type"] == "thinking":
+            # 思考内容
+            content = item["payload"]
+            if content:
+                cot_content += content
+                # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
+                data = {
+                    "type": "thinking",
+                    "payload": json.dumps(content, ensure_ascii=False)
+                }
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+        elif item["type"] == "content":
+            # 答案内容
+            content = item["payload"]
+            if content:
+                full_content += content
+                # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
+                data = {
+                    "type": "content",
+                    "payload": json.dumps(content, ensure_ascii=False)
+                }
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+        elif item["type"] == "system_prompt":
+            # 接收系统提示词，用于计算token数
+            system_prompt_text = item["payload"]
+            # 将系统提示词的token数计入prompt_tokens
+            prompt_tokens += get_token_count(system_prompt_text)
+
+    # 发送RAG过程汇总
+    if rag_process_data:
+        # 对payload进行json.dumps包裹，防止特殊字符导致JSON解析错误
+        rag_summary = {
+            "type": "rag_summary",
+            "payload": json.dumps(rag_process_data, ensure_ascii=False)
+        }
+        yield f"data: {json.dumps(rag_summary, ensure_ascii=False)}\n\n"
+
+    # 发送使用统计
+    end_time = time.time()
+    latency_ms = int((end_time - start_time) * 1000)
+    # 计算输出token：包括思考内容和回答内容
+    completion_tokens = get_token_count(cot_content) + get_token_count(full_content)
+    usage_data = {
+        "type": "usage",
+        "payload": {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+            "latency_ms": latency_ms
+        }
+    }
+    yield f"data: {json.dumps(usage_data)}\n\n"
 
 
 async def stream_generator(model_instance, messages, prompt_tokens: int = 0, options: dict = None):
@@ -70,89 +155,77 @@ async def rag_stream_generator(
     3. 并行评估文档相关性
     4. 流式生成答案
     """
-    full_content = ""
-    cot_content = ""
-    rag_process_data = []
-    start_time = time.time()  # Start timing
+    stream_iterator = rag_service.stream_rag_response_with_process(
+        question=question,
+        history=history,
+        model_info=model_info,
+        kb_id=kb_id,
+        user_id=user_id,
+        system_prompt=system_prompt,
+        options=options,
+        retrieve_k=30,
+        grade_top_n=50,
+        grade_score_threshold=0.35,
+        context_top_n=25,
+    )
 
-    async for item in rag_service.stream_rag_response_with_process(
-            question=question,
-            history=history,
-            model_info=model_info,
-            kb_id=kb_id,
-            user_id=user_id,
-            system_prompt=system_prompt,
-            options=options,
+    # 使用通用的事件处理逻辑
+    async for item in process_rag_stream_events(stream_iterator, prompt_tokens):
+        yield item
 
-            retrieve_k=30,
 
-            grade_top_n=50,
+async def agentic_rag_stream_generator(
+        question: str,
+        history: list,
+        model_info: dict,
+        kb_id: Optional[int] = None,
+        user_id: Optional[int] = None,
+        max_rounds: int = 20,
+        system_prompt: Optional[str] = None,
+        prompt_tokens: int = 0,
+        options: dict = None,
+):
+    """
+    Agentic RAG流式响应生成器
+    
+    流程：
+    1. 初始化AgenticRAGService
+    2. 执行Agentic检索流程（多轮次智能检索）
+    3. 流式生成答案
+    
+    Args:
+        question: 用户问题
+        history: 对话历史
+        model_info: 模型配置信息
+        kb_id: 知识库ID
+        user_id: 用户ID
+        max_rounds: 最大检索轮次
+        system_prompt: 自定义系统提示词
+        prompt_tokens: 已有的prompt tokens数
+        options: 其他选项
+        
+    Yields:
+        SSE格式的流式数据
+    """
+    # 初始化Agentic RAG服务
+    agentic_rag = AgenticRAGService(
+        user_id=user_id,
+        kb_id=kb_id
+    )
 
-            grade_score_threshold=0.35,
+    # 创建流式迭代器
+    stream_iterator = agentic_rag.stream_agentic_rag_response_with_process(
+        question=question,
+        history=history,
+        model_info=model_info,
+        system_prompt=system_prompt,
+        options=options,
+        max_rounds=max_rounds
+    )
 
-            context_top_n=25,
-    ):
-        if item["type"] == "process":
-            # 检索过程信息
-            rag_process_data.append(item["payload"])
-            # 对payload进行json.dumps包裹，防止特殊字符导致JSON解析错误
-            process_data = {
-                "type": "process",
-                "payload": json.dumps(item["payload"], ensure_ascii=False)
-            }
-            yield f"data: {json.dumps(process_data, ensure_ascii=False)}\n\n"
-        elif item["type"] == "thinking":
-            # 思考内容
-            content = item["payload"]
-            if content:
-                cot_content += content
-                # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
-                data = {
-                    "type": "thinking",
-                    "payload": json.dumps(content, ensure_ascii=False)
-                }
-                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-        elif item["type"] == "content":
-            # 答案内容
-            content = item["payload"]
-            if content:
-                full_content += content
-                # 对content进行json.dumps包裹，防止特殊字符导致JSON解析错误
-                data = {
-                    "type": "content",
-                    "payload": json.dumps(content, ensure_ascii=False)
-                }
-                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-        elif item["type"] == "system_prompt":
-            # 接收系统提示词，用于计算token数
-            system_prompt_text = item["payload"]
-            # 将系统提示词的token数计入prompt_tokens
-            prompt_tokens += get_token_count(system_prompt_text)
-
-    # 发送RAG过程汇总
-    if rag_process_data:
-        # 对payload进行json.dumps包裹，防止特殊字符导致JSON解析错误
-        rag_summary = {
-            "type": "rag_summary",
-            "payload": json.dumps(rag_process_data, ensure_ascii=False)
-        }
-        yield f"data: {json.dumps(rag_summary, ensure_ascii=False)}\n\n"
-
-    # 发送使用统计
-    end_time = time.time()
-    latency_ms = int((end_time - start_time) * 1000)  # Calculate latency
-    # 计算输出token：包括思考内容和回答内容
-    completion_tokens = get_token_count(cot_content) + get_token_count(full_content)
-    usage_data = {
-        "type": "usage",
-        "payload": {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_tokens": completion_tokens + prompt_tokens,
-            "latency_ms": latency_ms  # Add latency_ms
-        }
-    }
-    yield f"data: {json.dumps(usage_data)}\n\n"
+    # 使用通用的事件处理逻辑
+    async for item in process_rag_stream_events(stream_iterator, prompt_tokens):
+        yield item
 
 
 def build_langchain_messages(history: list) -> list:
@@ -241,20 +314,41 @@ async def chat_stream(
 
     # 如果有知识库ID，使用RAG模式
     if kb_id and user_id:
-        logger.info(f"使用RAG模式，知识库ID: {kb_id}, 用户ID: {user_id}")
-        return StreamingResponse(
-            rag_stream_generator(
-                question=current_question,
-                history=langchain_messages,
-                model_info=model,
-                kb_id=kb_id,
-                user_id=user_id,
-                system_prompt=system_prompt,
-                prompt_tokens=prompt_tokens,
-                options=options
-            ),
-            media_type="text/event-stream"
-        )
+        # 检查是否使用 Agentic RAG 模式
+        use_agentic_rag = options.get('agenticRag', True)  # 默认使用Agentic RAG模式，除非明确设置为False
+        max_rounds = options.get('maxRounds', 20)  # Agentic RAG的最大轮次
+
+        if use_agentic_rag:
+            logger.info(f"使用Agentic RAG模式，知识库ID: {kb_id}, 用户ID: {user_id}, 最大轮次: {max_rounds}")
+            return StreamingResponse(
+                agentic_rag_stream_generator(
+                    question=current_question,
+                    history=langchain_messages,
+                    model_info=model,
+                    kb_id=kb_id,
+                    user_id=user_id,
+                    max_rounds=max_rounds,
+                    system_prompt=system_prompt,
+                    prompt_tokens=prompt_tokens,
+                    options=options
+                ),
+                media_type="text/event-stream"
+            )
+        else:
+            logger.info(f"使用传统RAG模式，知识库ID: {kb_id}, 用户ID: {user_id}")
+            return StreamingResponse(
+                rag_stream_generator(
+                    question=current_question,
+                    history=langchain_messages,
+                    model_info=model,
+                    kb_id=kb_id,
+                    user_id=user_id,
+                    system_prompt=system_prompt,
+                    prompt_tokens=prompt_tokens,
+                    options=options
+                ),
+                media_type="text/event-stream"
+            )
 
     # 否则使用纯LLM模式
     else:
