@@ -23,12 +23,12 @@ class RetrievalDecision(BaseModel):
 
     # 如果action=continue, 以下字段必填
     tool: Optional[Literal[
-        "search_by_keyword_in_file",  # 1. 文件内关键词检索
-        "search_by_keyword_in_database",  # 2. 全库关键词检索
+        "search_by_grep_in_file",  # 1. 文件内关键词检索（grep）
+        "search_by_grep_in_database",  # 2. 全库关键词检索（grep）
         "search_by_document_and_chunk_range",  # 3. 按文档ID获取连续chunk范围
         "search_by_filename_and_chunk_range",  # 4. 按文件名获取连续chunk范围
         "search_by_multi_queries_in_database",  # 5. 全库语义检索(多query+rerank)
-        "list_filename_by_prefix"  # 6. 根据前缀列出文件
+        "list_filename_by_like"  # 6. 根据模式匹配列出文件
     ]] = Field(default=None, description="下一步要使用的检索工具")
 
     params: Optional[Dict[str, Any]] = Field(
@@ -103,7 +103,7 @@ class RetrievalToolkit:
             return []
 
     # ============= 工具1: 文件内关键词检索 =============
-    async def search_by_keyword_in_file(
+    async def search_by_grep_in_file(
             self,
             file_name: str,
             keywords: List[str],
@@ -112,7 +112,7 @@ class RetrievalToolkit:
             **kwargs
     ) -> Dict[str, Any]:
         """
-        工具1: 文件内关键词检索
+        工具1: 文件内关键词检索（grep风格）
 
         Args:
             file_name: 文件名（精确匹配）
@@ -127,7 +127,7 @@ class RetrievalToolkit:
         if kwargs:
             logger.debug(f"⚠️ 工具1收到额外参数（已忽略）: {kwargs}")
 
-        logger.info(f"🔍 [1.文件内关键词] file='{file_name}', keywords={keywords}, type={match_type}, top_k={top_k}")
+        logger.info(f"🔍 [1.文件内grep] file='{file_name}', keywords={keywords}, type={match_type}, top_k={top_k}")
 
         keyword_conditions = [f'text like "%{self._escape(kw)}%"' for kw in keywords]
         keyword_expr = f" {match_type} ".join(keyword_conditions)
@@ -138,7 +138,7 @@ class RetrievalToolkit:
             limit=top_k
         )
 
-        logger.info(f"✅ 文件内关键词检索结果: {len(docs)}条")
+        logger.info(f"✅ 文件内grep检索结果: {len(docs)}条")
 
         return {
             "results": docs,
@@ -146,7 +146,7 @@ class RetrievalToolkit:
         }
 
     # ============= 工具2: 全库关键词检索 =============
-    async def search_by_keyword_in_database(
+    async def search_by_grep_in_database(
             self,
             keywords: List[str],
             match_type: Literal["AND", "OR"] = "AND",
@@ -155,7 +155,7 @@ class RetrievalToolkit:
             **kwargs
     ) -> Dict[str, Any]:
         """
-        工具2: 全库关键词检索
+        工具2: 全库关键词检索（grep风格）
 
         Args:
             keywords: 关键词列表
@@ -170,7 +170,7 @@ class RetrievalToolkit:
         if kwargs:
             logger.debug(f"⚠️ 工具2收到额外参数（已忽略）: {kwargs}")
 
-        logger.info(f"🔍 [2.全库关键词] keywords={keywords}, type={match_type}, top_k={top_k}, files={file_names}")
+        logger.info(f"🔍 [2.全库grep] keywords={keywords}, type={match_type}, top_k={top_k}, files={file_names}")
 
         keyword_conditions = [f'text like "%{self._escape(kw)}%"' for kw in keywords]
         keyword_expr = f" {match_type} ".join(keyword_conditions)
@@ -187,7 +187,7 @@ class RetrievalToolkit:
             limit=top_k
         )
 
-        logger.info(f"✅ 全库关键词检索结果: {len(docs)}条")
+        logger.info(f"✅ 全库grep检索结果: {len(docs)}条")
 
         return {
             "results": docs,
@@ -383,18 +383,18 @@ class RetrievalToolkit:
         }
 
     # ============= 工具6: 根据前缀列出文件 =============
-    async def list_filename_by_prefix(
+    async def list_filename_by_like(
             self,
-            prefix: str,
+            pattern: str,
             offset: int = 0,
             limit: int = 30,
             **kwargs
     ) -> Dict[str, Any]:
         """
-        工具6: 根据文件名前缀列出文件信息（仅返回元信息，不包含文档内容）
+        工具6: 根据文件名模式匹配列出文件信息（仅返回元信息，不包含文档内容）
         
         Args:
-            prefix: 文件名前缀
+            pattern: 文件名匹配模式（支持SQL LIKE语法，如"doc%"表示前缀，"%report%"表示包含）
             offset: 偏移量（用于分页）
             limit: 返回数量限制
             **kwargs: 额外参数（容错，忽略大模型可能传递的其他参数）
@@ -412,9 +412,9 @@ class RetrievalToolkit:
         if kwargs:
             logger.debug(f"⚠️ 工具6收到额外参数（已忽略）: {kwargs}")
 
-        logger.info(f"🔍 [6.文件前缀列表] prefix='{prefix}', offset={offset}, limit={limit}")
+        logger.info(f"🔍 [6.文件名匹配列表] pattern='{pattern}', offset={offset}, limit={limit}")
 
-        filter_expr = f'fileName like "{self._escape(prefix)}%" and chunkIndex == 0'
+        filter_expr = f'fileName like "{self._escape(pattern)}" and chunkIndex == 0'
 
         output_fields = ["pk", "documentId", "chunkIndex", "fileName", "maxChunkIndex"]
 
@@ -467,11 +467,11 @@ class RetrievalToolkit:
         logger.info(f"🔧 执行工具: {tool}, 参数: {params}")
 
         try:
-            if tool == "search_by_keyword_in_file":
-                return await self.search_by_keyword_in_file(**params)
+            if tool == "search_by_grep_in_file":
+                return await self.search_by_grep_in_file(**params)
 
-            elif tool == "search_by_keyword_in_database":
-                return await self.search_by_keyword_in_database(**params)
+            elif tool == "search_by_grep_in_database":
+                return await self.search_by_grep_in_database(**params)
 
             elif tool == "search_by_document_and_chunk_range":
                 return await self.search_by_document_and_chunk_range(**params)
@@ -482,8 +482,8 @@ class RetrievalToolkit:
             elif tool == "search_by_multi_queries_in_database":
                 return await self.search_by_multi_queries_in_database(**params)
 
-            elif tool == "list_filename_by_prefix":
-                return await self.list_filename_by_prefix(**params)
+            elif tool == "list_filename_by_like":
+                return await self.list_filename_by_like(**params)
 
             else:
                 logger.warning(f"⚠️ 未知工具: {tool}")
@@ -498,8 +498,8 @@ class RetrievalToolkit:
 TOOL_DEFINE_PROMPT = """## 可用工具 
 
 (共6个可调用tool)
-### 1. search_by_keyword_in_file
-**功能**: 在指定文件内进行关键词精确匹配
+### 1. search_by_grep_in_file
+**功能**: 在指定文件内进行关键词精确匹配（grep风格）
 **参数**: 
   - file_name: str, 必填，目标文件名
   - keywords: List[str], 必填，关键词列表（如["API", "token"]）
@@ -509,8 +509,8 @@ TOOL_DEFINE_PROMPT = """## 可用工具
   - top_k: int, 可选，默认5
 **适用场景**: 在已知文件中查找特定关键词、专有名词、代码片段
 
-### 2. search_by_keyword_in_database
-**功能**: 在全库范围内进行关键词精确匹配
+### 2. search_by_grep_in_database
+**功能**: 在全库范围内进行关键词精确匹配（grep风格）
 **参数**: 
   - keywords: List[str], 必填，关键词列表
   - match_type: str, 可选，"AND"或"OR"，默认"AND"
@@ -564,22 +564,27 @@ TOOL_DEFINE_PROMPT = """## 可用工具
   - 多角度语义探索
   - 需要高质量排序结果的场景
 
-### 6. list_filename_by_prefix
-**功能**: 根据文件路径前缀列出文件，按文件名排序（仅返回元信息，不包含文档内容）
+### 6. list_filename_by_like
+**功能**: 根据文件名模式匹配列出文件，按文件名排序（仅返回元信息，不包含文档内容）
 **参数**: 
-  - prefix: str, 必填，文件路径前缀（如"dir/.../"。如为空字符串"", 则从根目录检索。）
+  - pattern: str, 必填，文件名匹配模式（支持SQL LIKE语法）
+    * "doc%": 前缀匹配（以"doc"开头的文件）
+    * "%report%": 包含匹配（包含"report"的文件）
+    * "dir/.../%": 目录匹配（某目录下的文件）
+    * "%%": 表示匹配所有文件
   - offset: int, 可选，默认0，分页偏移量
   - limit: int, 可选，默认30，每页返回数量
 **说明**: 
   - 自动使用chunkIndex==0过滤，每个文件只返回第一个chunk（包含完整元信息）
   - 结果按fileName字母序排序
-  - ⚠️ 注意：此工具只返回文件元信息（fileName, documentId, maxChunkIndex），不返回page_content，不会累积到文档总数中
+  - ⚠️ 注意：此工具只返回文件元信息（fileName, documentId, maxChunkIndex）
+  - 如果limit和返回数量一致，表示可能还有更多文件，需调整offset和limit进行分页查询
 **返回格式**:
   - {{"type": "file_list", "total_files": x, "files": [{{"fileName": "...", "documentId": x, "maxChunkIndex": x}}]}}
 **适用场景**: 
   - 浏览/探索文件列表（了解知识库有哪些文件）
   - 不确定具体文件名时查找相关文件
-  - 按目录结构查找文档
+  - 按目录结构或名称模式查找文档
   - 获取documentId和maxChunkIndex后，可使用search_by_document_and_chunk_range或search_by_filename_and_chunk_range获取实际内容"""
 
 TOOL_SELECT_PROMPT = """## 工具选择策略
@@ -603,7 +608,7 @@ TOOL_SELECT_PROMPT = """## 工具选择策略
 - 注意chunk索引从0开始（如maxChunkIndex=29表示有30个chunk，范围0-29）
 
 #### 2. 精确匹配场景
-**工具**: `search_by_keyword_in_file` / `search_by_keyword_in_database`
+**工具**: `search_by_grep_in_file` / `search_by_grep_in_database`
 
 **使用时机**:
 - 发现文档中提到专有名词、API名称、错误代码 → 精确查找这些术语
@@ -613,7 +618,7 @@ TOOL_SELECT_PROMPT = """## 工具选择策略
 **使用指南**:
 - match_type="AND": 精确查找（必须包含所有关键词）
 - match_type="OR": 广泛探索（包含任一关键词即可）
-- 优先在已知相关文件中搜索（search_by_keyword_in_file）
+- 优先在已知相关文件中搜索（search_by_grep_in_file）
 
 #### 3. 多角度语义场景
 **工具**: `search_by_multi_queries_in_database`
@@ -624,16 +629,17 @@ TOOL_SELECT_PROMPT = """## 工具选择策略
 - 需要高质量语义匹配和Rerank排序
 
 #### 4. 文件探索场景
-**工具**: `list_filename_by_prefix`
+**工具**: `list_filename_by_like`
 
 **使用时机**:
-- 不确定具体文件名，需要浏览目录结构
-- 按路径前缀查找相关文档
+- 不确定具体文件名，需要浏览文件列表
+- 按名称模式查找相关文档（前缀、包含、目录等）
 - 探索知识库中有哪些文件
 
 **使用指南**:
 - 此工具仅返回元信息（fileName, documentId, maxChunkIndex），不包含文档内容
 - 获取元信息后，使用chunk范围工具获取实际内容
+- 支持灵活的LIKE模式：前缀("doc%")、包含("%report%")、目录("dir/%")等
 
 ### 参数设置建议
 - **top_k**: 首轮检索10-15，补充检索5-7

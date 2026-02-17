@@ -173,7 +173,7 @@ class RetrievalController:
             history: list,
             current_round: int,
             max_rounds: int,
-            all_docs: List[Document],
+            reference_docs: List[Document],
             trace: List[Dict],
     ) -> RetrievalDecision:
         """
@@ -184,7 +184,7 @@ class RetrievalController:
             history: 对话历史
             current_round: 当前轮次
             max_rounds: 最大轮次
-            all_docs: 所有累积的文档
+            reference_docs: 所有累积的文档
             trace: 执行轨迹（工具调用历史）
 
         Returns:
@@ -199,7 +199,7 @@ class RetrievalController:
         }
 
         # 2. RAG检索信息（按文件聚合并排序）
-        docs_info = self._format_docs_by_file(all_docs)
+        docs_info = self._format_docs_by_file(reference_docs)
 
         # 3. 工具调用历史（包含参数和结果）
         tool_history = self._format_tool_call_history(trace)
@@ -237,7 +237,7 @@ class RetrievalController:
 说明:
 - 每次调用包含: 轮次、工具名、参数、结果
 - 文档检索类工具的结果格式: {{"type": "document_retrieval", "retrieved": x, "new_added": x, "accumulated": x, "description": "..."}}
-- 文件列表类工具的结果格式: {{"type": "file_list", "total_files": x, "files": [{{"fileName": "...", "documentId": x, "maxChunkIndex": x}}]}}
+- 文件列表类工具的结果格式: {{"type": "file_list", "total_files": x, "files_table": "Markdown表格"}}
 
 ---
 
