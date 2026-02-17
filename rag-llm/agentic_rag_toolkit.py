@@ -127,7 +127,8 @@ class RetrievalToolkit:
             logger.debug(f"⚠️ 工具1收到额外参数（已忽略）: {kwargs}")
 
         scope = "全库" if not file_names else f"{len(file_names)}个文件"
-        logger.info(f"🔍 [1.grep检索] keywords={keywords}, type={match_type}, top_k={top_k}, scope={scope}, files={file_names}")
+        logger.info(
+            f"🔍 [1.grep检索] keywords={keywords}, type={match_type}, top_k={top_k}, scope={scope}, files={file_names}")
 
         keyword_conditions = [f'text like "%{self._escape(kw)}%"' for kw in keywords]
         keyword_expr = f" {match_type} ".join(keyword_conditions)
@@ -254,7 +255,7 @@ class RetrievalToolkit:
             grade_query: 专门用于Rerank评分的查询（通常是解除歧义后的用户原始问题）
             top_k: 最终返回条数（在rerank和动态过滤后）
             grade_score_threshold: Rerank分数阈值（默认0.4），低于此分数的文档将被过滤
-                                   0.3=弱相关，0.5=一般相关，0.7=强相关，由大模型决定
+                                   0.3=弱相关，0.5=一般相关，0.6=强相关，由大模型决定
             **kwargs: 额外参数（容错，忽略大模型可能传递的其他参数）
 
         Returns:
@@ -533,9 +534,9 @@ TOOL_DEFINE_PROMPT = """## 可用工具
   - grade_query: str, 必填，用于Rerank评分的查询（可使用改写后的原始问题）
   - grade_score_threshold: float, 可选，默认0.4，Rerank分数阈值（斩杀线）
     * 0.3: 弱相关（宽松模式，召回更多文档）
-    * 0.4: 有些相关（探索模型，用于前期探索）
+    * 0.4: 有些相关（探索模式，用于前期探索）
     * 0.5: 一般相关（平衡模式）
-    * 0.7: 强相关（严格模式，只保留高度相关文档）
+    * 0.6: 强相关（严格模式，只保留高度相关文档）
     * 低于此分数的文档将被过滤，由你根据问题复杂度和召回情况灵活决定
   - top_k: int, 可选，默认10，最终返回的文档数量
 **执行流程**: 
@@ -552,7 +553,7 @@ TOOL_DEFINE_PROMPT = """## 可用工具
 **阈值选择建议**:
   - 简单问题（如"什么是XXX"）→ 0.3~0.4（宽松）
   - 中等问题（如"如何实现XXX功能"）→ 0.5（默认）
-  - 复杂问题（如"XXX与YYY的区别和联系"）→ 0.6~0.7（严格）
+  - 复杂问题（如"XXX与YYY的区别和联系"）→ 0.6（严格）
 
 ### 5. list_filename_by_like
 **功能**: 根据文件名模式匹配列出文件，按文件名排序（仅返回元信息，不包含文档内容）
@@ -579,18 +580,29 @@ TOOL_DEFINE_PROMPT = """## 可用工具
 
 TOOL_SELECT_PROMPT = """## 工具选择策略
 
-### 首轮检索（推荐）
-使用 **search_by_multi_queries_in_database** 进行多角度语义检索，获得Rerank高质量结果
+### 首轮检索（根据问题类型选择）
+
+**1. 概念性/描述性问题（没有明确关键词）**:
+- 使用 **search_by_multi_queries_in_database** 进行多角度语义检索，获得Rerank高质量结果
+- 适合："什么是XXX"、"如何理解XXX"、"XXX的原理"等问题
+
+**2. 结构化内容查找（有明确关键词）**:
+- 使用 **search_by_grep** 进行代码级精确搜索，快速定位方法、类、变量、配置项等
+- 适合："XXX方法在哪"、"XXX类的定义"、"XXX配置项"等问题
+
+**3. 文件探索（不确定文件名）**:
+- 使用 **list_filename_by_like** 列出文件列表，然后用chunk范围工具获取内容
+- 适合："有哪些XXX文件"、"查看所有配置文件"等问题
 
 ### 后续轮次策略（根据检索情况选择）
 
-#### 1. 代码级精确搜索场景 🎯（优先考虑grep）
+#### 1. 代码级精确搜索场景
 **工具**: `search_by_grep`
 
 **grep核心优势**: 
-- ✅ 精确匹配，无歧义
-- ✅ 适合结构化内容（代码、配置、参数）
-- ✅ 速度快，无向量化延迟
+- 精确匹配，无歧义
+- 适合结构化内容（代码、配置、参数）
+- 速度快，无向量化延迟
 
 **使用时机**（强烈推荐grep的场景）:
 1. **查找方法/函数定义**:
@@ -622,11 +634,12 @@ TOOL_SELECT_PROMPT = """## 工具选择策略
    - "所有GET接口" → keywords=["@app.get", "GET"], file_names=None（全库）
 
 **使用指南**:
-- **file_names为空**: 全库检索，适合不确定位置或需要跨文件查找
-- **file_names单个**: 单文件检索，已知文件时使用（更快更准）
-- **file_names多个**: 多文件检索，限定在几个相关文件中查找
-- **match_type="AND"**: 精确查找（如查找"def calculate_price"用["def", "calculate_price"]）
-- **match_type="OR"**: 广泛探索（如查找所有错误处理用["try", "catch", "except", "error"]）
+- **file_names为空（None）**: 全库检索，适合不确定位置或需要跨文件查找
+- **file_names单个（["file.py"]）**: 单文件检索，已知文件时使用（更快更准）
+- **file_names多个（["a.py", "b.py"]）**: 多文件检索，限定在几个相关文件中查找
+- **match_type="AND"**: 精确查找，要求包含所有关键词（如["def", "calculate_price"]表示必须同时包含这两个词）
+- **match_type="OR"**: 广泛探索，包含任一关键词即可（如["try", "catch", "except"]表示包含其中任意一个即可）
+- **关键词建议**: 可以是单个完整短语（如["def calculate_price"]）或拆分多个词（如["def", "calculate_price"]），根据实际需要选择
 - **组合策略**: 先grep定位文件/chunk，再用chunk_range获取完整上下文
 
 **典型工作流**:
@@ -660,7 +673,7 @@ TOOL_SELECT_PROMPT = """## 工具选择策略
 **工具**: `search_by_multi_queries_in_database`
 
 **使用时机**:
-- 首轮结果不理想，需要换角度重新检索
+- 检索结果不理想，需要换角度重新检索
 - 问题有多个方面，需要从不同角度探索
 - 需要高质量语义匹配和Rerank排序
 - 概念性、描述性问题（grep不适用的场景）
@@ -672,6 +685,7 @@ TOOL_SELECT_PROMPT = """## 工具选择策略
 - 不确定具体文件名，需要浏览文件列表
 - 按名称模式查找相关文档（前缀、包含、目录等）
 - 探索知识库中有哪些文件
+- 进一步探索是否还有更多相关文件
 
 **使用指南**:
 - 此工具仅返回元信息（fileName, documentId, maxChunkIndex），不包含文档内容
@@ -679,7 +693,8 @@ TOOL_SELECT_PROMPT = """## 工具选择策略
 - 支持灵活的LIKE模式：前缀("doc%")、包含("%report%")、目录("dir/%")等
 
 ### 参数设置建议
-- **top_k**: 首轮检索10-15，补充检索5-7
-- **match_type**: 精确查找用"AND"，广泛探索用"OR"
+- **top_k**: 首轮检索10-15个，补充检索5-7个
+- **match_type**: 精确查找用"AND"（要求全部匹配），广泛探索用"OR"（任一匹配即可），默认"OR"
+- **keywords**: 可以是完整短语或拆分词语，根据匹配精度需求决定
 - **document_id**: 必须是整数类型int（不能是字符串）
-- **chunk范围**: 注意maxChunkIndex边界，避免超出范围"""
+- **chunk范围**: 注意maxChunkIndex边界，避免超出范围（索引从0开始）"""
