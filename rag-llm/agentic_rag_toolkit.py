@@ -23,12 +23,11 @@ class RetrievalDecision(BaseModel):
 
     # 如果action=continue, 以下字段必填
     tool: Optional[Literal[
-        "search_by_grep_in_file",  # 1. 文件内关键词检索（grep）
-        "search_by_grep_in_database",  # 2. 全库关键词检索（grep）
-        "search_by_document_and_chunk_range",  # 3. 按文档ID获取连续chunk范围
-        "search_by_filename_and_chunk_range",  # 4. 按文件名获取连续chunk范围
-        "search_by_multi_queries_in_database",  # 5. 全库语义检索(多query+rerank)
-        "list_filename_by_like"  # 6. 根据模式匹配列出文件
+        "search_by_grep",  # 1. 关键词检索（grep），支持全库/单文件/多文件
+        "search_by_document_and_chunk_range",  # 2. 按文档ID获取连续chunk范围
+        "search_by_filename_and_chunk_range",  # 3. 按文件名获取连续chunk范围
+        "search_by_multi_queries_in_database",  # 4. 全库语义检索(多query+rerank)
+        "list_filename_by_like"  # 5. 根据模式匹配列出文件
     ]] = Field(default=None, description="下一步要使用的检索工具")
 
     params: Optional[Dict[str, Any]] = Field(
@@ -102,51 +101,8 @@ class RetrievalToolkit:
             logger.error(f"❌ 向量检索失败: {e}")
             return []
 
-    # ============= 工具1: 文件内关键词检索 =============
-    async def search_by_grep_in_file(
-            self,
-            file_name: str,
-            keywords: List[str],
-            match_type: Literal["AND", "OR"] = "OR",
-            top_k: int = 5,
-            **kwargs
-    ) -> Dict[str, Any]:
-        """
-        工具1: 文件内关键词检索（grep风格）
-
-        Args:
-            file_name: 文件名（精确匹配）
-            keywords: 关键词列表
-            match_type: 匹配模式 "AND" 或 "OR"
-            top_k: 返回条数限制
-            **kwargs: 额外参数（容错，忽略大模型可能传递的其他参数）
-
-        Returns:
-            {"results": List[Document], "total_hits": int}
-        """
-        if kwargs:
-            logger.debug(f"⚠️ 工具1收到额外参数（已忽略）: {kwargs}")
-
-        logger.info(f"🔍 [1.文件内grep] file='{file_name}', keywords={keywords}, type={match_type}, top_k={top_k}")
-
-        keyword_conditions = [f'text like "%{self._escape(kw)}%"' for kw in keywords]
-        keyword_expr = f" {match_type} ".join(keyword_conditions)
-        filter_expr = f'fileName == "{self._escape(file_name)}" and ({keyword_expr})'
-
-        docs = await self._milvus_filter(
-            filter_expr=filter_expr,
-            limit=top_k
-        )
-
-        logger.info(f"✅ 文件内grep检索结果: {len(docs)}条")
-
-        return {
-            "results": docs,
-            "total_hits": len(docs)
-        }
-
-    # ============= 工具2: 全库关键词检索 =============
-    async def search_by_grep_in_database(
+    # ============= 工具1: 关键词检索（grep风格）=============
+    async def search_by_grep(
             self,
             keywords: List[str],
             match_type: Literal["AND", "OR"] = "OR",
@@ -155,22 +111,23 @@ class RetrievalToolkit:
             **kwargs
     ) -> Dict[str, Any]:
         """
-        工具2: 全库关键词检索（grep风格）
+        工具1: 关键词检索（grep风格），支持全库检索或指定文件范围
 
         Args:
             keywords: 关键词列表
             match_type: 匹配模式 "AND" 或 "OR"
             top_k: 返回条数限制
-            file_names: 可选限制文件范围
+            file_names: 可选文件名列表，为空则全库检索，1个为单文件检索，多个为多文件检索
             **kwargs: 额外参数（容错，忽略大模型可能传递的其他参数）
 
         Returns:
             {"results": List[Document], "total_hits": int}
         """
         if kwargs:
-            logger.debug(f"⚠️ 工具2收到额外参数（已忽略）: {kwargs}")
+            logger.debug(f"⚠️ 工具1收到额外参数（已忽略）: {kwargs}")
 
-        logger.info(f"🔍 [2.全库grep] keywords={keywords}, type={match_type}, top_k={top_k}, files={file_names}")
+        scope = "全库" if not file_names else f"{len(file_names)}个文件"
+        logger.info(f"🔍 [1.grep检索] keywords={keywords}, type={match_type}, top_k={top_k}, scope={scope}, files={file_names}")
 
         keyword_conditions = [f'text like "%{self._escape(kw)}%"' for kw in keywords]
         keyword_expr = f" {match_type} ".join(keyword_conditions)
@@ -187,14 +144,14 @@ class RetrievalToolkit:
             limit=top_k
         )
 
-        logger.info(f"✅ 全库grep检索结果: {len(docs)}条")
+        logger.info(f"✅ grep检索结果: {len(docs)}条")
 
         return {
             "results": docs,
             "total_hits": len(docs)
         }
 
-    # ============= 工具3: 按文档ID获取连续chunk范围 =============
+    # ============= 工具2: 按文档ID获取连续chunk范围 =============
     async def search_by_document_and_chunk_range(
             self,
             document_id: int,
@@ -203,7 +160,7 @@ class RetrievalToolkit:
             **kwargs
     ) -> Dict[str, Any]:
         """
-        工具3: 按文档ID获取连续chunk范围
+        工具2: 按文档ID获取连续chunk范围
 
         Args:
             document_id: 文档ID（必须是整数）
@@ -215,9 +172,9 @@ class RetrievalToolkit:
             {"results": List[Document], "total_hits": int}
         """
         if kwargs:
-            logger.debug(f"⚠️ 工具3收到额外参数（已忽略）: {kwargs}")
+            logger.debug(f"⚠️ 工具2收到额外参数（已忽略）: {kwargs}")
 
-        logger.info(f"🔍 [3.chunk范围] docId={document_id}, range=[{start_chunk_index}, {end_chunk_index}]")
+        logger.info(f"🔍 [2.chunk范围] docId={document_id}, range=[{start_chunk_index}, {end_chunk_index}]")
 
         filter_expr = f'documentId == {document_id} and chunkIndex >= {start_chunk_index} and chunkIndex <= {end_chunk_index}'
 
@@ -237,7 +194,7 @@ class RetrievalToolkit:
             "total_hits": len(docs)
         }
 
-    # ============= 工具4: 按文件名获取连续chunk范围 =============
+    # ============= 工具3: 按文件名获取连续chunk范围 =============
     async def search_by_filename_and_chunk_range(
             self,
             file_name: str,
@@ -246,7 +203,7 @@ class RetrievalToolkit:
             **kwargs
     ) -> Dict[str, Any]:
         """
-        工具4: 按文件名获取连续chunk范围
+        工具3: 按文件名获取连续chunk范围
 
         Args:
             file_name: 文件名（精确匹配）
@@ -258,9 +215,9 @@ class RetrievalToolkit:
             {"results": List[Document], "total_hits": int}
         """
         if kwargs:
-            logger.debug(f"⚠️ 工具4收到额外参数（已忽略）: {kwargs}")
+            logger.debug(f"⚠️ 工具3收到额外参数（已忽略）: {kwargs}")
 
-        logger.info(f"🔍 [4.文件chunk范围] file='{file_name}', range=[{start_chunk_index}, {end_chunk_index}]")
+        logger.info(f"🔍 [3.文件chunk范围] file='{file_name}', range=[{start_chunk_index}, {end_chunk_index}]")
 
         filter_expr = f'fileName == "{self._escape(file_name)}" and chunkIndex >= {start_chunk_index} and chunkIndex <= {end_chunk_index}'
 
@@ -280,7 +237,7 @@ class RetrievalToolkit:
             "total_hits": len(docs)
         }
 
-    # ============= 工具5: 全库语义检索(多query+rerank) =============
+    # ============= 工具4: 全库语义检索(多query+rerank) =============
     async def search_by_multi_queries_in_database(
             self,
             queries: List[str],
@@ -290,7 +247,7 @@ class RetrievalToolkit:
             **kwargs
     ) -> Dict[str, Any]:
         """
-        工具5: 全库语义检索(多query+rerank)
+        工具4: 全库语义检索(多query+rerank)
 
         Args:
             queries: 多语义查询列表（用于向量检索召回）
@@ -311,10 +268,10 @@ class RetrievalToolkit:
             5. 按rerank_score排序并返回top_k
         """
         if kwargs:
-            logger.debug(f"⚠️ 工具5收到额外参数（已忽略）: {kwargs}")
+            logger.debug(f"⚠️ 工具4收到额外参数（已忽略）: {kwargs}")
 
         logger.info(
-            f"🔍 [5.全库语义] queries={queries}, grade_query={grade_query}, top_k={top_k}, threshold={grade_score_threshold}")
+            f"🔍 [4.全库语义] queries={queries}, grade_query={grade_query}, top_k={top_k}, threshold={grade_score_threshold}")
 
         all_docs = []
         seen_pks = set()
@@ -390,7 +347,7 @@ class RetrievalToolkit:
             "total_hits": len(all_docs)
         }
 
-    # ============= 工具6: 根据前缀列出文件 =============
+    # ============= 工具5: 根据前缀列出文件 =============
     async def list_filename_by_like(
             self,
             pattern: str,
@@ -399,7 +356,7 @@ class RetrievalToolkit:
             **kwargs
     ) -> Dict[str, Any]:
         """
-        工具6: 根据文件名模式匹配列出文件信息（仅返回元信息，不包含文档内容）
+        工具5: 根据文件名模式匹配列出文件信息（仅返回元信息，不包含文档内容）
         
         Args:
             pattern: 文件名匹配模式（支持SQL LIKE语法，如"doc%"表示前缀，"%report%"表示包含）
@@ -418,9 +375,9 @@ class RetrievalToolkit:
             - 返回的Document不会累积到all_docs中
         """
         if kwargs:
-            logger.debug(f"⚠️ 工具6收到额外参数（已忽略）: {kwargs}")
+            logger.debug(f"⚠️ 工具5收到额外参数（已忽略）: {kwargs}")
 
-        logger.info(f"🔍 [6.文件名匹配列表] pattern='{pattern}', offset={offset}, limit={limit}")
+        logger.info(f"🔍 [5.文件名匹配列表] pattern='{pattern}', offset={offset}, limit={limit}")
 
         filter_expr = f'fileName like "{self._escape(pattern)}" and chunkIndex == 0'
 
@@ -475,11 +432,8 @@ class RetrievalToolkit:
         logger.info(f"🔧 执行工具: {tool}, 参数: {params}")
 
         try:
-            if tool == "search_by_grep_in_file":
-                return await self.search_by_grep_in_file(**params)
-
-            elif tool == "search_by_grep_in_database":
-                return await self.search_by_grep_in_database(**params)
+            if tool == "search_by_grep":
+                return await self.search_by_grep(**params)
 
             elif tool == "search_by_document_and_chunk_range":
                 return await self.search_by_document_and_chunk_range(**params)
@@ -505,16 +459,19 @@ class RetrievalToolkit:
 # ============= 检索工具对应的prompt =============
 TOOL_DEFINE_PROMPT = """## 可用工具 
 
-(共6个可调用tool)
-### 1. search_by_grep_in_file
-**功能**: 在指定文件内进行关键词精确匹配（grep风格），适用于代码级精确搜索
+(共5个可调用tool)
+### 1. search_by_grep
+**功能**: 关键词精确匹配检索（grep风格），支持全库检索或限定文件范围，适用于代码级精确搜索
 **参数**: 
-  - file_name: str, 必填，目标文件名
   - keywords: List[str], 必填，关键词列表（如["API", "token"]）
   - match_type: str, 可选，"AND"或"OR"，默认"OR"
     * "AND": 返回包含所有关键词的chunk
     * "OR": 返回包含任一关键词的chunk
-  - top_k: int, 可选，默认5
+  - top_k: int, 可选，默认5，返回结果数量
+  - file_names: List[str], 可选，默认None（空表示全库检索）
+    * **为空（None或[]）**: 全库检索，搜索整个知识库
+    * **单个文件（["config.py"]）**: 单文件检索，仅在指定文件内查找
+    * **多个文件（["app.py", "utils.py", "config.py"]）**: 多文件检索，在指定多个文件中查找
 **核心优势**: 精确匹配，无歧义，适合查找：
   - **方法/函数名**: def calculate_price, function handleSubmit, async getUserData
   - **类名**: class UserService, interface IDatabase, struct Config
@@ -522,41 +479,25 @@ TOOL_DEFINE_PROMPT = """## 可用工具
   - **关键描述/注释**: "配置文件路径", "初始化数据库连接", "TODO: 优化性能"
   - **错误代码**: ERROR_404, TIMEOUT_EXCEPTION, StatusCode.BadRequest
   - **配置项**: timeout: 30, max_connections: 100, "port": 8080
+  - **跨文件的方法调用链**: login() → authenticate() → verifyToken()
+  - **全局类/接口**: 所有实现IRepository的类，所有继承BaseService的类
+  - **API端点**: "/api/users", "POST /login", "GET /data"
 **适用场景**: 
-  - 在已知文件中查找特定方法实现（如"search_by_grep"）
+  - 查找特定方法/函数实现（如"search_by_grep"）
   - 查找类定义和变量声明（如"class AgenticRAG"）
   - 查找带特定注释的代码段（如"核心算法"）
   - 定位配置参数和常量（如"DATABASE_URL"）
-**典型用法**: 
-  - 问题："工具类在哪个文件？" → keywords=["class", "ToolKit"] 或 ["def", "execute_tool"]
-  - 问题："配置文件端口是多少？" → keywords=["port", "8080"] 或 ["PORT", "listen"]
-  - 问题："数据库连接函数叫什么？" → keywords=["def", "connect", "database"] 或 ["async", "init_db"]
-
-### 2. search_by_grep_in_database
-**功能**: 在全库范围内进行关键词精确匹配（grep风格），跨文件精确搜索
-**参数**: 
-  - keywords: List[str], 必填，关键词列表
-  - match_type: str, 可选，"AND"或"OR"，默认"OR"
-  - top_k: int, 可选，默认5
-  - file_names: List[str], 可选，默认[]（空表示全库）。可限制搜索范围到指定文件
-**核心优势**: 全局精确匹配，适合查找：
-  - **跨文件的方法调用链**: login() → authenticate() → verifyToken()
-  - **全局类/接口**: 所有实现IRepository的类，所有继承BaseService的类
-  - **统一命名变量**: 所有文件中的userId, apiKey, sessionId
-  - **跨模块注释/描述**: "弃用", "已废弃", "实验性功能", "性能瓶颈"
-  - **错误码/状态码**: 所有使用ERROR_TIMEOUT的位置
-  - **API端点**: "/api/users", "POST /login", "GET /data"
-**适用场景**: 
   - 跨文件查找专有名词、API名称（如"OpenAI API"）
   - 查找错误代码、异常类型（如"TimeoutException"）
   - 定位特定术语、技术栈（如"Redis", "PostgreSQL"）
-  - 查找配置项、环境变量（如"DATABASE_URL", "API_KEY"）
 **典型用法**: 
-  - 问题："哪些文件使用了Redis？" → keywords=["Redis"] 或 ["redis", "cache"]
-  - 问题："所有API端点在哪里？" → keywords=["@app.route", "POST"] 或 ["@router", "endpoint"]
-  - 问题："错误处理在哪些地方？" → keywords=["try", "except", "error"] 或 ["catch", "throw"]
+  - 问题："工具类在哪个文件？" → keywords=["class", "ToolKit"], file_names=None（全库）
+  - 问题："config.py文件端口是多少？" → keywords=["port"], file_names=["config.py"]（单文件）
+  - 问题："数据库连接函数在app.py或utils.py？" → keywords=["def", "connect", "database"], file_names=["app.py", "utils.py"]（多文件）
+  - 问题："哪些文件使用了Redis？" → keywords=["Redis"], file_names=None（全库）
+  - 问题："API端点定义在controller文件中" → keywords=["@app.route", "POST"], file_names=["user_controller.py", "order_controller.py"]（多文件）
 
-### 3. search_by_document_and_chunk_range
+### 2. search_by_document_and_chunk_range
 **功能**: 按文档ID获取连续chunk范围
 **参数**: 
   - document_id: int, 必填，文档ID（必须是整数）
@@ -570,7 +511,7 @@ TOOL_DEFINE_PROMPT = """## 可用工具
   - 扩展上下文窗口（如已有chunk 5，获取3-7扩展上下文）
   - 获取完整段落、代码块等需要连续文本的场景
 
-### 4. search_by_filename_and_chunk_range
+### 3. search_by_filename_and_chunk_range
 **功能**: 按文件名获取连续chunk范围
 **参数**: 
   - file_name: str, 必填，精确文件名（如"rag-system/README.md"）
@@ -585,7 +526,7 @@ TOOL_DEFINE_PROMPT = """## 可用工具
   - 扩展上下文窗口
   - 获取完整段落、代码块等需要连续文本的场景
 
-### 5. search_by_multi_queries_in_database
+### 4. search_by_multi_queries_in_database
 **功能**: 全库多角度语义检索，使用Rerank评分和动态过滤返回高质量结果
 **参数**: 
   - queries: List[str], 必填，多个查询语句（用于召回阶段，可以是改写、扩展的查询）
@@ -613,7 +554,7 @@ TOOL_DEFINE_PROMPT = """## 可用工具
   - 中等问题（如"如何实现XXX功能"）→ 0.5（默认）
   - 复杂问题（如"XXX与YYY的区别和联系"）→ 0.6~0.7（严格）
 
-### 6. list_filename_by_like
+### 5. list_filename_by_like
 **功能**: 根据文件名模式匹配列出文件，按文件名排序（仅返回元信息，不包含文档内容）
 **参数**: 
   - pattern: str, 必填，文件名匹配模式（支持SQL LIKE语法）
@@ -644,7 +585,7 @@ TOOL_SELECT_PROMPT = """## 工具选择策略
 ### 后续轮次策略（根据检索情况选择）
 
 #### 1. 代码级精确搜索场景 🎯（优先考虑grep）
-**工具**: `search_by_grep_in_file` / `search_by_grep_in_database`
+**工具**: `search_by_grep`
 
 **grep核心优势**: 
 - ✅ 精确匹配，无歧义
@@ -653,36 +594,37 @@ TOOL_SELECT_PROMPT = """## 工具选择策略
 
 **使用时机**（强烈推荐grep的场景）:
 1. **查找方法/函数定义**:
-   - "calculate_price方法在哪？" → keywords=["def calculate_price"] 或 ["function calculatePrice"]
-   - "getUserData实现在哪个文件？" → keywords=["async getUserData", "function"] 或 ["def get_user_data"]
+   - "calculate_price方法在哪？" → keywords=["def calculate_price"], file_names=None（全库）
+   - "getUserData在user_service.py实现？" → keywords=["async getUserData", "function"], file_names=["user_service.py"]（单文件）
    
 2. **查找类/接口定义**:
-   - "UserService类在哪？" → keywords=["class UserService"] 或 ["interface IUserService"]
-   - "所有继承BaseModel的类" → keywords=["BaseModel", "class"] 全库grep
+   - "UserService类在哪？" → keywords=["class UserService"], file_names=None
+   - "所有继承BaseModel的类" → keywords=["BaseModel", "class"], file_names=None（全库）
    
 3. **查找关键变量/常量**:
-   - "API_KEY在哪配置？" → keywords=["API_KEY", "="] 或 ["apiKey:", "config"]
-   - "数据库连接字符串" → keywords=["DATABASE_URL", "connection_string"] 或 ["db_uri"]
+   - "API_KEY在config.py配置？" → keywords=["API_KEY"], file_names=["config.py"]
+   - "数据库连接字符串" → keywords=["DATABASE_URL", "connection_string"], file_names=None
    
 4. **查找带特定注释/描述的代码**:
-   - "TODO项在哪里？" → keywords=["TODO:", "fixme"] 或 ["# TODO"]
-   - "标注为核心算法的部分" → keywords=["核心算法", "core algorithm"] 或 ["关键逻辑"]
+   - "TODO项在哪里？" → keywords=["TODO:", "fixme"], file_names=None
+   - "标注为核心算法的部分" → keywords=["核心算法", "core algorithm"], file_names=None
    
 5. **查找错误码/异常类型**:
-   - "TimeoutException在哪处理？" → keywords=["TimeoutException", "catch"] 或 ["except TimeoutError"]
-   - "ERROR_404定义在哪？" → keywords=["ERROR_404", "="] 或 ["404", "Not Found"]
+   - "TimeoutException在哪处理？" → keywords=["TimeoutException", "catch"], file_names=None
+   - "ERROR_404定义在哪？" → keywords=["ERROR_404", "="], file_names=None
    
 6. **查找配置项/环境变量**:
-   - "端口配置在哪？" → keywords=["port", "8080"] 或 ["PORT", "listen"]
-   - "Redis配置" → keywords=["redis", "host"] 或 ["REDIS_URL"]
+   - "端口配置在哪？" → keywords=["port", "8080"], file_names=None
+   - "Redis配置在settings文件" → keywords=["redis", "host"], file_names=["settings.py", "config.yaml"]
 
 7. **查找API端点/路由**:
-   - "登录接口在哪？" → keywords=["/login", "POST"] 或 ["@app.route", "login"]
-   - "所有GET接口" → keywords=["@app.get", "GET"] 全库grep
+   - "登录接口在controller文件？" → keywords=["/login", "POST"], file_names=["user_controller.py", "auth_controller.py"]
+   - "所有GET接口" → keywords=["@app.get", "GET"], file_names=None（全库）
 
 **使用指南**:
-- **优先in_file**: 如果已知相关文件，先用search_by_grep_in_file（更快更准）
-- **再用in_database**: 不确定位置或需要跨文件查找时用search_by_grep_in_database
+- **file_names为空**: 全库检索，适合不确定位置或需要跨文件查找
+- **file_names单个**: 单文件检索，已知文件时使用（更快更准）
+- **file_names多个**: 多文件检索，限定在几个相关文件中查找
 - **match_type="AND"**: 精确查找（如查找"def calculate_price"用["def", "calculate_price"]）
 - **match_type="OR"**: 广泛探索（如查找所有错误处理用["try", "catch", "except", "error"]）
 - **组合策略**: 先grep定位文件/chunk，再用chunk_range获取完整上下文
@@ -691,10 +633,10 @@ TOOL_SELECT_PROMPT = """## 工具选择策略
 ```
 问题: "UserService类的login方法实现"
 ↓
-第1步: search_by_grep_in_database(keywords=["class UserService"]) 
+第1步: search_by_grep(keywords=["class UserService"], file_names=None) 
        → 找到UserService在user_service.py
 ↓
-第2步: search_by_grep_in_file(file_name="user_service.py", keywords=["def login", "async login"])
+第2步: search_by_grep(keywords=["def login", "async login"], file_names=["user_service.py"])
        → 找到login方法在chunk 5
 ↓
 第3步: search_by_filename_and_chunk_range(file_name="user_service.py", start=4, end=7)
