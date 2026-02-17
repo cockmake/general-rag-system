@@ -109,6 +109,36 @@ class AgenticRAGService:
         return unique_docs
 
     @staticmethod
+    def _format_all_docs_table(all_docs: List[Document]) -> str:
+        """
+        将Document列表格式化为紧凑的Markdown表格（节省token）
+        
+        Args:
+            all_docs: List[Document] - Document对象列表，保持传入的顺序
+            
+        Returns:
+            Markdown表格字符串
+        """
+        if not all_docs:
+            return "无文档信息"
+
+        # 构建Markdown表格（不排序，保持传入顺序）
+        lines = [
+            "| DocID | 文件名 | 总Chunks |",
+            "|-------|--------|----------|"
+        ]
+
+        for doc in all_docs:
+            doc_id = doc.metadata.get("documentId", "")
+            file_name = doc.metadata.get("fileName", "")
+            max_chunk = doc.metadata.get("maxChunkIndex", 0)
+            total_chunks = max_chunk + 1  # 0-based转为总数
+
+            lines.append(f"| {doc_id} | {file_name} | {total_chunks} |")
+
+        return "\n".join(lines)
+
+    @staticmethod
     def _format_tool_result(
             tool: str, tool_result: Dict[str, Any], retrieved: int, new_added: int, accumulated: int
     ) -> Dict[str, Any]:
@@ -125,28 +155,20 @@ class AgenticRAGService:
         Returns:
             格式化后的结果描述（dict）
         """
-        if tool == "list_filename_by_prefix":
+        if tool == "list_filename_by_like":
             results = tool_result.get("results", [])
             if not results:
                 return {
                     "type": "file_list",
                     "total_files": 0,
-                    "files": []
+                    "files_table": "无文件"
                 }
-
-            file_list = []
-            for doc in results:
-                file_info = {
-                    "fileName": doc.metadata.get("fileName"),
-                    "documentId": doc.metadata.get("documentId"),
-                    "maxChunkIndex": doc.metadata.get("maxChunkIndex")
-                }
-                file_list.append(file_info)
+            files_table = AgenticRAGService._format_all_docs_table(results)
 
             return {
                 "type": "file_list",
-                "total_files": len(file_list),
-                "files": file_list
+                "total_files": len(results),
+                "files_table": files_table
             }
         else:
             return {
@@ -179,7 +201,8 @@ class AgenticRAGService:
         if not self.toolkit or not self.controller:
             await self.initialize()
 
-        all_docs: Dict[str, Document] = {}
+        all_docs: Dict[int, Document] = {}  # 收集检索过程中遇到的所有文档，key为documentId
+        reference_docs: Dict[str, Document] = {}  # 收集用于回答的参考文档，key为pk
         trace = []
 
         for round_no in range(1, max_rounds + 1):
@@ -188,7 +211,7 @@ class AgenticRAGService:
             decision = await self.controller.decide_next_action(
                 question=question,
                 history=history,
-                all_docs=list(all_docs.values()),
+                reference_docs=list(reference_docs.values()),
                 trace=trace,
                 current_round=round_no,
                 max_rounds=max_rounds,
@@ -203,12 +226,14 @@ class AgenticRAGService:
                     "decision": decision.model_dump()
                 })
 
-                # Yield停止信息
+                # yield停止信息
                 content_parts = []
                 if decision.reason:
                     content_parts.append(f"理由: {decision.reason}")
                 if decision.missing_info:
                     content_parts.append(f"缺失信息: {decision.missing_info}")
+
+                content_parts = ["```"] + content_parts + ["```"] if content_parts else []
 
                 yield {
                     "type": "process",
@@ -222,48 +247,32 @@ class AgenticRAGService:
                 }
                 break
 
-            if not decision.tool or not decision.params:
-                logger.warning(f"⚠️ 决策无效: tool={decision.tool}, params={decision.params}")
-                trace.append({
-                    "round": round_no,
-                    "result": None,
-                    "decision": decision.model_dump()
-                })
-
-                # Yield无效决策信息
-                content_parts = []
-                if decision.reason:
-                    content_parts.append(f"理由: {decision.reason}")
-                if decision.missing_info:
-                    content_parts.append(f"缺失信息: {decision.missing_info}")
-                content_parts.append(f"工具: {decision.tool}")
-                content_parts.append(f"参数: {decision.params}")
-
-                yield {
-                    "type": "process",
-                    "payload": {
-                        "step": f"round_{round_no}",
-                        "title": "决策无效",
-                        "description": "LLM决策出现错误",
-                        "content": "\n".join(content_parts),
-                        "status": "error"
-                    }
-                }
-                break
-
             tool_result = await self.toolkit.execute_tool(decision.tool, decision.params)
             new_docs = tool_result["results"]
 
-            before_count = len(all_docs)
+            before_count = len(reference_docs)
 
-            # list_filename_by_prefix 只返回元信息，不加入all_docs
-            if decision.tool != "list_filename_by_prefix":
+            # list_filename_by_like 只返回元信息，不加入reference_docs
+            if decision.tool != "list_filename_by_like":
                 for doc in new_docs:
                     pk = doc.metadata.get("pk")
-                    if pk and pk not in all_docs:
-                        all_docs[pk] = doc
+                    if pk and pk not in reference_docs:
+                        reference_docs[pk] = doc
+            # 无论是否加入reference_docs，都记录所有遇到的文档信息（直接存Document对象）
+            for doc in new_docs:
+                doc_id = doc.metadata.get("documentId")
+                if doc_id and doc_id not in all_docs:
+                    # 创建一个轻量级Document对象（只保留metadata，不保留page_content节省内存）
+                    all_docs[doc_id] = Document(
+                        page_content="",
+                        metadata={
+                            "fileName": doc.metadata.get("fileName"),
+                            "documentId": doc.metadata.get("documentId"),
+                            "maxChunkIndex": doc.metadata.get("maxChunkIndex"),
+                        }
+                    )
 
-            after_count = len(all_docs)
+            after_count = len(reference_docs)
             new_added = after_count - before_count
 
             logger.info(f"📊 本轮新增: {new_added}, 累积总数: {after_count}")
@@ -305,7 +314,7 @@ class AgenticRAGService:
             if formatted_result.get("type") == "file_list":
                 # 文件列表工具
                 total_files = formatted_result.get('total_files', 0)
-                description = f"共 {total_files} 个文件"
+                description = f"列出 {total_files} 个文件"
                 content_parts.append(f"结果: 列出 {total_files} 个文件")
 
             elif formatted_result.get("type") == "document_retrieval":
@@ -314,13 +323,15 @@ class AgenticRAGService:
                 new_added = formatted_result.get('new_added', 0)
                 accumulated = formatted_result.get('accumulated', 0)
 
-                description = f"检索 {retrieved}，新增 {new_added}"
+                description = f"检索 {retrieved} 个，新增 {new_added} 个，累计 {accumulated} 个"
                 content_parts.append(f"结果: 检索 {retrieved} 个，新增 {new_added} 个，累计 {accumulated} 个")
             else:
                 # 其他情况
                 description = "执行完成"
                 content_parts.append(f"结果: {str(formatted_result)}")
-            content_parts = ["```"] + content_parts + ["```"]
+
+            content_parts = ["```"] + content_parts + ["```"] if content_parts else []
+
             yield {
                 "type": "process",
                 "payload": {
@@ -335,20 +346,14 @@ class AgenticRAGService:
             if new_added == 0:
                 logger.warning(f"⚠️ 本轮无新增文档")
 
-        final_docs = list(all_docs.values())
-        final_docs.sort(key=lambda d: d.metadata.get("rerank_score", 0.0), reverse=True)
-
-        logger.info(f"\n{'=' * 60}")
-        logger.info(f"✅ 检索完成: 总轮次={len(trace)}, 最终文档数={len(final_docs)}")
-        logger.info(f"{'=' * 60}\n")
-
         # 最终结果
         yield {
             "type": "final_result",
             "payload": {
-                "documents": final_docs,
+                "reference_documents": list(reference_docs.values()),
                 "trace": trace,
-                "total_rounds": len(trace)
+                "total_rounds": len(trace),
+                "all_documents": sorted(all_docs.values(), key=lambda d: d.metadata.get("fileName", ""))  # 按文件名排序
             }
         }
 
@@ -380,7 +385,9 @@ class AgenticRAGService:
         """
 
         context = "无相关文档"
-        documents = []
+        reference_documents = []
+        all_documents = []
+        all_docs_table = ""
 
         # 执行Agentic RAG流程
         try:
@@ -402,23 +409,25 @@ class AgenticRAGService:
                 # 最后一个 process_item 包含完整结果
             if final_item:
                 retrieval_result = final_item["payload"]
-                documents = retrieval_result["documents"]
+                all_documents = retrieval_result.get("all_documents", [])
+                reference_documents = retrieval_result.get("reference_documents", [])
                 trace = retrieval_result["trace"]
                 total_rounds = retrieval_result["total_rounds"]
-                logger.info(f"Agentic检索完成: {total_rounds}轮, {len(documents)}个文档")
+                logger.info(f"Agentic检索完成: {total_rounds}轮, {len(reference_documents)}个文档")
             else:
-                logger.warning("Agentic检索流程未返回最终结果")
-
+                raise RuntimeError("Agentic检索流程未返回最终结果")
             # 合并连续切片并构建上下文
-            if documents:
+            if reference_documents:
                 # 合并同一文档的连续切片（不需要分数，所以传False）
-                merged_docs = merge_consecutive_chunks(documents, False)
+                merged_docs = merge_consecutive_chunks(reference_documents, False)
 
                 # 构建上下文
                 context = "\n\n".join([
-                    f"[文档{i + 1}]: {doc.page_content} (来源: {doc.metadata.get('fileName')})"
+                    f"[来源: {doc.metadata.get('fileName')}]: {doc.page_content}"
                     for i, doc in enumerate(merged_docs)
                 ])
+
+                all_docs_table = self._format_all_docs_table(all_documents)
 
                 logger.info(f"构建上下文完成，使用 {len(merged_docs)} 个文档")
 
@@ -462,7 +471,10 @@ class AgenticRAGService:
             logger.info("使用自定义提示词")
             final_system_prompt = f"""{system_prompt}
 
-参考文档：
+检索过程中涉及到的全部文档列表（元信息表格）：
+{all_docs_table}
+
+可能与问题有关的参考文档中的内容：
 {context}"""
         else:
             logger.info("使用系统内置提示词")
@@ -473,7 +485,11 @@ class AgenticRAGService:
 2. 如果文档不足以完整回答，结合对话历史进行推理或明确说明
 3. 文档中的信息为切片信息，可能语义并不连贯或存在错误，你需要抽取或推理相关信息
 
-参考文档：
+
+检索过程中涉及到的全部文档列表（元信息表格）：
+{all_docs_table}
+
+可能与问题有关的参考文档中的内容：
 {context}"""
 
         # 发送系统提示词用于token统计
