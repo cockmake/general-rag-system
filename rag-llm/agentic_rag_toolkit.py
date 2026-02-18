@@ -699,6 +699,20 @@ TOOL_SELECT_PROMPT = """## 工具选择策略
 - 需要高质量语义匹配和Rerank排序
 - 概念性、描述性问题（grep不适用的场景）
 
+**典型场景**:
+```
+场景：理解某个概念或机制
+问题："RAG系统中的Rerank是如何工作的？"
+这类问题关键词不明确，需要语义理解
+→ search_by_multi_queries_in_database(
+    queries=["Rerank重排序机制", "文档相关性评分", "检索结果精排"],
+    grade_query="RAG系统中的Rerank是如何工作的",
+    grade_score_threshold=0.5,
+    top_k=10
+  )
+通过多角度语义检索 + Rerank精排，找到高质量相关文档
+```
+
 #### 4. 文件探索场景
 **工具**: `list_filename_by_like`
 
@@ -707,6 +721,19 @@ TOOL_SELECT_PROMPT = """## 工具选择策略
 - 按名称模式查找相关文档（前缀、包含、目录等）
 - 探索知识库中有哪些文件
 - 进一步探索是否还有更多相关文件
+
+**典型场景**:
+```
+场景：查找配置相关文件
+问题："系统有哪些配置文件？"
+不确定具体文件名，先列出候选文件
+→ list_filename_by_like(pattern="%config%", limit=30)
+   返回：config.yaml (documentId=10, maxChunkIndex=5)
+         app_config.py (documentId=25, maxChunkIndex=8)
+         database_config.json (documentId=33, maxChunkIndex=3)
+然后根据需要选择文件获取内容：
+→ search_by_filename_and_chunk_range(file_name="config.yaml", start=0, end=5)
+```
 
 **使用指南**:
 - 此工具仅返回元信息（fileName, documentId, maxChunkIndex），不包含文档内容
