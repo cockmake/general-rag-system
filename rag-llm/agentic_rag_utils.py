@@ -161,15 +161,15 @@ class AgenticRAGService:
             if not results:
                 return {
                     "type": "file_list",
+                    "files_table": "无文件",
                     "total_files": 0,
-                    "files_table": "无文件"
                 }
             files_table = AgenticRAGService._format_all_docs_table(results)
 
             return {
                 "type": "file_list",
+                "files_table": files_table,
                 "total_files": len(results),
-                "files_table": files_table
             }
         else:
             return {

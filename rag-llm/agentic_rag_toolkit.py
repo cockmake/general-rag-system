@@ -437,29 +437,32 @@ class RetrievalToolkit:
             {"results": List[Document], "total_hits": int}
         """
         logger.info(f"🔧 执行工具: {tool}, 参数: {params}")
-        try:
-            if tool == "search_by_grep":
-                return await self.search_by_grep(**params)
+        if tool and params:
+            try:
+                if tool == "search_by_grep":
+                    return await self.search_by_grep(**params)
 
-            elif tool == "search_by_document_and_chunk_range":
-                return await self.search_by_document_and_chunk_range(**params)
+                elif tool == "search_by_document_and_chunk_range":
+                    return await self.search_by_document_and_chunk_range(**params)
 
-            elif tool == "search_by_filename_and_chunk_range":
-                return await self.search_by_filename_and_chunk_range(**params)
+                elif tool == "search_by_filename_and_chunk_range":
+                    return await self.search_by_filename_and_chunk_range(**params)
 
-            elif tool == "search_by_multi_queries_in_database":
-                return await self.search_by_multi_queries_in_database(**params)
+                elif tool == "search_by_multi_queries_in_database":
+                    return await self.search_by_multi_queries_in_database(**params)
 
-            elif tool == "list_filename_by_like":
-                return await self.list_filename_by_like(**params)
-
-            else:
-                logger.warning(f"⚠️ 未知工具: {tool}")
+                elif tool == "list_filename_by_like":
+                    return await self.list_filename_by_like(**params)
+                else:
+                    logger.warning(f"⚠️ 未知工具: {tool}")
+                    return {"results": [], "total_hits": 0}
+            except Exception as e:
+                logger.error(f"❌ 工具执行失败: {tool}, 错误: {e}")
                 return {"results": [], "total_hits": 0}
-
-        except Exception as e:
-            logger.error(f"❌ 工具执行失败: {tool}, 错误: {e}")
+        else:
+            logger.warning(f"⚠️ 工具执行异常: {tool}没有抛出异常也没有返回结果")
             return {"results": [], "total_hits": 0}
+
 
 
 # ============= 检索工具对应的prompt =============
@@ -492,6 +495,7 @@ TOOL_DEFINE_PROMPT = """## 可用工具
 
 适用场景:
 - 已知document_id，需要补全/扩展连续上下文。
+- 已知document_id和chunk_index，想获取前后相关内容。
 
 不适用场景:
 - 不知道document_id时。
@@ -509,6 +513,7 @@ TOOL_DEFINE_PROMPT = """## 可用工具
 
 适用场景:
 - 已知file_name，需要补全/扩展连续上下文。
+- 已知file_name和chunk_index，想获取前后相关内容。
 
 不适用场景:
 - 文件名不确定时（应先用list_filename_by_like）。
@@ -543,7 +548,7 @@ TOOL_DEFINE_PROMPT = """## 可用工具
 [工具5] list_filename_by_like
 ====================
 功能:
-- 按文件名模式列出文件（仅返回元信息，不返回正文）。
+- 按文件名模式递归列出文件（仅返回元信息，不返回正文）。
 
 适用场景:
 - 不确定文件名时先探索文件；
@@ -561,7 +566,7 @@ TOOL_DEFINE_PROMPT = """## 可用工具
 [全局硬规则]
 ====================
 1) 只能使用上述5个工具名与参数名。
-2) 参数类型必须正确；不要猜测不存在字段。
+2) 工具对应的相关参数必须携带；参数类型必须正确；。
 3) chunk范围必须满足 start <= end。
 4) list_filename_by_like 仅返回文件元信息；若要正文，必须再调用chunk范围工具。
 5) 输出中若出现非法工具名/参数名，视为错误决策。"""
@@ -631,6 +636,7 @@ search_by_multi_queries_in_database:
 
 list_filename_by_like:
 - pattern使用LIKE语法；
+- 若返回数量小于limit，说明对应pattern的文件已基本列举完毕，因为文件夹会递归展开；
 - 仅用于发现文件元信息，不返回正文。
 
 ====================
