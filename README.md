@@ -37,28 +37,33 @@ General RAG System 是一个基于**检索增强生成（Retrieval-Augmented Gen
 
 ```
 general-rag-system/
-├── rag-client/          # 前端界面（Vue 3 + Vite + Ant Design Vue）
-├── rag-server/          # 业务后端（Spring Boot + MyBatis Plus）
-├── rag-llm/             # AI服务（FastAPI + LangChain + LangGraph）
-└── embedding_rerank/    # 本地向量化与重排序服务（vLLM + FastAPI）
-    ├── service/         # 服务实现（Embedding & Rerank）
-    ├── config/          # 配置模块
-    └── test/            # 测试套件
+├── rag-client/          # 前端界面（Vue 3.5 + Vite 7.2 + Ant Design Vue 4.2）
+├── rag-server/          # 业务后端（Spring Boot 2.7 + MyBatis Plus 3.5 + Java 11）
+├── rag-llm/             # AI 服务（FastAPI + LangChain + LangGraph，端口 8888）
+└── embedding_rerank/    # 本地向量化与重排序服务（vLLM 0.8.5+ + FastAPI，可选）
 ```
 
 ### 技术选型
 
-| 模块 | 技术栈 | 说明 |
-|------|--------|------|
-| **前端** | Vue 3、Vite、Ant Design Vue 4、Pinia | 响应式UI，支持深色模式 |
-| **后端** | Spring Boot 2.7、MyBatis Plus、JWT | RESTful API，统一鉴权 |
-| **AI服务** | FastAPI、LangChain、LangGraph | 异步处理，流式响应 |
-| **向量化服务** | vLLM 0.8.5+、FastAPI、PyTorch | 本地Embedding与Rerank |
-| **向量数据库** | Milvus 2.6+ | 高性能向量检索 |
-| **对象存储** | MinIO 8.x | 文档文件存储 |
-| **关系数据库** | MySQL 8.0+ | 业务数据持久化 |
-| **缓存** | Redis 6.x | Session、Token缓存 |
-| **消息队列** | RabbitMQ 3.x | 异步任务处理 |
+| 模块 | 技术栈 | 端口 | 说明 |
+|------|--------|------|------|
+| **前端** | Vue 3.5、Vite 7.2、Ant Design Vue 4.2、Pinia 3.0 | 5173 | Hash 路由，localStorage 持久化 |
+| **后端** | Spring Boot 2.7、MyBatis Plus 3.5、JWT、Java 11 | 8080 | RESTful API，/api 统一前缀 |
+| **AI 服务** | FastAPI、LangChain、LangGraph、Pydantic | 8888 | root_path="/rag"，SSE 流式响应 |
+| **向量化服务** | vLLM 0.8.5+、FastAPI、PyTorch、Qwen3 模型 | 8890/8891 | 本地 Embedding 与 Rerank（可选） |
+| **向量数据库** | Milvus 2.6+ | 19530 | 按 kbId 创建集合，30min 自动释放 |
+| **对象存储** | MinIO 8.x | 9000 | S3 兼容，文档文件存储 |
+| **关系数据库** | MySQL 8.0+ | 3306 | 业务数据持久化，15+ 表 |
+| **缓存** | Redis 6.x/7.x | 6379 | Session、Token、JWT 黑名单 |
+| **消息队列** | RabbitMQ 3.x | 5672 | DirectExchange，异步任务处理 |
+
+### 模块详细文档
+
+📚 **各模块详细技术文档**：
+- [rag-client 前端文档](./rag-client/README.md) - Vue 3 开发指南、页面路由、状态管理
+- [rag-server 后端文档](./rag-server/README.md) - Spring Boot 配置、API 路由、MyBatis 使用
+- [rag-llm AI 服务文档](./rag-llm/README.md) - Agentic RAG 实现、LLM 集成、RabbitMQ 消费者
+- [embedding_rerank 本地向量化文档](./embedding_rerank/) - vLLM 部署、性能调优
 
 ### 系统架构图
 
@@ -149,11 +154,11 @@ general-rag-system/
 | 软件 | 版本要求 | 说明 |
 |------|----------|------|
 | Node.js | 18+ | 前端开发环境 |
-| Java | 11 | 后端运行环境（必须11） |
-| Python | 3.8+ | AI服务运行环境 |
-| Maven | 3.6+ | Java项目构建工具 |
+| Java | **11**（必须） | 后端运行环境（不支持其他版本） |
+| Python | 3.8+ | AI 服务运行环境 |
+| Maven | 3.6+ | Java 项目构建工具 |
 | Docker | 20+ | 依赖服务容器化（推荐）|
-| GPU | 可选 | vLLM本地向量化需要（embedding_rerank）|
+| GPU | 可选 | vLLM 本地向量化（embedding_rerank，推荐 4GB+ 显存）|
 
 ### 依赖服务部署
 
@@ -165,62 +170,64 @@ docker-compose up -d
 ```
 
 或手动安装：
-- MySQL 8.0+（推荐 8.0.x 或更高版本）
-- Redis 6.x 或 7.x
-- Milvus 2.6+（需要配置认证）
-- MinIO（Latest）
-- RabbitMQ 3.x（需配置用户名密码）
+- **MySQL 8.0+** - 业务数据库
+- **Redis 6.x/7.x** - 缓存、Session、JWT 黑名单
+- **Milvus 2.6+** - 向量数据库（需配置认证）
+- **MinIO Latest** - 对象存储（S3 兼容）
+- **RabbitMQ 3.x** - 消息队列（需配置用户名密码）
 
 ### 配置文件
 
 ⚠️ **重要：配置敏感信息**
 
-本项目的配置文件包含敏感信息（API密钥、数据库密码等），已被 `.gitignore` 排除。您需要手动创建配置文件：
+本项目的配置文件包含敏感信息（API 密钥、数据库密码等），已被 `.gitignore` 排除。您需要手动创建配置文件：
 
-#### 1. 后端配置
+#### 1. 后端配置（rag-server）
 
 ```bash
-# 复制配置模板
 cd rag-server/src/main/resources
-cp application-dev.yml.example application-dev.yml
-cp application-prod.yml.example application-prod.yml
-
-# 编辑配置文件，填入真实的：
-# - 数据库连接信息
-# - JWT 密钥（至少32位）
-# - MinIO 访问密钥
-# - Redis 密码
-# - RabbitMQ 凭据
-# - 邮箱配置
-# - Milvus 认证信息
+# 编辑 application-dev.yml，填入真实的：
+# - MySQL 连接信息（端口 3306）
+# - JWT 密钥（至少 32 字符，可用 openssl rand -base64 32 生成）
+# - MinIO 访问密钥（endpoint, access-key, secret-key）
+# - Redis 密码（端口 6379）
+# - RabbitMQ 凭据（端口 5672）
+# - Milvus 认证信息（uri, token）
 ```
 
-#### 2. LLM服务配置
+📖 详细配置说明：[rag-server/README.md](./rag-server/README.md)
+
+#### 2. AI 服务配置（rag-llm）
 
 ```bash
-# 复制配置模板
 cd rag-llm
-cp model_config.json.example model_config.json
-
-# 编辑 model_config.json，填入各 AI 服务商的 API Key：
-# - OpenAI / ChatGPT
-# - DeepSeek
-# - 通义千问（Qwen）
-# - Gemini
+# 1. 编辑 model_config.json（参考 model_config.json.example）
+# 填入各 LLM 的 API Key：
+# - OpenAI (gpt-5.2, gpt-5.2-codex)
+# - DeepSeek (deepseek-chat, deepseek-reasoner)
+# - 通义千问 (qwen3-max, text-embedding-v4)
+# - Gemini (gemini-3-flash-preview)
+# - Claude (claude-4.5-sonnet)
 # - 其他模型服务
 
-# 注意：main.py 中包含基础设施连接配置：
-# - RabbitMQ 连接信息
-# - MinIO 访问密钥
-# - Milvus 认证令牌
-# 生产环境请修改这些硬编码配置或使用环境变量
+# 2. 编辑 main.py 中的基础设施连接配置（约第 30-40 行）：
+# - RabbitMQ 连接信息（host, port, username, password）
+# - MinIO 访问密钥（endpoint, access-key, secret-key）
+# - Milvus 认证令牌（uri, token）
+# 生产环境建议使用环境变量替代硬编码
 ```
 
-📚 **详细配置说明请参考 [SECURITY.md](./SECURITY.md)**
+⚠️ **注意**：
+- `model_config.json` 不要提交到 Git
+- `main.py` 中的基础设施配置为硬编码，生产环境需修改或使用环境变量
+
+📖 详细配置说明：[rag-llm/README.md](./rag-llm/README.md)
+
+📚 **安全配置指南**：[SECURITY.md](./SECURITY.md)
 
 ### 启动服务
 
-#### 1. 启动前端
+#### 1. 启动前端（端口 5173）
 
 ```bash
 cd rag-client
@@ -229,57 +236,58 @@ npm run dev
 # 访问 http://localhost:5173
 ```
 
-#### 2. 启动后端
+📖 详细配置请参考：[rag-client/README.md](./rag-client/README.md)
+
+#### 2. 启动后端（端口 8080，context-path /api）
 
 ```bash
 cd rag-server
+# 编辑 src/main/resources/application-dev.yml 配置数据库等信息
 mvn clean install
 mvn spring-boot:run
-# 后端运行在 http://localhost:8080
+# 后端运行在 http://localhost:8080/api
 ```
 
-#### 3. 启动 LLM 服务
+⚠️ **注意**：必须使用 Java 11（不支持其他版本）
+
+📖 详细配置请参考：[rag-server/README.md](./rag-server/README.md)
+
+#### 3. 启动 LLM 服务（端口 8888，root_path /rag）
 
 ```bash
 cd rag-llm
+# 编辑 model_config.json 配置各 LLM 的 API Key
+# 编辑 main.py 中的 RabbitMQ、MinIO、Milvus 连接信息
 pip install -r requirements.txt
-# 使用 uvicorn 启动服务（推荐）
 uvicorn main:app --host 0.0.0.0 --port 8888 --workers 2
-# 或直接使用 python
-python main.py
-# LLM服务运行在 http://localhost:8888
+# LLM 服务运行在 http://localhost:8888
 ```
 
-#### 4. 启动本地向量化服务（可选）
+📖 详细配置请参考：[rag-llm/README.md](./rag-llm/README.md)
 
-如果需要使用本地向量化和重排序服务（不依赖外部API），需要GPU支持：
+#### 4. 启动本地向量化服务（可选，需 GPU）
+
+如果需要使用本地向量化和重排序服务（不依赖外部 API），需要 GPU 支持：
 
 ```bash
 cd embedding_rerank
 
-# 安装依赖
-pip install vllm>=0.8.5 fastapi uvicorn[standard]
-
-# 启动 Embedding 服务（默认端口: 8890）
+# 启动 Embedding 服务（端口 8890）
 python embedding_start.py
 
-# 启动 Rerank 服务（默认端口: 8891）
+# 启动 Rerank 服务（端口 8891）
 python rerank_start.py
 ```
 
 **系统要求**：
-- GPU: NVIDIA GPU (推荐4GB+显存)
+- GPU: NVIDIA GPU（推荐 4GB+ 显存，最佳 8GB+）
 - CUDA: 11.8+
 - Python: 3.8+
 - vLLM: 0.8.5+
 
-**模型说明**：
-- **Embedding服务**: 使用 `Qwen/Qwen3-Embedding-0.6B` 模型进行文本向量化
-- **Rerank服务**: 使用 `Qwen/Qwen3-Reranker-0.6B` 模型进行文档重排序
-
-详细配置和使用说明请参考：
-- [Embedding服务文档](./embedding_rerank/EmbeddingREADME.md)
-- [Rerank服务文档](./embedding_rerank/RerankREADME.md)
+📖 详细配置请参考：
+- [Embedding 服务文档](./embedding_rerank/EmbeddingREADME.md)
+- [Rerank 服务文档](./embedding_rerank/RerankREADME.md)
 
 ### 数据库初始化
 
@@ -307,77 +315,109 @@ source 1_general_rag.sql
 
 ```
 general-rag-system/
-├── rag-client/                      # 前端项目
+├── rag-client/                      # 前端项目（Vue 3.5 + Vite 7.2）
 │   ├── src/
-│   │   ├── api/                     # API接口封装
-│   │   ├── components/              # 公共组件
-│   │   ├── views/                   # 页面视图
-│   │   ├── router/                  # 路由配置
-│   │   ├── stores/                  # 状态管理（Pinia）
-│   │   └── utils/                   # 工具函数
+│   │   ├── api/                     # API 接口封装（chatApi, kbApi, workspaceApi 等）
+│   │   ├── stores/                  # Pinia 状态管理（user, theme, search, workspace, kb）
+│   │   ├── router/                  # 路由配置（beforeEach 认证守卫）
+│   │   ├── views/                   # 页面组件
+│   │   │   ├── Login.vue            # 登录页
+│   │   │   ├── Register.vue         # 注册页
+│   │   │   ├── Dashboard.vue        # 仪表盘
+│   │   │   ├── SearchSessions.vue   # 搜索会话
+│   │   │   ├── chat/                # 对话页面（NewChat, ChatSession）
+│   │   │   ├── kb/                  # 知识库页面（KnowledgeBases, KnowledgeDetails）
+│   │   │   └── workspace/           # 工作空间页面（WorkspaceManagement）
+│   │   ├── components/              # 公共组件（ChatMessage, DocumentList 等）
+│   │   ├── layouts/                 # 布局组件（MainLayout）
+│   │   ├── utils/                   # 工具函数（auth, markdown, format）
+│   │   └── consts.js                # 常量定义（API_BASE_URL）
 │   ├── package.json
-│   └── vite.config.js
+│   ├── vite.config.js
+│   └── README.md                    # 前端详细文档
 │
-├── rag-server/                      # 后端项目
+├── rag-server/                      # 后端项目（Spring Boot 2.7 + Java 11）
 │   ├── src/main/java/com/rag/ragserver/
-│   │   ├── controller/              # 控制器
-│   │   ├── service/                 # 业务逻辑
-│   │   ├── mapper/                  # 数据访问
-│   │   ├── domain/                  # 实体类
-│   │   ├── configuration/           # 配置类
-│   │   └── common/                  # 公共类
+│   │   ├── controller/              # 9 个 REST 控制器
+│   │   │   ├── UserController.java
+│   │   │   ├── WorkspaceController.java
+│   │   │   ├── KbController.java
+│   │   │   ├── ChatController.java
+│   │   │   ├── QuerySessionController.java
+│   │   │   ├── DashboardController.java
+│   │   │   ├── ModelsController.java
+│   │   │   ├── AuditLogsController.java
+│   │   │   └── NotificationsController.java
+│   │   ├── service/                 # 业务逻辑（接口 + impl/）
+│   │   ├── mapper/                  # 15 个 MyBatis Mapper 接口
+│   │   ├── domain/                  # 实体类 + VO 包
+│   │   ├── dto/                     # 请求/响应 DTO
+│   │   ├── configuration/           # Spring 配置类（CORS, JWT, MyBatis, Milvus 等）
+│   │   ├── interceptor/             # JWT 拦截器（excludes /users/*）
+│   │   ├── aspect/                  # AOP 切面（审计日志）
+│   │   ├── exception/               # 全局异常处理
+│   │   ├── rabbit/                  # RabbitMQ 消费者
+│   │   ├── assembler/               # 对象转换器
+│   │   └── utils/                   # 工具类
 │   ├── src/main/resources/
-│   │   ├── application.yml          # 主配置
-│   │   ├── application-dev.yml.example   # 开发环境配置模板
-│   │   ├── application-prod.yml.example  # 生产环境配置模板
-│   │   └── com/rag/ragserver/mapper/     # MyBatis XML映射文件
-│   └── pom.xml
+│   │   ├── application.yml          # 主配置（port 8080, context-path /api）
+│   │   ├── application-dev.yml      # 开发环境配置
+│   │   ├── application-prod.yml     # 生产环境配置
+│   │   └── com/rag/ragserver/mapper/  # ⚠️ MyBatis XML 映射文件（15 个）
+│   ├── pom.xml
+│   └── README.md                    # 后端详细文档
 │
-├── rag-llm/                         # LLM服务（端口: 8888）
-│   ├── services/                    # 业务服务
-│   │   └── chat/                    # 聊天服务
-│   ├── mq/                          # 消息队列处理
-│   ├── agentic_rag_controller.py    # Agentic RAG 控制器（LangGraph状态机）
-│   ├── agentic_rag_toolkit.py       # Agentic RAG 工具集（5种检索工具）
+├── rag-llm/                         # LLM 服务（FastAPI，端口 8888）
+│   ├── services/
+│   │   └── chat.py                  # 聊天服务路由（/chat）
+│   ├── mq/                          # RabbitMQ 消息队列
+│   │   ├── connection.py            # 连接管理
+│   │   ├── document_embedding.py    # 文档向量化消费者
+│   │   └── session_name.py          # 会话名称生成消费者
+│   ├── agentic_rag_controller.py    # LangGraph 状态机控制器（max 5 轮）
+│   ├── agentic_rag_toolkit.py       # 5 种检索工具 + PROMPT
 │   ├── agentic_rag_utils.py         # Agentic RAG 核心服务
-│   ├── main.py                      # 入口文件
-│   ├── rag_utils.py                 # RAG工具函数
-│   ├── milvus_utils.py              # Milvus操作
-│   ├── minio_utils.py               # MinIO操作
-│   ├── gemini_utils.py              # Gemini API集成
-│   ├── openai_utils.py              # OpenAI API集成
-│   ├── requirements.txt             # Python依赖
-│   └── model_config.json.example    # 模型配置模板
+│   ├── main.py                      # FastAPI 入口（root_path="/rag"）
+│   ├── dependencies.py              # Lifespan 管理（RabbitMQ、Milvus 初始化）
+│   ├── rag_utils.py                 # 传统 RAG 工具函数
+│   ├── milvus_utils.py              # Milvus 操作（MilvusClientManager，30min 自动释放）
+│   ├── minio_utils.py               # MinIO 对象存储操作
+│   ├── utils.py                     # 通用工具（LLM 初始化、模型配置加载）
+│   ├── openai_utils.py              # OpenAI API 封装
+│   ├── gemini_utils.py              # Gemini API 封装
+│   ├── requirements.txt             # Python 依赖
+│   ├── model_config.json.example    # 模型配置模板
+│   └── README.md                    # AI 服务详细文档
 │
-├── embedding_rerank/                # 本地向量化与重排序服务
+├── embedding_rerank/                # 本地向量化与重排序服务（可选）
 │   ├── service/                     # 服务实现
-│   │   ├── embedding_service.py     # Embedding服务（Qwen3-Embedding-0.6B）
-│   │   └── rerank_service.py        # Rerank服务（Qwen3-Reranker-0.6B）
+│   │   ├── embedding_service.py     # Embedding 服务（Qwen3-Embedding-0.6B）
+│   │   └── rerank_service.py        # Rerank 服务（Qwen3-Reranker-0.6B）
 │   ├── config/                      # 配置模块
-│   │   ├── embedding_config.py      # Embedding配置
-│   │   └── rerank_config.py         # Rerank配置
+│   │   ├── embedding_config.py
+│   │   └── rerank_config.py
 │   ├── test/                        # 测试套件
-│   │   ├── test_embedding_service.py
-│   │   └── test_rerank_service.py
-│   ├── embedding_start.py           # Embedding服务启动入口
-│   ├── rerank_start.py              # Rerank服务启动入口
-│   ├── EmbeddingREADME.md          # Embedding服务完整文档
-│   ├── EmbeddingQUICKSTART.md      # Embedding快速开始
-│   ├── EmbeddingAPI.md             # Embedding API文档
-│   ├── RerankREADME.md             # Rerank服务完整文档
-│   ├── RerankQUICKSTART.md         # Rerank快速开始
-│   └── RerankAPI.md                # Rerank API文档
+│   ├── embedding_start.py           # Embedding 启动入口（端口 8890）
+│   ├── rerank_start.py              # Rerank 启动入口（端口 8891）
+│   ├── EmbeddingREADME.md          # Embedding 完整文档
+│   ├── RerankREADME.md             # Rerank 完整文档
+│   └── ...（API 文档、快速开始）
 │
-├── 1_general_rag.sql                # 数据库初始化SQL
-├── .gitignore                       # Git忽略配置
-├── README.md                        # 项目说明（本文件）
+├── 1_general_rag.sql                # 数据库初始化 SQL（15+ 表）
+├── .gitignore                       # Git 忽略配置
+├── README.md                        # 项目主文档（本文件）
 ├── SECURITY.md                      # 安全配置指南
 ├── CONTRIBUTING.md                  # 贡献指南
-├── LICENSE                          # Apache 2.0 开源协议
-└── CLEAN_GIT_HISTORY.md             # Git历史清理说明
+└── LICENSE                          # Apache 2.0 开源协议
 ```
 
 </details>
+
+📚 **各模块详细文档**：
+- [rag-client/README.md](./rag-client/README.md) - 前端开发指南（页面路由、状态管理、API 通信）
+- [rag-server/README.md](./rag-server/README.md) - 后端开发指南（API 路由、MyBatis 配置、JWT 认证）
+- [rag-llm/README.md](./rag-llm/README.md) - AI 服务指南（Agentic RAG、LLM 集成、RabbitMQ 消费者）
+- [embedding_rerank/](./embedding_rerank/) - 本地向量化服务（vLLM 部署、性能调优）
 
 ## 🔧 配置指南
 
