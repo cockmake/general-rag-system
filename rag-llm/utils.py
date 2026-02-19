@@ -474,14 +474,14 @@ def cut_history(history: list, model: dict):
 
     base_token = 10240  # 10k
 
-    max_tokens = base_token * 9
+    max_tokens = base_token * 6
     if (
             model_name.startswith("gemini-3-flash")
             or model_name == "grok-4.1-fast"
             or "codex" in model_name
             or "haiku" in model_name.lower()
     ):
-        max_tokens = base_token * 6
+        max_tokens = base_token * 5
     elif "sonnet" in model_name.lower():
         max_tokens = base_token * 4
     elif "opus" in model_name.lower():

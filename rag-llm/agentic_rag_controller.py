@@ -23,14 +23,13 @@ class RetrievalController:
         self.llm = self.llm.with_structured_output(RetrievalDecision)
 
     @staticmethod
-    def _format_history(history: list, max_turns: int = 4) -> str:
+    def _format_history(history: list) -> str:
         """格式化对话历史"""
         if not history:
             return "无对话历史"
 
-        recent = history[-max_turns * 2:] if len(history) > max_turns * 2 else history
         lines = []
-        for i, msg in enumerate(recent):
+        for i, msg in enumerate(history):
             role = "用户" if i % 2 == 0 else "助手"
             content = msg.get("content", "") if isinstance(msg, dict) else str(msg)
             lines.append(f"{role}: {content}")
@@ -256,11 +255,11 @@ class RetrievalController:
 {TOOL_SELECT_PROMPT}
 
 ### 决策输出要求
-- 严格遵守RetrievalDecision schema
-- params必须是完整的JSON对象，包含所有必填参数
-- reason要清晰说明决策依据（基于哪些信息、为什么选择该工具）
-- missing_info要列出当前缺失的具体信息点
-
+- 严格遵守 RetrievalDecision schema
+- params 必须是完整的JSON对象，包含所有必填参数
+- reason 要清晰说明决策依据（基于哪些信息、为什么选择该工具）
+- existing_info 简要总结已检索到的有用信息，必须是信息列表 List[str]
+- missing_info 列出当前缺失的具体信息点，必须是信息列表 List[str]
 ---
 
 请基于以上三类信息和决策策略，输出结构化决策。
