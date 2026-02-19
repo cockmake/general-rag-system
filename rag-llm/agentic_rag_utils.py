@@ -247,44 +247,50 @@ class AgenticRAGService:
                     }
                 }
                 break
+            try:
+                tool_result = await self.toolkit.execute_tool(decision.tool, decision.params)
+                new_docs = tool_result["results"]
+                before_count = len(reference_docs)
 
-            tool_result = await self.toolkit.execute_tool(decision.tool, decision.params)
-            new_docs = tool_result["results"]
-
-            before_count = len(reference_docs)
-
-            # list_filename_by_like 只返回元信息，不加入reference_docs
-            if decision.tool != "list_filename_by_like":
+                # list_filename_by_like 只返回元信息，不加入reference_docs
+                if decision.tool != "list_filename_by_like":
+                    for doc in new_docs:
+                        pk = doc.metadata.get("pk")
+                        if pk and pk not in reference_docs:
+                            reference_docs[pk] = doc
+                # 无论是否加入reference_docs，都记录所有遇到的文档信息（直接存Document对象）
                 for doc in new_docs:
-                    pk = doc.metadata.get("pk")
-                    if pk and pk not in reference_docs:
-                        reference_docs[pk] = doc
-            # 无论是否加入reference_docs，都记录所有遇到的文档信息（直接存Document对象）
-            for doc in new_docs:
-                doc_id = doc.metadata.get("documentId")
-                if doc_id and doc_id not in all_docs:
-                    # 创建一个轻量级Document对象（只保留metadata，不保留page_content节省内存）
-                    all_docs[doc_id] = Document(
-                        page_content="",
-                        metadata={
-                            "fileName": doc.metadata.get("fileName"),
-                            "documentId": doc.metadata.get("documentId"),
-                            "maxChunkIndex": doc.metadata.get("maxChunkIndex"),
-                        }
-                    )
+                    doc_id = doc.metadata.get("documentId")
+                    if doc_id and doc_id not in all_docs:
+                        # 创建一个轻量级Document对象（只保留metadata，不保留page_content节省内存）
+                        all_docs[doc_id] = Document(
+                            page_content="",
+                            metadata={
+                                "fileName": doc.metadata.get("fileName"),
+                                "documentId": doc.metadata.get("documentId"),
+                                "maxChunkIndex": doc.metadata.get("maxChunkIndex"),
+                            }
+                        )
 
-            after_count = len(reference_docs)
-            new_added = after_count - before_count
+                after_count = len(reference_docs)
+                new_added = after_count - before_count
 
-            logger.info(f"📊 本轮新增: {new_added}, 累积总数: {after_count}")
+                logger.info(f"📊 本轮新增: {new_added}, 累积总数: {after_count}")
 
-            formatted_result = self._format_tool_result(
-                tool=decision.tool,
-                tool_result=tool_result,
-                retrieved=len(new_docs),
-                new_added=new_added,
-                accumulated=after_count
-            )
+                formatted_result = self._format_tool_result(
+                    tool=decision.tool,
+                    tool_result=tool_result,
+                    retrieved=len(new_docs),
+                    new_added=new_added,
+                    accumulated=after_count
+                )
+                if new_added == 0:
+                    logger.warning(f"⚠️ 本轮无新增文档")
+            except Exception as e:
+                formatted_result = {
+                    "type": "error",
+                    "description": str(e)
+                }
 
             trace.append({
                 "round": round_no,
@@ -299,37 +305,37 @@ class AgenticRAGService:
             # 1. 决策理由
             if decision.reason:
                 content_parts.append(f"理由: {decision.reason}")
-
-            # 2. 缺失信息
+            # 2. 已有信息
+            if decision.existing_info:
+                content_parts.append(f"已有信息: {decision.existing_info}")
+            # 3. 缺失信息
             if decision.missing_info:
                 content_parts.append(f"缺失信息: {decision.missing_info}")
-
-            # 3. 工具名称
+            # 4. 工具名称
             content_parts.append(f"工具: {decision.tool}")
-
-            # 4. 调用参数
+            # 5. 调用参数
             params_str = json.dumps(decision.params, ensure_ascii=False, indent=2)
             content_parts.append(f"参数: {params_str}")
-
-            # 5. 执行结果（根据工具类型格式化）
+            # 6. 执行结果（根据工具类型格式化）
             if formatted_result.get("type") == "file_list":
                 # 文件列表工具
                 total_files = formatted_result.get('total_files', 0)
                 description = f"列出 {total_files} 个文件"
                 content_parts.append(f"结果: 列出 {total_files} 个文件")
-
             elif formatted_result.get("type") == "document_retrieval":
                 # 文档检索工具
                 retrieved = formatted_result.get('retrieved', 0)
                 new_added = formatted_result.get('new_added', 0)
                 accumulated = formatted_result.get('accumulated', 0)
-
                 description = f"检索 {retrieved} 个，新增 {new_added} 个，累计 {accumulated} 个"
                 content_parts.append(f"结果: 检索 {retrieved} 个，新增 {new_added} 个，累计 {accumulated} 个")
+            elif formatted_result.get("type") == "error":
+                # 错误情况
+                description = "error"
+                content_parts.append(f"执行工具时出错: {formatted_result.get('description')}")
             else:
-                # 其他情况
                 description = "执行完成"
-                content_parts.append(f"结果: {str(formatted_result)}")
+                content_parts.append(f"工具执行结果: {json.dumps(formatted_result, ensure_ascii=False)}")
 
             content_parts = ["```"] + content_parts + ["```"] if content_parts else []
 
@@ -343,9 +349,6 @@ class AgenticRAGService:
                     "status": "completed"
                 }
             }
-
-            if new_added == 0:
-                logger.warning(f"⚠️ 本轮无新增文档")
 
         # 最终结果
         yield {

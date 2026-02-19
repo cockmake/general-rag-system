@@ -35,6 +35,10 @@ class RetrievalDecision(BaseModel):
         description="工具参数,根据tool不同而不同"
     )
 
+    existing_info: List[str] = Field(
+        default_factory=list,
+        description="当前已检索到的有用信息（简要总结）"
+    )
     missing_info: List[str] = Field(
         default_factory=list,
         description="当前缺失的关键信息"
@@ -186,6 +190,8 @@ class RetrievalToolkit:
         filter_expr = f'documentId == {document_id} and chunkIndex >= {start_chunk_index} and chunkIndex <= {end_chunk_index}'
 
         limit = end_chunk_index - start_chunk_index + 1
+        if limit > 20:
+            raise RuntimeError(f"单次chunk范围不能超过20个，当前为{limit}个，请缩小范围或分多次调用")
 
         docs = await self._milvus_filter(
             filter_expr=filter_expr,
@@ -229,6 +235,8 @@ class RetrievalToolkit:
         filter_expr = f'fileName == "{self._escape(file_name)}" and chunkIndex >= {start_chunk_index} and chunkIndex <= {end_chunk_index}'
 
         limit = end_chunk_index - start_chunk_index + 1
+        if limit > 20:
+            raise RuntimeError(f"单次chunk范围不能超过20个，当前为{limit}个，请缩小范围或分多次调用")
 
         docs = await self._milvus_filter(
             filter_expr=filter_expr,
@@ -438,31 +446,23 @@ class RetrievalToolkit:
         """
         logger.info(f"🔧 执行工具: {tool}, 参数: {params}")
         if tool and params:
-            try:
-                if tool == "search_by_grep":
-                    return await self.search_by_grep(**params)
+            if tool == "search_by_grep":
+                return await self.search_by_grep(**params)
+            elif tool == "search_by_document_and_chunk_range":
+                return await self.search_by_document_and_chunk_range(**params)
 
-                elif tool == "search_by_document_and_chunk_range":
-                    return await self.search_by_document_and_chunk_range(**params)
+            elif tool == "search_by_filename_and_chunk_range":
+                return await self.search_by_filename_and_chunk_range(**params)
 
-                elif tool == "search_by_filename_and_chunk_range":
-                    return await self.search_by_filename_and_chunk_range(**params)
+            elif tool == "search_by_multi_queries_in_database":
+                return await self.search_by_multi_queries_in_database(**params)
 
-                elif tool == "search_by_multi_queries_in_database":
-                    return await self.search_by_multi_queries_in_database(**params)
-
-                elif tool == "list_filename_by_like":
-                    return await self.list_filename_by_like(**params)
-                else:
-                    logger.warning(f"⚠️ 未知工具: {tool}")
-                    return {"results": [], "total_hits": 0}
-            except Exception as e:
-                logger.error(f"❌ 工具执行失败: {tool}, 错误: {e}")
-                return {"results": [], "total_hits": 0}
+            elif tool == "list_filename_by_like":
+                return await self.list_filename_by_like(**params)
+            else:
+                raise ValueError(f"未知工具: {tool}")
         else:
-            logger.warning(f"⚠️ 工具执行异常: {tool}没有抛出异常也没有返回结果")
-            return {"results": [], "total_hits": 0}
-
+            raise ValueError("工具名称和参数不能为空")
 
 
 # ============= 检索工具对应的prompt =============
@@ -566,7 +566,7 @@ TOOL_DEFINE_PROMPT = """## 可用工具
 [全局硬规则]
 ====================
 1) 只能使用上述5个工具名与参数名。
-2) 工具对应的相关参数必须携带；参数类型必须正确；。
+2) 工具对应的必填参数必须携带；参数类型必须正确；。
 3) chunk范围必须满足 start <= end。
 4) list_filename_by_like 仅返回文件元信息；若要正文，必须再调用chunk范围工具。
 5) 输出中若出现非法工具名/参数名，视为错误决策。"""
@@ -624,8 +624,9 @@ search_by_grep:
 - 精确收敛用AND，广泛探索用OR。
 
 search_by_document_and_chunk_range / search_by_filename_and_chunk_range:
-- start_chunk_index <= end_chunk_index；
-- 范围尽量结合maxChunkIndex避免越界；
+- [start_chunk_index, end_chunk_index] 单次调用范围内禁止大于20个chunk；
+- 区间end_chunk_index，获取的chunk数量 = end_chunk_index - start_chunk_index + 1；
+- 范围注意maxChunkIndex避免越界；
 - document_id必须是int。
 
 search_by_multi_queries_in_database:
