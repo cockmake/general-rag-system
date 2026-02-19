@@ -2,15 +2,15 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.6-brightgreen)
 ![Vue.js](https://img.shields.io/badge/Vue.js-3.x-42b883)
 ![Python](https://img.shields.io/badge/Python-3.8+-3776ab)
 
-**一个功能完整的企业级 RAG（检索增强生成）知识库问答系统**
+**企业级 Agentic RAG 知识库问答系统**
 
-支持多用户、多工作空间、文档向量化、智能问答等功能
+支持多用户、多工作空间、智能代理检索、文档向量化等功能
 
 [功能特性](#-功能特性) • [快速开始](#-快速开始) • [系统架构](#-系统架构) • [配置指南](#-配置指南) • [部署文档](#-部署)
 
@@ -20,12 +20,14 @@
 
 ## 📖 项目简介
 
-General RAG System 是一个基于检索增强生成（Retrieval-Augmented Generation）技术的企业级知识库问答系统。通过将文档向量化存储，结合大语言模型的生成能力，实现精准、可靠的智能问答服务。
+General RAG System 是一个基于**检索增强生成（Retrieval-Augmented Generation）**和**智能代理（Agentic AI）**技术的企业级知识库问答系统。通过将文档向量化存储，结合 LangGraph 状态机和大语言模型的决策能力，实现自主、精准、可靠的智能问答服务。
 
 ### 核心优势
 
-- 🎯 **精准检索**：基于向量相似度的语义检索，支持多路召回策略
-- 🤖 **多模型支持**：兼容 OpenAI、DeepSeek、通义千问、Gemini 等多种 LLM
+- 🤖 **Agentic RAG**：基于 LangGraph 的智能代理检索，自主决策、多轮迭代、动态优化
+- 🎯 **精准检索**：5种检索工具（语义+关键词+文件探索+上下文补全），智能选择最优策略
+- 🔄 **多轮优化**：支持最多5轮检索迭代，自动补全不连续文档片段
+- 🤖 **多模型支持**：兼容 OpenAI、DeepSeek、通义千问、Gemini、Claude 等多种 LLM
 - 👥 **多租户架构**：支持工作空间隔离，权限精细化管理
 - 📚 **文档管理**：支持 PDF、TXT 等多种格式，自动解析和分块
 - 💬 **对话管理**：会话持久化，上下文记忆，历史回溯
@@ -98,11 +100,27 @@ general-rag-system/
   - 文档版本管理和更新
   - MinIO 对象存储，支持大文件
 
+- 🤖 **Agentic RAG（智能代理检索）**
+  - **自主决策检索策略**：基于 LangGraph 状态机，LLM 自主选择最优检索工具
+  - **5种检索工具**：
+    1. `search_by_grep` - 关键词精确检索（支持全库/单文件/多文件）
+    2. `search_by_document_and_chunk_range` - 按文档ID获取chunk范围
+    3. `search_by_filename_and_chunk_range` - 按文件名获取chunk范围
+    4. `search_by_multi_queries_in_database` - 多角度语义检索+Rerank
+    5. `list_filename_by_like` - 文件名模糊匹配列表
+  - **多轮迭代优化**：支持最多5轮检索，自动补全上下文
+  - **智能停止机制**：检索到足够信息后自动停止，节省资源
+  - **实时过程反馈**：检索过程、工具调用、决策理由实时流式输出
+
 - 🔍 **智能检索**
-  - 语义相似度搜索
-  - 混合检索（向量+关键词）
-  - 重排序（Rerank）优化
-  - Top-K 结果返回
+  - **Agentic RAG**: 基于 LangGraph 的智能代理检索系统
+    - 自主决策检索策略（5种工具自动选择）
+    - 多轮迭代检索优化
+    - 动态上下文补全
+  - 语义相似度搜索（向量检索 + 自动关键词融合）
+  - 关键词精确检索（grep风格，支持全库/单文件/多文件）
+  - 混合检索与重排序（Rerank）优化
+  - 智能文档分块与范围获取
 
 - 💬 **对话问答**
   - 基于 RAG 的准确回答
@@ -319,6 +337,9 @@ general-rag-system/
 │   ├── services/                    # 业务服务
 │   │   └── chat/                    # 聊天服务
 │   ├── mq/                          # 消息队列处理
+│   ├── agentic_rag_controller.py    # Agentic RAG 控制器（LangGraph状态机）
+│   ├── agentic_rag_toolkit.py       # Agentic RAG 工具集（5种检索工具）
+│   ├── agentic_rag_utils.py         # Agentic RAG 核心服务
 │   ├── main.py                      # 入口文件
 │   ├── rag_utils.py                 # RAG工具函数
 │   ├── milvus_utils.py              # Milvus操作
@@ -480,6 +501,140 @@ export RERANK_MAX_MODEL_LEN=3072
 - 🚀 [快速开始](./embedding_rerank/EmbeddingQUICKSTART.md)
 - 📡 [API文档](./embedding_rerank/EmbeddingAPI.md)
 
+## 🧠 Agentic RAG 智能代理检索
+
+### 什么是 Agentic RAG？
+
+Agentic RAG 是本系统的核心检索引擎，基于 **LangGraph 状态机** 和 **大语言模型决策**，实现了自主、智能的文档检索系统。不同于传统的单次检索方式，Agentic RAG 能够：
+
+- 🎯 **自主决策**：LLM 根据问题和检索历史，自动选择最优检索工具
+- 🔄 **多轮迭代**：支持最多5轮检索，逐步完善检索结果
+- 🧩 **上下文补全**：自动检测并补全不连续的文档片段
+- 🛑 **智能停止**：检索到足够信息后自动停止，避免过度检索
+- 📊 **过程可视化**：实时流式输出检索过程、工具调用、决策理由
+
+### 5种检索工具
+
+#### 1. search_by_grep - 关键词精确检索
+**适用场景**：代码级精确搜索、查找方法/类/变量/配置项
+- 支持全库检索、单文件检索、多文件检索
+- 支持 AND/OR 匹配模式（默认OR）
+- 精确匹配，无歧义，速度快
+
+**示例**：
+```python
+# 全库查找 Redis 相关代码
+search_by_grep(keywords=["Redis"], file_names=None)
+
+# 在 config.py 中查找端口配置
+search_by_grep(keywords=["port"], file_names=["config.py"])
+
+# 在多个 controller 文件中查找 API 端点
+search_by_grep(keywords=["@app.route", "POST"], 
+               file_names=["user_controller.py", "auth_controller.py"])
+```
+
+#### 2 & 3. chunk_range 工具 - 文档片段获取
+**适用场景**：补全上下文、扩展文档范围、绕过检索失败
+- `search_by_document_and_chunk_range` - 按文档ID获取
+- `search_by_filename_and_chunk_range` - 按文件名获取
+- 解决语义检索和关键词检索都失效的情况
+
+**示例**：
+```python
+# 补全不连续的chunk
+search_by_document_and_chunk_range(document_id=123, start=1, end=9)
+
+# 基于已知信息局部获取（检索失效时）
+search_by_filename_and_chunk_range(file_name="README.md", start=0, end=5)
+```
+
+#### 4. search_by_multi_queries_in_database - 多角度语义检索
+**适用场景**：概念理解、描述性问题、需要高质量语义匹配
+- 多query并行检索 + Rerank精排
+- 支持动态阈值过滤（grade_score_threshold: 0.3-0.6）
+- K-Means聚类去噪
+
+**示例**：
+```python
+# 理解Rerank机制
+search_by_multi_queries_in_database(
+    queries=["Rerank重排序机制", "文档相关性评分", "检索结果精排"],
+    grade_query="RAG系统中的Rerank是如何工作的",
+    grade_score_threshold=0.5,
+    top_k=10
+)
+```
+
+#### 5. list_filename_by_like - 文件探索
+**适用场景**：不确定文件名、浏览文件列表、按模式查找
+- 支持SQL LIKE语法（前缀、包含、目录匹配）
+- 仅返回元信息（fileName、documentId、maxChunkIndex）
+- 需配合 chunk_range 工具获取实际内容
+
+**示例**：
+```python
+# 查找所有配置文件
+list_filename_by_like(pattern="%config%", limit=30)
+# 然后选择目标文件获取内容
+search_by_filename_and_chunk_range(file_name="config.yaml", start=0, end=5)
+```
+
+### 工作流程
+
+```
+用户提问
+   ↓
+┌─────────────────────────────────────┐
+│  Agentic RAG Controller (LangGraph) │
+├─────────────────────────────────────┤
+│  第1轮：决策检索策略                 │
+│  ├─ 分析问题类型                     │
+│  ├─ 选择工具（5选1）                 │
+│  └─ 执行检索                         │
+│                                     │
+│  第2-5轮：迭代优化（如需）            │
+│  ├─ 评估当前检索结果                 │
+│  ├─ 决定继续/停止                    │
+│  ├─ 补全上下文/换角度检索            │
+│  └─ 更新检索历史                     │
+│                                     │
+│  构建上下文                          │
+│  ├─ 合并检索结果                     │
+│  ├─ 去重并排序                       │
+│  └─ 格式化为上下文                   │
+└─────────────────────────────────────┘
+   ↓
+生成回答（流式输出）
+```
+
+### 技术实现
+
+- **状态机框架**：LangGraph（支持循环、条件分支、状态持久化）
+- **决策模型**：支持所有 LLM（GPT、Claude、DeepSeek、Qwen、Gemini等）
+- **结构化输出**：Pydantic 模型定义，确保决策格式正确
+- **流式传输**：SSE（Server-Sent Events）实时推送检索过程
+- **容错机制**：工具调用失败自动降级，最多5轮保底
+
+### 优势对比
+
+| 特性 | 传统RAG | Agentic RAG |
+|------|---------|-------------|
+| 检索策略 | 固定单一 | 自主选择（5种工具） |
+| 检索轮次 | 单次 | 多轮迭代（最多5轮） |
+| 上下文补全 | 不支持 | 自动补全不连续chunk |
+| 工具组合 | 不支持 | 支持工具链式调用 |
+| 过程透明 | 黑盒 | 实时流式输出 |
+| 适应性 | 差 | 强（根据问题动态调整） |
+
+### 配置说明
+
+在 `agentic_rag_controller.py` 中可配置：
+- `max_rounds`: 最大检索轮次（默认5）
+- `grade_score_threshold`: Rerank分数阈值（默认0.4）
+- `top_k`: 每轮检索返回数量（默认10）
+
+
 ### Docker Compose 一键部署
 
 基础设施服务Docker部署配置：
@@ -604,6 +759,32 @@ A: 建议根据场景选择：
 - 快速响应：GPT-3.5、DeepSeek-Chat、Qwen-Plus
 - 高质量：GPT-4、Claude-3、Qwen-Max
 - 成本优化：本地部署开源模型（LLaMA、ChatGLM）
+</details>
+
+<details>
+<summary><b>Q: Agentic RAG 和传统 RAG 有什么区别？</b></summary>
+
+A: 主要区别：
+- **检索策略**：传统RAG单一固定，Agentic RAG自主选择5种工具
+- **检索轮次**：传统RAG单次检索，Agentic RAG支持最多5轮迭代
+- **上下文处理**：Agentic RAG自动补全不连续chunk，提供完整上下文
+- **适应性**：Agentic RAG根据问题类型动态调整策略
+- **透明度**：Agentic RAG实时展示检索过程和决策理由
+
+推荐在复杂问答、代码搜索、多文档关联等场景使用 Agentic RAG。
+</details>
+
+<details>
+<summary><b>Q: Agentic RAG 的5种工具如何选择？</b></summary>
+
+A: LLM会根据问题类型自动选择：
+- **结构化查找**（如"XXX方法在哪"）→ `search_by_grep`
+- **概念理解**（如"什么是XXX"）→ `search_by_multi_queries_in_database`
+- **文件探索**（如"有哪些配置文件"）→ `list_filename_by_like`
+- **上下文补全**（检索到不连续chunk）→ `chunk_range` 工具
+- **检索失效**（其他工具无法命中）→ `chunk_range` 兜底
+
+系统会在每轮检索后评估结果，决定是否继续、使用哪个工具。
 </details>
 
 <details>
