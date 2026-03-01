@@ -67,176 +67,96 @@ export function awaitSessionTitle(sessionId, onEvent) {
     }).then()
 }
 
-export function startChatStream(sessionId, modelId, question, kbId, options, onOpen, onMessage, onError, onClose) {
-    fetchEventSource(`${API_BASE_URL}/chat/stream`, {
+/**
+ * 通用流式请求处理函数
+ */
+function streamRequest(url, body, onOpen, onMessage, onError, onClose, logTag = "Stream") {
+    fetchEventSource(url, {
         method: "POST",
-
         headers: {
             "Authorization": `Bearer ${useUserStore().token}`,
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-            sessionId: sessionId,
-            modelId: modelId,
-            question: question,
-            kbId: kbId,
-            options: options
-        }),
-
+        body: JSON.stringify(body),
         onopen(response) {
             if (response.ok) {
-                console.log("Chat SSE connected")
+                console.log(`${logTag} SSE connected`)
                 if (onOpen) onOpen(response)
                 return
             }
-            throw new Error("Chat SSE Connection failed")
+            message.error("今日Token使用已达上限，请明天再试或联系管理员升级").then()
+            throw new Error(`${logTag} SSE Connection failed`)
         },
         onmessage(ev) {
-            let json = JSON.parse(ev.data)
-            if (json.type === 'content' || json.type === 'thinking') {
-                // content字段直接使用，已在server端解析
-                if (onMessage) onMessage({type: json.type, content: json.content})
-            } else if (json.type === 'process') {
-                // payload字段直接使用，已在server端解析
-                if (onMessage) onMessage({type: 'process', payload: json.payload})
-            } else if (json.type === 'done') {
-                // 流完成事件，包含消息ID
-                if (onMessage) onMessage({
-                    type: 'done',
-                    userMessageId: json.userMessageId,
-                    assistantMessageId: json.assistantMessageId
-                })
-            } else if (json.type === "usage") {
-                if (onMessage) onMessage({
-                    type: 'usage',
-                    payload: json.payload
-                })
+            try {
+                let json = JSON.parse(ev.data)
+                if (json.type === 'content' || json.type === 'thinking') {
+                    if (onMessage) onMessage({type: json.type, content: json.content})
+                } else if (json.type === 'process') {
+                    if (onMessage) onMessage({type: 'process', payload: json.payload})
+                } else if (json.type === 'done') {
+                    if (onMessage) onMessage({
+                        type: 'done',
+                        userMessageId: json.userMessageId,
+                        assistantMessageId: json.assistantMessageId
+                    })
+                } else if (json.type === "usage") {
+                    if (onMessage) onMessage({
+                        type: 'usage',
+                        payload: json.payload
+                    })
+                }
+            } catch (e) {
+                console.error(`${logTag} JSON Parse Error`, e)
             }
         },
         onclose() {
-            console.log("Chat SSE closed")
+            console.log(`${logTag} SSE closed`)
             if (onClose) onClose()
         },
         onerror(err) {
-            console.error("chat stream error", err)
+            console.error(`${logTag} error`, err)
             if (onError) onError(err)
             throw err
         },
-        openWhenHidden: true // 类 ChatGPT，切 tab 不断流
+        openWhenHidden: true
     }).then()
+}
+
+export function startChatStream(sessionId, modelId, question, kbId, options, onOpen, onMessage, onError, onClose) {
+    const body = {
+        sessionId: sessionId,
+        modelId: modelId,
+        question: question,
+        kbId: kbId,
+        options: options
+    }
+    streamRequest(`${API_BASE_URL}/chat/stream`, body, onOpen, onMessage, onError, onClose, "Chat")
 }
 
 /**
  * 编辑最后一轮用户问题并重新生成回复
  */
 export function editMessageStream(messageId, sessionId, modelId, kbId, newContent, options, onOpen, onMessage, onError, onClose) {
-    fetchEventSource(`${API_BASE_URL}/chat/messages/${messageId}/edit`, {
-        method: "POST",
-        headers: {
-            "Authorization": `Bearer ${useUserStore().token}`,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            sessionId: sessionId,
-            modelId: modelId,
-            kbId: kbId,
-            newContent: newContent,
-            options: options
-        }),
-        onopen(response) {
-            if (response.ok) {
-                console.log("Edit SSE connected")
-                if (onOpen) onOpen(response)
-                return
-            }
-            throw new Error("Edit SSE Connection failed")
-        },
-        onmessage(ev) {
-            let json = JSON.parse(ev.data)
-            if (json.type === 'content' || json.type === 'thinking') {
-                // content字段直接使用，已在server端解析
-                if (onMessage) onMessage({type: json.type, content: json.content})
-            } else if (json.type === 'process') {
-                if (onMessage) onMessage({type: 'process', payload: json.payload})
-            } else if (json.type === 'done') {
-                if (onMessage) onMessage({
-                    type: 'done',
-                    userMessageId: json.userMessageId,
-                    assistantMessageId: json.assistantMessageId
-                })
-            } else if (json.type === "usage") {
-                if (onMessage) onMessage({
-                    type: 'usage',
-                    payload: json.payload
-                })
-            }
-        },
-        onclose() {
-            console.log("Edit SSE closed")
-            if (onClose) onClose()
-        },
-        onerror(err) {
-            console.error("edit stream error", err)
-            if (onError) onError(err)
-            throw err
-        },
-        openWhenHidden: true
-    }).then()
+    const body = {
+        sessionId: sessionId,
+        modelId: modelId,
+        kbId: kbId,
+        newContent: newContent,
+        options: options
+    }
+    streamRequest(`${API_BASE_URL}/chat/messages/${messageId}/edit`, body, onOpen, onMessage, onError, onClose, "Edit")
 }
 
 /**
  * 重试最后一轮AI回复
  */
 export function retryMessageStream(userMessageId, sessionId, modelId, kbId, options, onOpen, onMessage, onError, onClose) {
-    fetchEventSource(`${API_BASE_URL}/chat/messages/${userMessageId}/retry`, {
-        method: "POST",
-        headers: {
-            "Authorization": `Bearer ${useUserStore().token}`,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            sessionId: sessionId,
-            modelId: modelId,
-            kbId: kbId,
-            options: options
-        }),
-        onopen(response) {
-            if (response.ok) {
-                console.log("Retry SSE connected")
-                if (onOpen) onOpen(response)
-                return
-            }
-            throw new Error("Retry SSE Connection failed")
-        },
-        onmessage(ev) {
-            let json = JSON.parse(ev.data)
-            if (json.type === 'content' || json.type === 'thinking') {
-                // content字段直接使用，已在server端解析
-                if (onMessage) onMessage({type: json.type, content: json.content})
-            } else if (json.type === 'process') {
-                if (onMessage) onMessage({type: 'process', payload: json.payload})
-            } else if (json.type === 'done') {
-                if (onMessage) onMessage({
-                    type: 'done',
-                    userMessageId: json.userMessageId,
-                    assistantMessageId: json.assistantMessageId
-                })
-            } else if (json.type === "usage") {
-                if (onMessage) onMessage({
-                    type: 'usage',
-                    payload: json.payload
-                })
-            }
-        },
-        onclose() {
-            console.log("Retry SSE closed")
-            if (onClose) onClose()
-        },
-        onerror(err) {
-            console.error("retry stream error", err)
-            if (onError) onError(err)
-            throw err
-        },
-        openWhenHidden: true
-    }).then()
+    const body = {
+        sessionId: sessionId,
+        modelId: modelId,
+        kbId: kbId,
+        options: options
+    }
+    streamRequest(`${API_BASE_URL}/chat/messages/${userMessageId}/retry`, body, onOpen, onMessage, onError, onClose, "Retry")
 }

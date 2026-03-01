@@ -570,7 +570,7 @@ TOOL_DEFINE_PROMPT = """## Agentic RAG 检索工具集（5 个原子化工具）
 ┌─────────────────────────┬──────────┬────────────────────────────────────┐
 │ 参数名                  │ 类型     │ 说明                             │
 ├─────────────────────────┼──────────┼────────────────────────────────────┤
-│ queries                 │ List[str]│ 必填，3~6 条，避免同义重复        │
+│ queries                 │ List[str]│ 必填，3~10 条，避免同义重复        │
 │ grade_query             │ str      │ 必填，消歧后的核心问题（用于评分）│
 │ top_k                   │ int      │ 可选，默认 10；首轮 10~15，补充 5~7 │
 │ grade_score_threshold   │ float    │ 可选，默认 0.4；范围 0.3~0.6       │
@@ -632,7 +632,7 @@ LIKE 语法示例：
 - 获取正文需再用工具 2（search_by_filename_and_chunk_range）或工具 3（extend_file_chunk_windows）
 
 示例：
-{"tool": "list_filename_by_like", "params": {"pattern": "src/auth/%", "limit": 30}}
+{"tool": "list_filename_by_like", "params": {"pattern": "src/auth/%", "offset": 0, "limit": 30}}
 
 ================================================================================
 [全局硬规则]
@@ -746,7 +746,7 @@ TOOL_SELECT_PROMPT = """## 检索决策输出规范
   - ⚠️ 总 chunk 数 = window_size * 2 + 1，确保不超过 20
 
 □ search_by_multi_queries_in_database：
-  - queries 3~6 条，角度不同但语义相关
+  - queries 3~10 条，角度不同但语义相关
   - grade_query 是消歧后的核心问题
   - grade_score_threshold 在 0.3~0.6 之间
 

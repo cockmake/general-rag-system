@@ -75,7 +75,7 @@ export function useMessageEdit(
             loading: true,
             ragProcess: [],
             latencyMs: 0,
-            completionTokens: 0,
+            totalTokens: 0,
             thinkingCollapseKeys: []
         }))
         const assistant = messages.value[messages.value.length - 1]
@@ -132,7 +132,7 @@ export function useMessageEdit(
             loading: true,
             ragProcess: [],
             latencyMs: 0,
-            completionTokens: 0,
+            totalTokens: 0,
             thinkingCollapseKeys: []
         }))
         const assistant = messages.value[messages.value.length - 1]

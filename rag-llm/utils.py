@@ -97,6 +97,7 @@ def get_official_llm(
             api_key=api_key,
             base_url=base_url,
             enable_web_search=enable_web_search,
+            enable_thinking=True,
             timeout=timeout,
             max_retries=max_retries,
         )

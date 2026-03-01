@@ -7,19 +7,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rag.ragserver.common.R;
-import com.rag.ragserver.domain.ConversationMessages;
-import com.rag.ragserver.domain.KnowledgeBases;
-import com.rag.ragserver.domain.Models;
-import com.rag.ragserver.domain.QuerySessions;
+import com.rag.ragserver.domain.*;
 import com.rag.ragserver.dto.ChatStart;
 import com.rag.ragserver.dto.ChatStream;
 import com.rag.ragserver.dto.MessageEditDTO;
 import com.rag.ragserver.dto.MessageRetryDTO;
 import com.rag.ragserver.exception.BusinessException;
-import com.rag.ragserver.service.ConversationMessagesService;
-import com.rag.ragserver.service.KnowledgeBasesService;
-import com.rag.ragserver.service.QuerySessionsService;
-import com.rag.ragserver.service.KbPermissionService;
+import com.rag.ragserver.service.*;
 import com.rag.ragserver.utils.ModelUtils;
 import com.rag.ragserver.domain.model.vo.ModelPermission;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +43,7 @@ public class ChatController {
     private final ConversationMessagesService conversationMessagesService;
     private final KnowledgeBasesService knowledgeBasesService;
     private final KbPermissionService kbPermissionService;
+    private final RolesService rolesService;
     private final WebClient webClient;
 
     @PostMapping("/start")
@@ -121,7 +116,9 @@ public class ChatController {
                         ConversationMessages::getStatus,
                         ConversationMessages::getCreatedAt,
                         ConversationMessages::getLatencyMs,
+                        ConversationMessages::getPromptTokens,
                         ConversationMessages::getCompletionTokens,
+                        ConversationMessages::getTotalTokens,
                         ConversationMessages::getOptions,
                         ConversationMessages::getThinking
                 )
@@ -255,6 +252,18 @@ public class ChatController {
     }
 
     private ModelPermission validatePermissions(Integer roleId, Long modelId, Long kbId, Long userId, Long workspaceId) {
+        // Check daily token limit
+        Roles role = rolesService.getById(roleId);
+        if (role != null && role.getDailyMaxTokens() != null && role.getDailyMaxTokens() > 0) {
+            Long todayUsage = conversationMessagesService.countTodayTokens(userId);
+            if (todayUsage >= role.getDailyMaxTokens()) {
+                throw new BusinessException(
+                        403,
+                        String.format("今日Token使用已达上限 (%d)，请明天再试或联系管理员升级", role.getDailyMaxTokens())
+                );
+            }
+        }
+
         ModelPermission modelPermission = modelUtils.canUseModel(roleId, modelId);
         if (modelPermission == null) {
             throw new BusinessException(404, "您无权使用该模型");

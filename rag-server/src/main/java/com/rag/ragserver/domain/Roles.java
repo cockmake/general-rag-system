@@ -4,14 +4,17 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+
 import java.util.Date;
+
 import lombok.Data;
 
 /**
  * 用户角色与等级定义表.
+ *
  * @TableName roles
  */
-@TableName(value ="roles")
+@TableName(value = "roles")
 @Data
 public class Roles {
     /**
@@ -40,6 +43,8 @@ public class Roles {
      */
     private Date createdAt;
 
+    private Integer dailyMaxTokens;
+
     @Override
     public boolean equals(Object that) {
         if (this == that) {
@@ -53,10 +58,10 @@ public class Roles {
         }
         Roles other = (Roles) that;
         return (this.getId() == null ? other.getId() == null : this.getId().equals(other.getId()))
-            && (this.getName() == null ? other.getName() == null : this.getName().equals(other.getName()))
-            && (this.getWeight() == null ? other.getWeight() == null : this.getWeight().equals(other.getWeight()))
-            && (this.getDescription() == null ? other.getDescription() == null : this.getDescription().equals(other.getDescription()))
-            && (this.getCreatedAt() == null ? other.getCreatedAt() == null : this.getCreatedAt().equals(other.getCreatedAt()));
+                && (this.getName() == null ? other.getName() == null : this.getName().equals(other.getName()))
+                && (this.getWeight() == null ? other.getWeight() == null : this.getWeight().equals(other.getWeight()))
+                && (this.getDescription() == null ? other.getDescription() == null : this.getDescription().equals(other.getDescription()))
+                && (this.getCreatedAt() == null ? other.getCreatedAt() == null : this.getCreatedAt().equals(other.getCreatedAt()));
     }
 
     @Override

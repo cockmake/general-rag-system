@@ -5,14 +5,15 @@
 <mapper namespace="com.rag.ragserver.mapper.RolesMapper">
 
     <resultMap id="BaseResultMap" type="com.rag.ragserver.domain.Roles">
-            <id property="id" column="id" />
-            <result property="name" column="name" />
-            <result property="weight" column="weight" />
-            <result property="description" column="description" />
-            <result property="createdAt" column="created_at" />
+        <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="weight" column="weight"/>
+        <result property="description" column="description"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="dailyMaxTokens" column="daily_max_tokens"/>
     </resultMap>
 
     <sql id="Base_Column_List">
-        id,name,weight,description,created_at
+        id,name,weight,description,created_at, daily_max_tokens
     </sql>
 </mapper>

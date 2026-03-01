@@ -19,6 +19,7 @@ class GeminiInstance:
             api_key: str,
             base_url: str,
             enable_web_search: bool = False,
+            enable_thinking: bool = True,
             timeout: int = 30,
             max_retries: int = 2,
     ):
@@ -30,7 +31,7 @@ class GeminiInstance:
         :param base_url: API 基础地址
         """
         self.model_name = model_name
-        self.enable_thinking = "thinking" in model_name  # 简单判断是否为思考模型
+        self.enable_thinking = enable_thinking
         self.enable_web_search = enable_web_search
 
         # 保存原始配置供 astream 手动请求使用

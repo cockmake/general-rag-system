@@ -90,11 +90,14 @@ export function useChat(
                     }
                 } else if (data.type === 'usage') {
                     if (data.payload) {
-                        if (data.payload.latency_ms) {
+                        if (data.payload.latency_ms != null) {
                             assistantMsg.latencyMs = data.payload.latency_ms
                         }
-                        if (data.payload.completion_tokens) {
+                        if (data.payload.completion_tokens != null) {
                             assistantMsg.completionTokens = data.payload.completion_tokens
+                        }
+                        if (data.payload.total_tokens != null) {
+                            assistantMsg.totalTokens = data.payload.total_tokens
                         }
                     }
                 }
@@ -179,7 +182,7 @@ export function useChat(
                 loading: msg.role === 'assistant' && msg.status === 'generating',
                 ragProcess: ragProcess,
                 latencyMs: msg.latencyMs,
-                completionTokens: msg.completionTokens,
+                totalTokens: msg.totalTokens,
                 options: options,
                 thinking: msg.thinking,
                 thinkingCollapseKeys: []
@@ -239,7 +242,7 @@ export function useChat(
                     loading: true,
                     ragProcess: [],
                     latencyMs: 0,
-                    completionTokens: 0,
+                    totalTokens: 0,
                     thinkingCollapseKeys: []
                 }))
                 const assistant = messages.value[messages.value.length - 1]
@@ -280,7 +283,7 @@ export function useChat(
             loading: true,
             ragProcess: [],
             latencyMs: 0,
-            completionTokens: 0,
+            totalTokens: 0,
             thinkingCollapseKeys: []
         }))
         scrollToBottom()

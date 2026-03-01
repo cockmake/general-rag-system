@@ -188,10 +188,10 @@ const roles = computed(() => ({
               class="bubble-list">
             <template #header="{item: msg}">
               <!-- 显示 usage header -->
-              <div v-if="msg.latencyMs || msg.completionTokens"
+              <div v-if="msg.latencyMs || msg.totalTokens"
                    style="font-size: 12px; color: #999; margin-bottom: 8px;">
-                <span v-if="msg.completionTokens">Tokens: {{ msg.completionTokens }}</span>
-                <a-divider type="vertical" v-if="msg.completionTokens && msg.latencyMs"/>
+                <span v-if="msg.totalTokens">Tokens: {{ msg.totalTokens }}</span>
+                <a-divider type="vertical" v-if="msg.totalTokens && msg.latencyMs"/>
                 <span v-if="msg.latencyMs">Latency: {{ msg.latencyMs / 1000 }}s</span>
               </div>
             </template>
