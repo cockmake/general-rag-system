@@ -149,16 +149,15 @@ def get_embedding_instance(embedding_info: dict):
 
 def get_langchain_llm(
         model_info: dict,
-        enable_thinking: bool = False,
         timeout: int = 60,
         max_retries: int = 5,
+        **kwargs
 ):
     # 初始化langchain类型的LLM
     settings = _get_model_setting(model_info)
     model_name = model_info.get("name")
     api_key = settings.get("api_key")
     base_url = settings.get("base_url")
-    extra_body = {"enable_thinking": enable_thinking}
 
     llm = init_chat_model(
         model=model_name,
@@ -167,7 +166,7 @@ def get_langchain_llm(
         model_provider=settings['model_provider'] if "model_provider" in settings else None,
         timeout=timeout,
         max_retries=max_retries,
-        extra_body=extra_body
+        **kwargs
     )
     return llm
 

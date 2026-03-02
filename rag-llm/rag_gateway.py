@@ -47,7 +47,6 @@ class RAGGateway:
             logger.info(f"初始化RAG Gateway，使用模型: {self.model_info['name']}")
             self.llm = get_langchain_llm(
                 model_info=self.model_info,
-                enable_thinking=False,
                 timeout=60,
                 max_retries=3
             )
