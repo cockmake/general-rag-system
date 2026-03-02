@@ -55,10 +55,9 @@ class SessionNameGenerator:
                 session_id = data.get("sessionId")
                 # 兼容不同的字段名，假设 Java 端发送的是 content 或 message
                 content = data.get("firstMessage") or data.get("content") or data.get("message")
-                model = data.get(
-                    "model")  # {'id': 7, 'name': 'gemini-2.5-flash', 'provider': 'gemini', 'metadata': '{}'}
+                model = data.get("model")
                 model = {
-                    'name': 'qwen3-max-2026-01-23',
+                    'name': 'deepseek/deepseek-v3.2-251201',
                     'provider': 'other'
                 }
                 llm = get_langchain_llm(model)
