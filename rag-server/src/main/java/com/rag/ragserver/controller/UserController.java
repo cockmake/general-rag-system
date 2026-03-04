@@ -151,7 +151,8 @@ public class UserController {
             userInfo.put("role", Map.of(
                     "id", role.getId(),
                     "name", role.getName(),
-                    "weight", role.getWeight()
+                    "weight", role.getWeight(),
+                    "dailyMaxTokens", role.getDailyMaxTokens()
             ));
         }
         return R.success(Map.of(

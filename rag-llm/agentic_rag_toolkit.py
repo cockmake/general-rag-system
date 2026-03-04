@@ -694,7 +694,7 @@ TOOL_SELECT_PROMPT = """## 检索决策输出规范
    - 例：maxChunkIndex=29 表示该文件有 30 个 chunk 文档切片（索引 0-29）
    - 规划范围时确保 end_chunk_index ≤ maxChunkIndex
 
-2. 利用 fileName + chunkIndex 快速扩展上下文（推荐）：
+2. 利用 fileName + chunkIndex 快速扩展文档切片内容上下文（推荐）：
    - 从已检索文档的 metadata 中获取 fileName 和 chunkIndex
    - 优先使用 extend_file_chunk_context_window 快速获取前后内容
    - 比手动计算范围更高效，自动处理边界
@@ -702,11 +702,11 @@ TOOL_SELECT_PROMPT = """## 检索决策输出规范
 3. 利用 fileName 调用文件级范围检索：
    - 从已检索文档的 metadata 中获取 fileName
    - 用于 search_by_filename_and_chunk_range 精确控制范围
-   - 适合需要读取大范围连续 chunk 的场景
+   - 适合需要读取大范围连续 chunk 文档切片的场景
 
-4. 利用已检索 chunk 的连续性判断是否需要补充：
+4. 利用已检索 chunk 文档切片的连续性判断是否需要补充：
    - 例：已获取 chunk [0,1,2] 和 [15,16,17]，中间 [3-14] 缺失
-   - 可调用 search_by_filename_and_chunk_range 补全中间部分
+   - 可调用 search_by_filename_and_chunk_range 补全中间部分的文档切片
 
 5. 利用文件分布判断检索覆盖度：
    - total_files=1 且问题涉及多模块 → 需要扩展文件范围

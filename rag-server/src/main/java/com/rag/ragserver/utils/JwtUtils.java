@@ -37,8 +37,9 @@ public class JwtUtils {
     /**
      * 生成 Token
      * 修改：增加 userId 参数，并将 userId 和 username 存入 Claims
-     * @param userId 用户ID
-     * @param username 用户名
+     *
+     * @param userId     用户ID
+     * @param username   用户名
      * @param rememberMe 是否记住我
      * @return JWT 字符串
      */
@@ -68,7 +69,12 @@ public class JwtUtils {
      * 检查 Token 是否过期
      */
     public boolean isTokenExpired(String token) {
-        return extractAllClaims(token).getExpiration().before(new Date());
+        try {
+            return extractAllClaims(token).getExpiration().before(new Date());
+        } catch (Exception e) {
+            return true; // 如果解析失败（如过期或无效），也视为过期
+        }
+
     }
 
     /**
