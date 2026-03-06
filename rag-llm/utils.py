@@ -471,24 +471,22 @@ def cut_history(history: list, model: dict):
 
     base_token = 10240  # 10k
 
-    max_tokens = base_token * 8
+    max_tokens = base_token * 6
     if model_name.startswith("gpt-"):
         if "codex" in model_name.lower():
-            max_tokens = base_token * 6
-        else:
             max_tokens = base_token * 4
+        else:
+            max_tokens = base_token * 3
 
     elif model_name.startswith("gemini-"):
         if "flash" in model_name.lower():
-            max_tokens = base_token * 6
-        elif "pro" in model_name.lower():
             max_tokens = base_token * 4
+        elif "pro" in model_name.lower():
+            max_tokens = base_token * 3
 
     elif model_name.startswith("claude-"):
-        if "haiku" in model_name.lower():
-            max_tokens = base_token * 6
-        elif "sonnet" in model_name.lower():
-            max_tokens = base_token * 4
+        if "sonnet" in model_name.lower():
+            max_tokens = base_token * 3
         elif "opus" in model_name.lower():
             max_tokens = base_token * 2
 
