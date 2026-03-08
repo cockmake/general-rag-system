@@ -52,7 +52,7 @@ public class ChatController {
         Integer roleId = (Integer) request.getAttribute("roleId");
         Long workspaceId = (Long) request.getAttribute("workspaceId");
 
-        ModelPermission modelPermission = validatePermissions(roleId, chatStart.getModelId(), chatStart.getKbId(), userId, workspaceId);
+        validatePermissions(roleId, chatStart.getModelId(), chatStart.getKbId(), userId, workspaceId);
         Long kbId = chatStart.getKbId();
 
         QuerySessions querySession = new QuerySessions();
@@ -80,13 +80,7 @@ public class ChatController {
 
         conversationMessagesService.save(conversationMessage);
 
-        Boolean f = querySessionsService.sessionNameGenerate(userId, querySession.getId(), chatStart.getQuestion(), modelPermission);
-        if (f) {
-            return R.success(Map.of(
-                    "sessionId", querySession.getId()
-            ));
-        }
-        throw new BusinessException(500, "会话创建失败");
+        return R.success(Map.of("sessionId", querySession.getId()));
     }
 
     @GetMapping("/sessions/{sessionId}/messages")

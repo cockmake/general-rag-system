@@ -2,7 +2,7 @@ import commonApi from './commonApi'
 import {API_BASE_URL} from "@/consts.js";
 import {useUserStore} from "@/stores/user.js";
 import {fetchEventSource} from "@microsoft/fetch-event-source"
-import {message} from "ant-design-vue";
+import {message} from "ant-design-vue"
 
 export function fetchAvailableModels() {
     return commonApi.get('/models/available')
@@ -37,34 +37,8 @@ export function deleteSession(sessionId) {
     return commonApi.delete(`/sessions/${sessionId}`)
 }
 
-export function awaitSessionTitle(sessionId, onEvent) {
-    console.log("awaitSessionTitle", sessionId)
-    fetchEventSource(`${API_BASE_URL}/sessions/${sessionId}/title/await`, {
-        headers: {
-            Authorization: `Bearer ${useUserStore().token}`,
-        },
-        async onopen(response) {
-            if (response.ok) {
-                console.log('Session SSE connected')
-                return
-            }
-            throw new Error(`Failed to connect: ${response.status}`)
-        },
-        onmessage(ev) {
-            if (onEvent) {
-                let {data, event} = ev
-                const json = JSON.parse(data)
-                onEvent(json.title || '新的对话')
-            }
-        },
-        onclose() {
-            console.log('Session SSE closed')
-        },
-        onerror(err) {
-            console.error('Session SSE error', err)
-        },
-        openWhenHidden: true
-    }).then()
+export function fetchSessionTitle(sessionId) {
+    return commonApi.get(`/sessions/${sessionId}/title`)
 }
 
 /**

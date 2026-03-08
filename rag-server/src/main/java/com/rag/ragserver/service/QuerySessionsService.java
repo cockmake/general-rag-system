@@ -1,9 +1,7 @@
 package com.rag.ragserver.service;
 
-import com.rag.ragserver.domain.ModelPermissions;
 import com.rag.ragserver.domain.QuerySessions;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.rag.ragserver.domain.model.vo.ModelPermission;
 import com.rag.ragserver.domain.session.vo.SessionListVO;
 import com.rag.ragserver.dto.SessionCursorQuery;
 
@@ -16,7 +14,7 @@ import java.util.List;
 * @createDate 2026-01-02 22:22:17
 */
 public interface QuerySessionsService extends IService<QuerySessions> {
-    Boolean sessionNameGenerate(Long userId, Long sessionId, String firstMessage, ModelPermission modelPermission);
+    String generateTitle(Long sessionId, Long userId, Long workspaceId);
     SessionListVO listByCursor(
             Long userId,
             Long workspaceId,

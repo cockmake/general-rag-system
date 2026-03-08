@@ -15,7 +15,7 @@ import {
   BulbOutlined
 } from '@ant-design/icons-vue'
 
-import {awaitSessionTitle, fetchAvailableModels, startChat} from '@/api/chatApi'
+import {fetchAvailableModels, fetchSessionTitle, startChat} from '@/api/chatApi'
 import {models, groupedModels, selectedModel, selectedKb, loadKbs} from "@/vars.js";
 import {events} from "@/events.js";
 import KbSelector from "@/components/KbSelector.vue";
@@ -171,16 +171,15 @@ const onSend = async (text) => {
     })
     let {sessionId} = res
     if (sessionId) {
-      awaitSessionTitle(sessionId, (title) => {
-        events.emit('sessionTitleUpdated', {
-          sessionId,
-          title
-        })
-      })
       events.emit('sessionListRefresh')
       router.replace(`/chat/${res.sessionId}`).then(() => {
         message.success('新聊天已创建')
-        // 并刷新SessionList组件的数据
+      })
+      fetchSessionTitle(sessionId).then(titleRes => {
+        events.emit('sessionTitleUpdated', {
+          sessionId,
+          title: titleRes.title || '新的对话'
+        })
       })
     }
   } finally {

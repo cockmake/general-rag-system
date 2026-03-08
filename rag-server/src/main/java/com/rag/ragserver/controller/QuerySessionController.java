@@ -7,14 +7,13 @@ import com.rag.ragserver.domain.session.vo.SessionListVO;
 import com.rag.ragserver.dto.SessionCursorQuery;
 import com.rag.ragserver.exception.BusinessException;
 import com.rag.ragserver.service.QuerySessionsService;
-import com.rag.ragserver.utils.SessionTitleAwaitManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import javax.servlet.http.HttpServletRequest;
 import com.rag.ragserver.dto.SessionSearchResultDTO;
 import java.util.List;
+import java.util.Map;
 
 import com.rag.ragserver.dto.SessionSearchQuery;
 import org.springframework.validation.annotation.Validated;
@@ -25,7 +24,6 @@ import org.springframework.validation.annotation.Validated;
 public class QuerySessionController {
     private final QuerySessionsService querySessionsService;
     private final HttpServletRequest request;
-    private final SessionTitleAwaitManager sseManager;
 
     @PostMapping("/search")
     public R<List<SessionSearchResultDTO>> searchSessions(
@@ -53,7 +51,6 @@ public class QuerySessionController {
 
     @DeleteMapping("/{sessionId}")
     public R<Void> deleteSession(@PathVariable Long sessionId) {
-
         Long userId = (Long) request.getAttribute("userId");
         Long workspaceId = (Long) request.getAttribute("workspaceId");
 
@@ -64,20 +61,11 @@ public class QuerySessionController {
         throw new BusinessException(404, "会话不存在或无权限删除");
     }
 
-
-    @GetMapping("/{sessionId}/title/await")
-    public SseEmitter connect(@PathVariable Long sessionId) {
+    @GetMapping("/{sessionId}/title")
+    public R<Map<String, String>> getSessionTitle(@PathVariable Long sessionId) {
         Long userId = (Long) request.getAttribute("userId");
         Long workspaceId = (Long) request.getAttribute("workspaceId");
-        QuerySessions session = querySessionsService.getOne(
-                new LambdaQueryWrapper<QuerySessions>()
-                        .eq(QuerySessions::getId, sessionId)
-                        .eq(QuerySessions::getUserId, userId)
-                        .eq(QuerySessions::getWorkspaceId, workspaceId)
-        );
-        if (session == null) {
-            throw new BusinessException(404, "session 不存在");
-        }
-        return sseManager.connect(sessionId);
+        String title = querySessionsService.generateTitle(sessionId, userId, workspaceId);
+        return R.success(Map.of("title", title));
     }
 }

@@ -5,14 +5,14 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.rag.ragserver.assembler.SessionAssembler;
+import com.rag.ragserver.domain.ConversationMessages;
 import com.rag.ragserver.domain.QuerySessions;
-import com.rag.ragserver.domain.model.vo.ModelPermission;
 import com.rag.ragserver.domain.session.vo.SessionListVO;
 import com.rag.ragserver.dto.SessionCursorQuery;
 import com.rag.ragserver.exception.BusinessException;
+import com.rag.ragserver.service.ConversationMessagesService;
 import com.rag.ragserver.service.QuerySessionsService;
 import com.rag.ragserver.mapper.QuerySessionsMapper;
-import com.rag.ragserver.utils.SessionTitleAwaitManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -40,7 +40,7 @@ import com.rag.ragserver.dto.SessionSearchResultDTO;
 public class QuerySessionsServiceImpl extends ServiceImpl<QuerySessionsMapper, QuerySessions>
         implements QuerySessionsService {
     private final WebClient webClient;
-    private final SessionTitleAwaitManager sseManager;
+    private final ConversationMessagesService conversationMessagesService;
     private final QuerySessionsMapper querySessionsMapper;
 
     @Override
@@ -114,30 +114,41 @@ public class QuerySessionsServiceImpl extends ServiceImpl<QuerySessionsMapper, Q
     }
 
     @Override
-    public Boolean sessionNameGenerate(Long userId, Long sessionId, String firstMessage, ModelPermission modelPermission) {
-        webClient.post()
-                .uri("/rag/chat/session/name")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("content", firstMessage, "model", modelPermission))
-                .retrieve()
-                .bodyToMono(Map.class)
-                .subscribe(
-                        response -> {
-                            String sessionKey = (String) response.getOrDefault("title", "新的对话");
-                            LambdaUpdateWrapper<QuerySessions> uw = new LambdaUpdateWrapper<>();
-                            uw.eq(QuerySessions::getId, sessionId).set(QuerySessions::getSessionKey, sessionKey);
-                            update(uw);
-                            sseManager.send(sessionId, "session_title", Map.of("title", sessionKey));
-                        },
-                        error -> {
-                            log.error("Failed to generate session name for sessionId={}: {}", sessionId, error.getMessage());
-                            LambdaUpdateWrapper<QuerySessions> uw = new LambdaUpdateWrapper<>();
-                            uw.eq(QuerySessions::getId, sessionId).set(QuerySessions::getSessionKey, "新的对话");
-                            update(uw);
-                            sseManager.send(sessionId, "session_title", Map.of("title", "新的对话"));
-                        }
-                );
-        return true;
+    public String generateTitle(Long sessionId, Long userId, Long workspaceId) {
+        QuerySessions session = getOne(new LambdaQueryWrapper<QuerySessions>()
+                .eq(QuerySessions::getId, sessionId)
+                .eq(QuerySessions::getUserId, userId)
+                .eq(QuerySessions::getWorkspaceId, workspaceId));
+        if (session == null) {
+            throw new BusinessException(404, "会话不存在");
+        }
+        // 获取第一条用户消息
+        ConversationMessages firstMsg = conversationMessagesService.getOne(
+                new LambdaQueryWrapper<ConversationMessages>()
+                        .eq(ConversationMessages::getSessionId, sessionId)
+                        .eq(ConversationMessages::getRole, "user")
+                        .orderByAsc(ConversationMessages::getCreatedAt)
+                        .last("LIMIT 1")
+        );
+        String content = firstMsg != null ? firstMsg.getContent() : "";
+        String title;
+        try {
+            Map<?, ?> response = webClient.post()
+                    .uri("/rag/chat/session/name")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(Map.of("content", content))
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+            title = response != null ? Objects.toString(response.get("title"), "新的对话") : "新的对话";
+        } catch (Exception e) {
+            log.error("Failed to generate session title for sessionId={}: {}", sessionId, e.getMessage());
+            title = "新的对话";
+        }
+        update(new LambdaUpdateWrapper<QuerySessions>()
+                .eq(QuerySessions::getId, sessionId)
+                .set(QuerySessions::getSessionKey, title));
+        return title;
     }
 
     @Override
