@@ -31,18 +31,6 @@ public class RabbitConfig {
     }
 
     @Bean
-    public Queue sessionNameGenerateQueue() {
-        return QueueBuilder.durable("session.name.generate.producer.queue").build();
-    }
-
-    @Bean
-    public Binding sessionNameGenerateBinding(DirectExchange serverInteractLLMExchange, Queue sessionNameGenerateQueue) {
-        return BindingBuilder.bind(sessionNameGenerateQueue)
-                .to(serverInteractLLMExchange)
-                .with("session.name.generate.producer.key");
-    }
-
-    @Bean
     public Queue documentEmbeddingQueue() {
         return QueueBuilder.durable("rag.document.process.queue").build();
     }

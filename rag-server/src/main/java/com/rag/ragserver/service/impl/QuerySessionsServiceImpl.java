@@ -1,6 +1,7 @@
 package com.rag.ragserver.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.rag.ragserver.assembler.SessionAssembler;
@@ -11,9 +12,12 @@ import com.rag.ragserver.dto.SessionCursorQuery;
 import com.rag.ragserver.exception.BusinessException;
 import com.rag.ragserver.service.QuerySessionsService;
 import com.rag.ragserver.mapper.QuerySessionsMapper;
+import com.rag.ragserver.utils.SessionTitleAwaitManager;
 import lombok.RequiredArgsConstructor;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -30,11 +34,13 @@ import com.rag.ragserver.dto.SessionSearchResultDTO;
  * @description 针对表【query_sessions(RAG 查询会话上下文表)】的数据库操作Service实现
  * @createDate 2026-01-02 22:22:17
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class QuerySessionsServiceImpl extends ServiceImpl<QuerySessionsMapper, QuerySessions>
         implements QuerySessionsService {
-    private final RabbitTemplate rabbitTemplate;
+    private final WebClient webClient;
+    private final SessionTitleAwaitManager sseManager;
     private final QuerySessionsMapper querySessionsMapper;
 
     @Override
@@ -109,25 +115,29 @@ public class QuerySessionsServiceImpl extends ServiceImpl<QuerySessionsMapper, Q
 
     @Override
     public Boolean sessionNameGenerate(Long userId, Long sessionId, String firstMessage, ModelPermission modelPermission) {
-        try {
-            rabbitTemplate.convertAndSend(
-                    "server.interact.llm.exchange",
-                    "session.name.generate.producer.key",
-                    Map.of(
-                            "userId", userId,
-                            "sessionId", sessionId,
-                            "firstMessage", firstMessage,
-                            "model", modelPermission
-                    ),
-                    message -> {
-                        // 这里可以对消息进行一些处理
-                        return message;
-                    }
-            );
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+        webClient.post()
+                .uri("/rag/chat/session/name")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("content", firstMessage, "model", modelPermission))
+                .retrieve()
+                .bodyToMono(Map.class)
+                .subscribe(
+                        response -> {
+                            String sessionKey = (String) response.getOrDefault("title", "新的对话");
+                            LambdaUpdateWrapper<QuerySessions> uw = new LambdaUpdateWrapper<>();
+                            uw.eq(QuerySessions::getId, sessionId).set(QuerySessions::getSessionKey, sessionKey);
+                            update(uw);
+                            sseManager.send(sessionId, "session_title", Map.of("title", sessionKey));
+                        },
+                        error -> {
+                            log.error("Failed to generate session name for sessionId={}: {}", sessionId, error.getMessage());
+                            LambdaUpdateWrapper<QuerySessions> uw = new LambdaUpdateWrapper<>();
+                            uw.eq(QuerySessions::getId, sessionId).set(QuerySessions::getSessionKey, "新的对话");
+                            update(uw);
+                            sseManager.send(sessionId, "session_title", Map.of("title", "新的对话"));
+                        }
+                );
+        return true;
     }
 
     @Override

@@ -7,7 +7,6 @@ from fastapi import FastAPI
 from milvus_utils import MilvusClientManager
 from mq.connection import rabbit_async_client
 from mq.document_embedding import document_embedding_consumer
-from mq.session_name import session_name_generator
 
 logger = logging.getLogger(__name__)
 
@@ -25,15 +24,6 @@ async def app_lifespan(app: FastAPI):
     milvus_release_task = asyncio.create_task(MilvusClientManager.milvus_release_worker())
 
     try:
-        consume_background_tasks.append(
-            asyncio.create_task(
-                rabbit_async_client.consume(
-                    queue_name="session.name.generate.producer.queue",
-                    callback=session_name_generator.on_receive_message
-                )
-            )
-        )
-
         consume_background_tasks.append(
             asyncio.create_task(
                 rabbit_async_client.consume(

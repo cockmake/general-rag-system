@@ -6,15 +6,48 @@ from typing import Optional
 from fastapi import APIRouter, Body, Request
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage, AIMessage
+from pydantic import BaseModel, Field
 
 from agentic_rag_utils import AgenticRAGService
 from rag_gateway import get_rag_gateway
 from rag_utils import rag_service
-from utils import get_official_llm, cut_history, get_token_count, unified_llm_stream
+from utils import get_official_llm, cut_history, get_token_count, unified_llm_stream, get_langchain_llm, get_structured_data_agent
 
 logger = logging.getLogger(__name__)
 
 chat_service = APIRouter(prefix="/chat", tags=["chat"])
+
+
+class _SessionTitle(BaseModel):
+    """请根据用户的输入内容，生成一个简短的标题。"""
+    title: str = Field(..., description="会话标题")
+
+
+@chat_service.post("/session/name")
+async def get_session_name(body: dict = Body()):
+    """根据用户第一条消息生成会话标题"""
+    content = body.get("content", "")
+    try:
+        model = {"name": "deepseek/deepseek-v3.2-251201", "provider": "other"}
+        llm = get_langchain_llm(model)
+        llm = get_structured_data_agent(llm, _SessionTitle)
+        messages = [
+            {
+                "role": "user",
+                "content": (
+                    f"用户输入内容: {content}\n\n"
+                    "1. 请根据用户的输入内容，生成一个简短的标题。\n"
+                    "2. 直接返回标题，不要包含引号或其他多余文字。\n"
+                    "3. 注意不是回答用户内容，而是生成一个概括性的标题。\n"
+                ),
+            }
+        ]
+        response = await llm.ainvoke({"messages": messages})
+        title = response["structured_response"].title.strip()
+    except Exception as e:
+        logger.error(f"Error generating session name: {e}")
+        title = "新的对话"
+    return {"title": title}
 
 
 async def process_rag_stream_events(stream_iterator, prompt_tokens: int = 0):
