@@ -1,5 +1,6 @@
 """
 Embedding Service 启动脚本
+CUDA_VISIBLE_DEVICES=1 nohup python embedding_start.py > logs/embedding.log 2>&1 &
 """
 import logging
 import sys
@@ -29,7 +30,6 @@ def main():
     logger.info(f"Host: {config.host}")
     logger.info(f"Port: {config.port}")
     logger.info(f"Workers: {config.workers}")
-    logger.info(f"Max Batch Size: {config.max_batch_size}")
     logger.info(f"Log Level: {config.log_level}")
     logger.info("=" * 70)
 

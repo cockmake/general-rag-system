@@ -130,6 +130,7 @@ async def lifespan(app: FastAPI):
             tensor_parallel_size=config.tensor_parallel_size,
             dtype=config.dtype,
             trust_remote_code=True,
+            enable_chunked_prefill=False,  # embed task 不支持 chunked prefill，必须关闭
         )
 
         load_time = time.time() - start_time

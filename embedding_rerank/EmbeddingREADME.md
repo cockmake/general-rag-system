@@ -155,9 +155,6 @@ workers: int = 1
 #### 批处理配置
 
 ```python
-# 最大批处理大小
-max_batch_size: int = 32
-
 # 批处理超时（毫秒）
 batch_timeout_ms: int = 10
 ```
@@ -431,9 +428,6 @@ for batch in batches:
 ```python
 # 如果有足够显存，提高利用率
 gpu_memory_utilization: float = 0.8
-
-# 增加批处理大小
-max_batch_size: int = 64
 ```
 
 #### 4. 多GPU部署
@@ -474,9 +468,6 @@ gpu_memory_utilization: float = 0.3
 
 # 减小最大长度
 max_model_len: int = 2048
-
-# 减小批处理大小
-max_batch_size: int = 16
 ```
 
 #### 2. 模型下载失败

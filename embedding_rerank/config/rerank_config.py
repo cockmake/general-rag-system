@@ -15,8 +15,8 @@ class RerankConfig(BaseModel):
     model_path: Optional[str] = None  # 可选：本地模型路径
 
     # GPU配置
-    gpu_memory_utilization: float = 0.4
-    max_model_len: int = 10000
+    gpu_memory_utilization: float = 0.25
+    max_model_len: int = 8192
     tensor_parallel_size: int = 1
     dtype: str = "float16"
     enable_prefix_caching: bool = True
@@ -33,7 +33,6 @@ class RerankConfig(BaseModel):
     workers: int = 1
 
     # 批处理配置
-    max_batch_size: int = 32
     batch_timeout_ms: int = 10
 
     # 日志配置
