@@ -7,6 +7,7 @@ import logging
 from typing import List, Dict, Any
 
 from langchain_core.documents import Document
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from agentic_rag_toolkit import RetrievalDecision, TOOL_DEFINE_PROMPT, TOOL_SELECT_PROMPT, CONTROLLER_SYSTEM_PROMPT
 from utils import get_langchain_llm
@@ -40,9 +41,17 @@ class RetrievalController:
             return "无对话历史"
 
         lines = []
-        for i, msg in enumerate(history):
-            role = "用户" if i % 2 == 0 else "助手"
-            content = msg.get("content", "") if isinstance(msg, dict) else str(msg)
+        for msg in history:
+            if isinstance(msg, HumanMessage):
+                role, content = "用户", msg.content
+            elif isinstance(msg, AIMessage):
+                role, content = "助手", msg.content
+            elif isinstance(msg, dict):
+                role_key = msg.get("role", "")
+                role = "用户" if role_key == "user" else "助手" if role_key == "assistant" else role_key
+                content = msg.get("content", "")
+            else:
+                role, content = "未知", str(msg)
             lines.append(f"{role}: {content}")
 
         return "\n".join(lines)
@@ -203,10 +212,7 @@ class RetrievalController:
 
         # 1. 对话上下文（用于判断能否回答）
         history = history.copy()
-        history.extend({
-            "role": "user",
-            "content": question
-        })
+        history.append({"role": "user", "content": question})
         conversation_context = {
             "current_question": question,
             "history": self._format_history(history),
@@ -218,12 +224,11 @@ class RetrievalController:
         # 3. 工具调用历史（包含参数和结果）
         tool_history = self._format_tool_call_history(trace)
 
-        # 构建决策提示词
-        prompt = f"""{CONTROLLER_SYSTEM_PROMPT}
+        # system: 静态指令，可被缓存
+        system_prompt = f"{CONTROLLER_SYSTEM_PROMPT}\n\n{TOOL_DEFINE_PROMPT}\n\n{TOOL_SELECT_PROMPT}"
 
----
-
-## 一、对话上下文
+        # user: 动态数据，每轮不同
+        user_prompt = f"""## 一、对话上下文
 
 {json.dumps(conversation_context, ensure_ascii=False, indent=2)}
 
@@ -239,16 +244,15 @@ class RetrievalController:
 
 ## 当前轮次: {current_round}/{max_rounds}
 
-{TOOL_DEFINE_PROMPT}
-
-{TOOL_SELECT_PROMPT}
-
----
-
 请基于以上三类信息和决策策略，输出结构化决策（仅JSON对象）。"""
 
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
+        ]
+
         try:
-            decision = await self.llm.ainvoke(prompt)
+            decision = await self.llm.ainvoke(messages)
             return decision
 
         except Exception as e:
