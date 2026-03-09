@@ -80,8 +80,8 @@ def get_official_llm(
         model_info: dict,
         enable_web_search: bool = False,
         enable_thinking: bool = False,
-        timeout: int = 60,
-        max_retries: int = 5,
+        timeout: int = 30,
+        max_retries: int = 3,
 ):
     """根据模型信息加载配置并初始化 LLM"""
     settings = _get_model_setting(model_info)
@@ -487,22 +487,17 @@ def cut_history(history: list, model: dict):
 
     max_tokens = base_token * 6
     if model_name.startswith("gpt-"):
-        if "codex" in model_name.lower():
-            max_tokens = base_token * 4
-        else:
-            max_tokens = base_token * 3
+        max_tokens = base_token * 4
 
     elif model_name.startswith("gemini-"):
         if "flash" in model_name.lower():
             max_tokens = base_token * 6
         elif "pro" in model_name.lower():
-            max_tokens = base_token * 3
+            max_tokens = base_token * 4
 
     elif model_name.startswith("claude-"):
         if "sonnet" in model_name.lower():
             max_tokens = base_token * 3
-        elif "opus" in model_name.lower():
-            max_tokens = base_token * 2
 
     for i in range(n, 1, -2):
         pair = previous_msgs[i - 2: i]

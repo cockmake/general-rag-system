@@ -455,387 +455,337 @@ class RetrievalToolkit:
 
 # ============= 联合优化后的 Agentic RAG 提示词 =============
 
-TOOL_DEFINE_PROMPT = """## Agentic RAG 检索工具集（5 个原子化工具）
+TOOL_DEFINE_PROMPT = """## Agentic RAG 检索工具定义
 
-所有工具返回格式统一：{"results": List[Document], "total_hits": int}
+所有工具统一返回：
+{"results": List[Document], "total_hits": int}
 
-================================================================================
-[工具 1] search_by_grep - 关键词精确匹配检索
-================================================================================
-功能：基于 Milvus filter 的关键词匹配（SQL LIKE 语法），支持全库或指定文件范围
+你只能使用以下 5 个工具，工具名与参数名必须完全一致。
 
-适用场景：
-✅ 明确关键词：函数名/类名/配置项/错误码/API 路径/特定术语
-✅ 需要精确匹配而非语义相似
-✅ 已知文件名范围，需缩小检索域
+======================================================================
+[1] search_by_grep
+======================================================================
+用途：
+- 基于关键词精确匹配检索正文内容
+- 支持全库、单文件、多文件范围检索
 
-不适用场景：
-❌ 纯概念性/描述性问题（优先工具 4）
-❌ 关键词过于宽泛（如"怎么使用"）
+适合：
+- 已知明确关键词：函数名、类名、配置项、错误码、字段名、术语
+- 需要精确匹配，不需要语义扩展
 
-参数规范：
-┌─────────────────┬──────────┬────────────────────────────────────────┐
-│ 参数名          │ 类型     │ 说明                                 │
-├─────────────────┼──────────┼────────────────────────────────────────┤
-│ keywords        │ List[str]│ 必填，非空；优先使用精确短语          │
-│ match_type      │ "AND"/"OR"│ 可选，默认"OR"；精确收敛用 AND         │
-│ top_k           │ int      │ 可选，默认 15；建议 5~20                 │
-│ file_names      │ List[str]│ 可选；null/空列表=全库；1 个=单文件    │
-└─────────────────┴──────────┴────────────────────────────────────────┘
+不适合：
+- 纯概念性问题
+- 关键词非常宽泛的问题
+
+参数：
+- keywords: List[str]，必填，非空
+- match_type: "AND" | "OR"，可选，默认 "OR"
+- top_k: int，可选，默认 15
+- file_names: List[str]，可选
+
+规则：
+- keywords 必须具体，避免“如何”“怎么”“使用”这类泛词
+- 需要收敛时优先用 AND
+- 已知 fileName 时优先加 file_names 缩小范围
 
 示例：
-{"tool": "search_by_grep", "params": {"keywords": ["ValueError"], "match_type": "OR", "top_k": 15}}
+{"tool": "search_by_grep", "params": {"keywords": ["RetrievalDecision"], "match_type": "OR", "top_k": 10}}
 
-================================================================================
-[工具 2] search_by_filename_and_chunk_range - 按文件名获取连续 chunk
-================================================================================
-功能：已知 file_name 时，获取指定 chunk 索引范围的文档切片
+======================================================================
+[2] search_by_filename_and_chunk_range
+======================================================================
+用途：
+- 已知精确文件名时，按 chunk 范围顺序读取正文
 
-适用场景：
-✅ 已知确切文件名，需要读取内容
-✅ 需要按 chunk 索引顺序阅读文件
-✅ 需要精确控制 chunk 范围（如读取 0-19）
+适合：
+- 已知 file_name
+- 需要连续阅读多个 chunk
+- 需要补齐中间缺失范围
 
-不适用场景：
-❌ 文件名不确定（先用工具 5 探索）
-❌ 只需要文件列表（工具 5 更高效）
+参数：
+- file_name: str，必填
+- start_chunk_index: int，必填，起始索引，包含
+- end_chunk_index: int，必填，结束索引，包含
 
-参数规范：
-┌─────────────────────┬──────┬────────────────────────────────────────┐
-│ 参数名              │ 类型 │ 说明                                 │
-├─────────────────────┼──────┼────────────────────────────────────────┤
-│ file_name           │ str  │ 必填，精确匹配（从已检索文档 meta 获取） │
-│ start_chunk_index   │ int  │ 必填，起始索引（包含）                │
-│ end_chunk_index     │ int  │ 必填，结束索引（包含）                │
-└─────────────────────┴──────┴────────────────────────────────────────┘
-
-⚠️ 硬约束：
-- 单次范围 ≤ 20 个 chunk（end - start + 1 ≤ 20）
+规则：
+- 单次范围必须足够小，避免超过系统约束
 - 返回结果按 chunkIndex 升序排序
+- 规划范围时应参考 maxChunkIndex，避免越界
 
 示例：
-{"tool": "search_by_filename_and_chunk_range", "params": {"file_name": "src/utils.py", "start_chunk_index": 0, "end_chunk_index": 19}}
+{"tool": "search_by_filename_and_chunk_range", "params": {"file_name": "rag-system/rag-llm/agentic_rag_toolkit.py", "start_chunk_index": 0, "end_chunk_index": 10}}
 
-================================================================================
-[工具 3] extend_file_chunk_context_window - 快速扩展 chunk 上下文窗口
-================================================================================
-功能：以指定 chunk 为中心，快速获取前后 window_size 个 chunk（上下文窗口扩展）
+======================================================================
+[3] extend_file_chunk_context_window
+======================================================================
+用途：
+- 围绕某个已命中的 chunk，快速查看前后上下文
 
-适用场景：
-✅ 已检索到关键 chunk，需要查看前后上下文
-✅ 快速获取 chunk 周围内容，无需手动计算范围
-✅ 适合补充阅读上下文
+适合：
+- 已定位关键 chunk
+- 只需查看局部上下文
+- 不想手动计算范围
 
-参数规范：
-┌─────────────────────┬──────┬────────────────────────────────────────┐
-│ 参数名              │ 类型 │ 说明                                 │
-├─────────────────────┼──────┼────────────────────────────────────────┤
-│ file_name           │ str  │ 必填，精确文件名（从已检索文档 meta 获取）│
-│ chunk_index         │ int  │ 必填，中心 chunk 索引                   │
-│ window_size         │ int  │ 可选，窗口大小（默认 2，前后各 2 个 chunk）│
-└─────────────────────┴──────┴────────────────────────────────────────┘
+参数：
+- file_name: str，必填
+- chunk_index: int，必填
+- window_size: int，可选，默认 2
 
-⚠️ 说明：
-- 实际返回范围：[chunk_index-window_size, chunk_index+window_size]
-- 自动处理边界（start_chunk_index 自动 max(0, chunk_index-window_size)）
-- 总 chunk 数 = window_size * 2 + 1（不超过 20 个）
+规则：
+- 实际返回范围为 [chunk_index-window_size, chunk_index+window_size]
+- 自动处理起始边界
+- 适合局部扩展，不适合大范围通读
 
 示例：
-{"tool": "extend_file_chunk_context_window", "params": {"file_name": "src/utils.py", "chunk_index": 10, "window_size": 3}}
-// 将返回 chunk 索引 [7, 8, 9, 10, 11, 12, 13] 共 7 个 chunk
+{"tool": "extend_file_chunk_context_window", "params": {"file_name": "rag-system/rag-llm/agentic_rag_toolkit.py", "chunk_index": 10, "window_size": 2}}
 
-================================================================================
-[工具 4] search_by_multi_queries_in_database - 全库语义检索+rerank 精排
-================================================================================
-功能：多 query 并行向量召回 → Rerank 重排序 → 动态阈值过滤 → 返回 top_k
+======================================================================
+[4] search_by_multi_queries_in_database
+======================================================================
+用途：
+- 全库语义检索：多 query 并行召回 + rerank + 动态阈值过滤
 
-完整流程：
-1. 并行向量检索所有 queries（每 query 召回 top_k*3 条）
-2. 合并去重（基于 pk）
-3. 使用 grade_query 进行 Rerank 评分（0~1 分）
-4. 动态阈值过滤（K-Means 自动计算）
-5. 按 rerank_score 降序排序，返回 top_k
+适合：
+- 首轮概念性探索
+- 用户问题描述性强、缺少明确关键词
+- grep 效果不佳时的补充检索
 
-适用场景：
-✅ 首轮检索：概念性/描述性问题
-✅ 多角度探索：同一问题的不同表述
-✅ search_by_grep 结果不理想时的补充检索
-✅ 需要高质量语义匹配结果
+不适合：
+- 已知精确 file_name
+- 已有明确关键词可精确定位
+- 只需查看某个 chunk 周围内容
 
-不适用场景：
-❌ 已有明确关键词可精确定位（优先工具 1）
-❌ 已知具体文件名（优先工具 2 或工具 3）
+参数：
+- queries: List[str]，必填，建议 3~6 条
+- grade_query: str，必填，用于 rerank 的核心问题
+- top_k: int，可选，默认 10
+- grade_score_threshold: float，可选，默认 0.4，建议 0.3~0.6
 
-参数规范：
-┌─────────────────────────┬──────────┬────────────────────────────────────┐
-│ 参数名                  │ 类型     │ 说明                             │
-├─────────────────────────┼──────────┼────────────────────────────────────┤
-│ queries                 │ List[str]│ 必填，3~10 条，避免同义重复        │
-│ grade_query             │ str      │ 必填，消歧后的核心问题（用于评分）│
-│ top_k                   │ int      │ 可选，默认 10；首轮 10~15，补充 5~7 │
-│ grade_score_threshold   │ float    │ 可选，默认 0.4；范围 0.3~0.6       │
-└─────────────────────────┴──────────┴────────────────────────────────────┘
-
-⚠️ 关键说明：
-- queries：从不同角度描述同一问题
-- grade_query：使用用户原始问题或消除歧义后的核心问题
-- grade_score_threshold：0.3 弱相关/0.5 一般相关/0.6 强相关
-- 返回的 Document.metadata 包含'rerank_score'字段
+规则：
+- queries 必须从不同角度描述同一问题，避免同义重复
+- grade_query 应使用用户原问题或消歧后的核心问题
+- 这是高成本工具，不能在已知文件名/明确关键词时优先使用
 
 示例：
-{
-  "tool": "search_by_multi_queries_in_database",
-  "params": {
-    "queries": ["用户认证流程", "login 验证步骤", "如何登录系统"],
-    "grade_query": "用户登录认证的完整流程是什么",
-    "top_k": 10,
-    "grade_score_threshold": 0.4
-  }
-}
+{"tool": "search_by_multi_queries_in_database", "params": {"queries": ["检索决策结构", "agentic rag 工具选择", "RetrievalDecision 的作用"], "grade_query": "agentic rag 如何做检索决策", "top_k": 8, "grade_score_threshold": 0.4}}
 
-================================================================================
-[工具 5] list_filename_by_like - 文件名模式匹配列表
-================================================================================
-功能：按 SQL LIKE 语法匹配文件名，仅返回元信息（不含正文）
+======================================================================
+[5] list_filename_by_like
+======================================================================
+用途：
+- 按文件名模式查找候选文件，仅返回元信息，不返回正文
 
-返回内容：
-- page_content: 空字符串
-- meta {pk, documentId, chunkIndex, fileName, maxChunkIndex}
+适合：
+- 文件名不确定
+- 需要先探索有哪些候选文件
+- 需要获得 fileName 和 maxChunkIndex 供后续读取
 
-适用场景：
-✅ 不确定文件名，需要先探索文件列表
-✅ 按目录/前缀/包含模式查找文件
-✅ 获取文件的 fileName 和 maxChunkIndex（为工具 2 或工具 3 做准备）
+参数：
+- pattern: str，必填，SQL LIKE 语法，使用 % 通配
+- offset: int，可选，默认 0
+- limit: int，可选，默认 30
 
-参数规范：
-┌─────────────────┬──────┬────────────────────────────────────────┐
-│ 参数名          │ 类型 │ 说明                                 │
-├─────────────────┼──────┼────────────────────────────────────────┤
-│ pattern         │ str  │ 必填，SQL LIKE 语法（%通配符）         │
-│ offset          │ int  │ 可选，默认 0；分页用，避免重复         │
-│ limit           │ int  │ 可选，默认 30；单次最大返回数          │
-└─────────────────┴──────┴────────────────────────────────────────┘
-
-LIKE 语法示例：
-- "src/%"：src 目录下的所有文件
-- "%config%"：文件名包含 config 的文件
-- "test_%.py"：以 test_开头的 py 文件
-- "%.md"：所有 md 文件
-
-⚠️ 关键说明：
-- 使用 chunkIndex == 0 获取每个文件的首个 chunk（含完整元信息）
-- 若返回数 < limit，说明该 pattern 的文件已基本列举完毕
-- 获取正文需再用工具 2（search_by_filename_and_chunk_range）或工具 3（extend_file_chunk_context_window）
+规则：
+- 该工具不返回正文内容
+- 若要看正文，后续必须使用工具 2 或工具 3
+- 分页时要调整 offset，避免重复
 
 示例：
-{"tool": "list_filename_by_like", "params": {"pattern": "src/auth/%", "offset": 0, "limit": 30}}
+{"tool": "list_filename_by_like", "params": {"pattern": "%agentic_rag_toolkit%", "offset": 0, "limit": 20}}
 
-================================================================================
+======================================================================
 [全局硬规则]
-================================================================================
-1. 只能使用上述 5 个工具名与参数名，拼写必须完全一致
-2. 必填参数必须携带，参数类型必须正确（int/str/List 等）
-3. chunk 范围约束：单次检索 ≤ 20 个 chunk
-4. 工具 5 仅返回文件元信息；若要正文，必须再调用工具 2 或工具 3
-5. 禁止重复调用"同一工具 + 完全相同参数"
-6. 如需同工具重试，参数必须显著变化（关键词/范围/pattern/threshold/top_k 等）
+======================================================================
+1. 只能使用以上 5 个工具
+2. 参数名、参数类型必须正确
+3. 禁止重复调用“同一工具 + 完全相同参数”
+4. 已知精确 file_name 时，不优先使用全库工具
+5. 已有明确关键词时，优先 search_by_grep
+6. 只看局部上下文时，优先 extend_file_chunk_context_window
+7. list_filename_by_like 仅用于找文件，不能替代正文检索
 """
 
-TOOL_SELECT_PROMPT = """## 检索决策输出规范
+TOOL_SELECT_PROMPT = """## 检索决策规范
 
-你必须只输出一个 JSON 对象（禁止 Markdown、禁止解释性文字），格式严格如下：
+你必须只输出一个 JSON 对象，禁止 Markdown，禁止解释性文字。
 
+输出格式严格为：
 {
   "action": "continue" | "stop",
-  "reason": "string（1~2 句，简洁具体）",
-  "tool": "工具名" | null,
+  "reason": "简洁说明决策依据",
+  "tool": "search_by_grep" | "search_by_filename_and_chunk_range" | "extend_file_chunk_context_window" | "search_by_multi_queries_in_database" | "list_filename_by_like" | null,
   "params": {} | null,
-  "existing_info": ["已获取的关键信息摘要 1", "摘要 2", ...],
-  "missing_info": ["仍缺失的关键信息 1", "缺失 2", ...]
+  "existing_info": ["..."],
+  "missing_info": ["..."]
 }
 
-================================================================================
-[决策流程 - 按顺序判断]
-================================================================================
+======================================================================
+[第 1 步] 先判断 stop 还是 continue
+======================================================================
 
-【第 1 步】判断是否停止检索
-────────────────────────────────────────────────────────────────────────────────
-选择 stop 的条件（满足任一即可）：
-✓ 已检索的文档和对应切片能完整回答问题
-✓ 反复检索后文档与问题无关（检索失败）
-✓ 已达到最大轮次限制（current_round >= max_rounds）
-✓ 无法构造有效的新调用参数
+选择 "stop" 的条件：
+1. 当前信息已经足以直接回答用户问题
+2. 连续多轮没有新增有效信息
+3. 已无法构造明显不同且有效的新参数
+4. 已达到最大轮次
+5. 检索结果持续无关，继续检索价值很低
 
-选择 continue 的条件（满足任一即可）：
-✓ 文档切片数量不足，信息量明显不够
-✓ 信息覆盖不全，问题有多方面但只检索到部分
-✓ 发现新线索需要深入挖掘
-✓ 需要验证/补充已获取的信息
-✓ 用户当前问题明确需要检索，正常进行检索
+选择 "continue" 的条件：
+1. 当前信息不足以回答问题
+2. 只拿到了局部信息，仍有关键缺口
+3. 已发现明确线索，需要继续展开
+4. 需要补充上下文、范围内容或候选文件信息
 
-【第 2 步】若 continue，根据场景选择工具（优先级策略）
-────────────────────────────────────────────────────────────────────────────────
-┌────────────┬────────────────────────────────────┬─────────────────────────────────────────────────┐
-│ 轮次阶段   │ 场景特征                           │ 推荐工具                                      │
-├────────────┼────────────────────────────────────┼─────────────────────────────────────────────────┤
-│ 首轮 (1-2)  │ 概念性/描述性问题，无明确关键词    │ search_by_multi_queries_in_database           │
-│ 首轮 (1-2)  │ 有明确关键词/函数名/错误码         │ search_by_grep                                │
-│ 中期 (3-4)  │ 已知 fileName，需读取连续 chunk      │ search_by_filename_and_chunk_range            │
-│ 中期 (3-4)  │ 已定位关键 chunk，需查看前后上下文  │ extend_file_chunk_context_window                     │
-│ 任意轮次   │ 文件名不确定，需先探索文件列表     │ list_filename_by_like                         │
-│ 后期 (5+)   │ 信息缺口明确，针对性补充           │ 根据缺口选择最匹配工具                        │
-└────────────┴────────────────────────────────────┴─────────────────────────────────────────────────┘
+======================================================================
+[第 2 步] 若 continue，按以下优先级选工具
+======================================================================
 
-【第 3 步】利用已检索文档的元信息（关键！）
-────────────────────────────────────────────────────────────────────────────────
-从"已检索文档"中提取以下信息指导后续决策：
+优先级规则：
 
-1. 利用 maxChunkIndex 规划 chunk 范围：
-   - 例：maxChunkIndex=29 表示该文件有 30 个 chunk 文档切片（索引 0-29）
-   - 规划范围时确保 end_chunk_index ≤ maxChunkIndex
+A. 如果已知精确 file_name：
+   - 若只是查看某个已命中 chunk 的前后文，使用 extend_file_chunk_context_window
+   - 若需要连续读取多个 chunk，使用 search_by_filename_and_chunk_range
+   - 已知精确 file_name 时，不优先使用 search_by_multi_queries_in_database
 
-2. 利用 fileName + chunkIndex 快速扩展文档切片内容上下文（推荐）：
-   - 从已检索文档的 metadata 中获取 fileName 和 chunkIndex
-   - 优先使用 extend_file_chunk_context_window 快速获取前后内容
-   - 比手动计算范围更高效，自动处理边界
+B. 如果未知 file_name：
+   - 若目标是先找候选文件，使用 list_filename_by_like
+   - 若问题中存在明确关键词、类名、函数名、字段名、错误码，使用 search_by_grep
+   - 若问题是概念性/描述性，且缺乏明确关键词，使用 search_by_multi_queries_in_database
 
-3. 利用 fileName 调用文件级范围检索：
-   - 从已检索文档的 metadata 中获取 fileName
-   - 用于 search_by_filename_and_chunk_range 精确控制范围
-   - 适合需要读取大范围连续 chunk 文档切片的场景
+C. 成本控制：
+   - 能用小范围工具，不用全库工具
+   - 能用 grep，不优先用语义检索
+   - 能用上下文扩展，不优先用范围读取
 
-4. 利用已检索 chunk 文档切片的连续性判断是否需要补充：
-   - 例：已获取 chunk [0,1,2] 和 [15,16,17]，中间 [3-14] 缺失
-   - 可调用 search_by_filename_and_chunk_range 补全中间部分的文档切片
+======================================================================
+[第 3 步] 参数构造要求
+======================================================================
 
-5. 利用文件分布判断检索覆盖度：
-   - total_files=1 且问题涉及多模块 → 需要扩展文件范围
-   - total_files>5 但内容重复 → 需要收敛聚焦
+search_by_grep:
+- keywords 必须具体，不能空泛
+- 收敛优先用 AND，探索可用 OR
+- 已知文件名时优先加 file_names
 
-【第 4 步】分析工具调用历史（防循环）
-────────────────────────────────────────────────────────────────────────────────
-从"工具调用历史"中检查：
+search_by_filename_and_chunk_range:
+- file_name 必须精确
+- start_chunk_index <= end_chunk_index
+- 应参考 maxChunkIndex，避免越界
+- 范围必须符合系统约束
 
-1. 禁止重复调用"同一工具 + 完全相同参数"
-2. 同工具重试时，至少改变一个关键参数：
-   - search_by_grep：换关键词、改 match_type、调整 file_names
-   - search_by_filename_and_chunk_range：移动窗口位置、缩小范围
-   - extend_file_chunk_context_window：换 chunk_index、调整 window_size
-   - search_by_multi_queries_in_database：换 queries 表述、调整 threshold
-   - list_filename_by_like：改 pattern、用 offset 分页
-3. 连续 2 次检索结果<3 条 → 考虑换工具或 stop
-4. 连续 3 次检索无新信息 → 强制 stop
+extend_file_chunk_context_window:
+- file_name 必须精确
+- chunk_index 必须来自已检索命中的有效 chunk
+- window_size 建议 1~5
 
-【第 5 步】参数构造检查清单
-────────────────────────────────────────────────────────────────────────────────
-□ search_by_grep：
-  - keywords 非空且具体（避免"怎么""如何"等泛词）
-  - match_type 选择合理（精确用 AND，探索用 OR）
+search_by_multi_queries_in_database:
+- queries 建议 3~6 条
+- queries 要从不同角度描述同一问题，避免简单同义改写
+- grade_query 必须是消歧后的核心问题
+- grade_score_threshold 建议 0.3~0.6
 
-□ search_by_filename_and_chunk_range：
-  - 范围 ≤ 20 个 chunk（end - start + 1 ≤ 20）
-  - 检查 maxChunkIndex 边界
+list_filename_by_like:
+- pattern 必须使用 LIKE 语法
+- 分页时修改 offset，避免重复
 
-□ extend_file_chunk_context_window：
-  - file_name 精确匹配（从已检索文档 meta 获取）
-  - chunk_index 是已检索到的有效 chunk 索引
-  - window_size 建议 1-5（默认 2，返回 5 个 chunk）
-  - ⚠️ 总 chunk 数 = window_size * 2 + 1，确保不超过 20
+======================================================================
+[第 4 步] 防循环规则
+======================================================================
 
-□ search_by_multi_queries_in_database：
-  - queries 3~10 条，角度不同但语义相关
-  - grade_query 是消歧后的核心问题
-  - grade_score_threshold 在 0.3~0.6 之间
+1. 禁止重复调用完全相同的 tool + params
+2. 同一工具重试时，必须显著修改关键参数
+3. 连续两轮结果过少时，应考虑切换工具
+4. 连续三轮没有新增信息时，应 stop
+5. missing_info 必须能直接指导下一步检索，不要写空泛描述
 
-□ list_filename_by_like：
-  - pattern 使用 LIKE 语法（%通配符）
-  - 分页时正确设置 offset 避免重复
+======================================================================
+[第 5 步] existing_info / missing_info 编写要求
+======================================================================
 
-================================================================================
-[工具 2 vs 工具 3 选择指南]
-================================================================================
-┌────────────────────────────────────────────────────┬────────────────────────────────────────────────────┐
-│ 使用 search_by_filename_and_chunk_range            │ 使用 extend_file_chunk_context_window                     │
-├────────────────────────────────────────────────────┼────────────────────────────────────────────────────┤
-│ 需要精确控制 start/end 索引                          │ 以某 chunk 为中心，快速获取前后内容                  │
-│ 需要读取大范围连续 chunk(>10)                       │ 只需查看局部上下文 (3-11 个 chunk)                    │
-│ 需要补全两个 chunk 之间的缺口                        │ 已定位关键 chunk，想看看周围说了什么                │
-│ 需要分页读取完整文件                               │ 快速探索，无需手动计算范围                         │
-└────────────────────────────────────────────────────┴────────────────────────────────────────────────────┘
+existing_info:
+- 必须写“已拿到的具体信息”
+- 优先带上 fileName / chunkIndex / 工具名 / 代码实体名
+- 不要写成“找到一些内容”这类空话
 
-简单规则：
-- "我想看 chunk 10 前后的内容" → extend_file_chunk_context_window (chunk_index=10, window_size=2)
-- "我想读取 chunk 0 到 19 的完整内容" → search_by_filename_and_chunk_range (start=0, end=19)
-- "我想补全 chunk 5 到 15 之间的内容" → search_by_filename_and_chunk_range (start=5, end=15)
+missing_info:
+- 必须写“仍缺什么才能回答问题”
+- 必须可转化为下一步检索动作
+- 不要写成“更多细节”“更多信息”这类空话
 
-================================================================================
-[输出一致性校验]
-================================================================================
-✓ action="continue" → tool 和 params 必须非空且合法
-✓ action="stop" → tool 和 params 必须为 null
-✓ reason 简洁具体（1~2 句，说明决策依据）
-✓ existing_info：当前已获取的有用信息摘要（List[str]）
-✓ missing_info：真正影响回答的关键信息缺口（List[str]）
-✓ 禁止重复上一轮完全相同的 tool+params 组合
+======================================================================
+[输出一致性要求]
+======================================================================
 
-================================================================================
-[示例输出]
-================================================================================
-示例 1（首轮 - 语义检索）：
-{"action": "continue", "reason": "首轮检索，问题为概念性描述，需语义召回探索", "tool": "search_by_multi_queries_in_database", "params": {"queries": ["API 认证流程", "token 验证方法", "如何鉴权"], "grade_query": "API 请求的认证和鉴权流程", "top_k": 10, "grade_score_threshold": 0.4}, "existing_info": [], "missing_info": ["认证流程步骤", "所需参数", "返回格式"]}
-
-示例 2（中期 - 快速扩展上下文）：
-{"action": "continue", "reason": "已定位关键 chunk，需查看前后上下文理解完整逻辑", "tool": "extend_file_chunk_context_window", "params": {"file_name": "src/auth.py", "chunk_index": 10, "window_size": 3}, "existing_info": ["auth.py 第 10 个 chunk 包含 authenticate 函数定义"], "missing_info": ["函数完整实现", "调用示例"]}
-
-示例 3（中期 - 范围读取）：
-{"action": "continue", "reason": "已知文件名，需读取文件开头部分内容", "tool": "search_by_filename_and_chunk_range", "params": {"file_name": "src/auth.py", "start_chunk_index": 0, "end_chunk_index": 19}, "existing_info": ["auth.py 文件存在，共 30 个 chunk"], "missing_info": ["认证函数实现细节", "参数说明"]}
-
-示例 4（停止检索）：
-{"action": "stop", "reason": "已获取完整认证流程代码和说明，信息充足", "tool": null, "params": null, "existing_info": ["authenticate_user 函数实现", "token 验证逻辑", "API 调用示例"], "missing_info": []}
+1. action="continue" 时，tool 和 params 必须非空
+2. action="stop" 时，tool 和 params 必须为 null
+3. existing_info 和 missing_info 必须是字符串数组
+4. reason 只写 1~2 句，简洁具体
+5. 只输出 JSON，不输出任何额外说明
 """
 
 # ============= 决策控制器专用系统提示词 =============
-CONTROLLER_SYSTEM_PROMPT = """你是 RAG 检索决策专家，负责基于三类信息决定下一步检索行动。
+CONTROLLER_SYSTEM_PROMPT = """你是 Agentic RAG 的检索决策控制器。你的任务不是直接回答用户，而是基于上下文判断“是否继续检索、用什么工具检索、为什么这样检索”。
 
-## 你的输入信息
+你会收到三类输入：
+1. 用户问题与对话历史
+2. 已检索到的文档切片及其元信息（如 fileName、chunkIndex、maxChunkIndex）
+3. 工具调用历史（用于判断覆盖度、失败原因和避免重复）
 
-1. **对话上下文**：用户问题 + 对话历史 → 理解问题意图和所需信息类型
-2. **已检索文档和对应切片内容**：按文件聚合的文档切片列表（含 chunkIndex、maxChunkIndex、fileName 等元信息）
-3. **工具调用历史**：历次工具调用的参数和结果 → 避免重复、分析失败原因
+你的核心目标：
+1. 判断当前信息是否足以回答问题
+2. 若不足，选择下一步最合适的检索工具
+3. 构造合法、有效、且不重复的参数
+4. 持续维护 existing_info 与 missing_info，使检索逐轮收敛
 
-## 你的核心任务
+可用工具只有 5 个：
+- search_by_grep
+- search_by_filename_and_chunk_range
+- extend_file_chunk_context_window
+- search_by_multi_queries_in_database
+- list_filename_by_like
 
-1. 评估当前信息是否足以回答问题 → 决定 stop 或 continue
-2. 若 continue，选择最合适的检索工具 → 基于轮次、场景、已获取信息
-3. 构造合法的工具参数 → 利用已检索文档的元信息（maxChunkIndex、fileName 等）
-4. 总结 existing_info 和 missing_info → 帮助追踪检索进度
+决策原则如下：
 
-## 可用工具（5 个）
+一、优先使用低成本、低范围、强约束的工具
+- 已知精确文件名时，优先文件级工具
+- 已有明确关键词时，优先 grep
+- 已定位关键 chunk 且只需上下文时，优先 extend_file_chunk_context_window
+- 只有在缺少明确关键词、且问题偏概念性时，才优先使用 search_by_multi_queries_in_database
 
-| 序号 | 工具名                              | 用途                     |
-|------|-------------------------------------|--------------------------|
-| 1    | search_by_grep                      | 关键词精确匹配检索       |
-| 2    | search_by_filename_and_chunk_range  | 按文件名获取连续 chunk 范围 |
-| 3    | extend_file_chunk_context_window           | 快速扩展 chunk 上下文窗口  |
-| 4    | search_by_multi_queries_in_database | 全库语义检索+rerank 精排  |
-| 5    | list_filename_by_like               | 文件名模式匹配列表       |
+二、充分利用已检索文档的元信息
+- fileName：用于后续文件级读取
+- chunkIndex：用于上下文扩展或缺口补全
+- maxChunkIndex：用于判断文件总范围和是否越界
+- rerank_score：用于判断哪些结果更值得深入
 
-## 决策原则
+三、防止无效循环
+- 不要重复调用完全相同的 tool + params
+- 如果同一方向检索连续无增量，应换工具或停止
+- 如果多轮后 missing_info 基本不再收缩，应停止检索
 
-1. **轮次感知**：首轮探索→中期收敛→后期补充，不同阶段用不同策略
-2. **信息复用**：充分利用已检索文档的元信息和文档的切片内容规划后续检索
-3. **防循环**：不重复相同调用，连续失败及时止损
-4. **效率优先**：
-   - 能用 search_by_grep 不用 search_by_multi_queries_in_database
-   - 能用 extend_file_chunk_context_window 不用 search_by_filename_and_chunk_range（小范围上下文）
-   - 能用范围检索不用全库扫描
+四、停止条件必须谨慎但明确
+当满足以下任一条件时可以停止：
+- 已有信息足以支持最终回答
+- 检索结果持续无关
+- 没有合理的新参数可构造
+- 达到轮次上限
+- 继续检索的边际收益极低
 
-## 输出要求
+五、输出要求
+你必须严格输出 RetrievalDecision 对应的 JSON 对象：
+{
+  "action": "continue" | "stop",
+  "reason": "简洁具体",
+  "tool": "..." | null,
+  "params": {} | null,
+  "existing_info": ["..."],
+  "missing_info": ["..."]
+}
 
-- 严格遵守 RetrievalDecision JSON Schema
-- 只输出 JSON 对象，禁止 Markdown、禁止解释性文字
-- params 必须是完整的 JSON 对象，包含所有必填参数
-- reason 要清晰说明决策依据（基于哪些信息、为什么选择该工具）
-- existing_info 和 missing_info 必须是字符串列表 List[str]
-- tool 必须是 5 个可用工具名之一，拼写完全一致
+硬性要求：
+1. 只输出 JSON
+2. 不要输出 Markdown
+3. 不要输出解释性文字
+4. action=continue 时 tool 和 params 必须完整
+5. action=stop 时 tool 和 params 必须为 null
+6. existing_info / missing_info 必须是高信息密度、可执行的字符串列表
 """
