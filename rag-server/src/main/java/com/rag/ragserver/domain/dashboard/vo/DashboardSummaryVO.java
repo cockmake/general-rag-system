@@ -9,4 +9,5 @@ public class DashboardSummaryVO {
     private Long documentCount;
     private Long sessionCount;
     private Long todayTokenUsage;
+    private Integer dailyMaxTokens;
 }

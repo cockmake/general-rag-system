@@ -127,11 +127,13 @@ class DocumentEmbeddingConsumer:
                         'name': 'text-embedding-v4',
                         'provider': 'qwen'
                     }
+
                     embeddings = get_embedding_instance(embedding_config)
                     vector_store = await MilvusClientManager.get_instance(
                         user_id, kb_id, milvus_uri, milvus_token, embeddings
                     )
-                    max_batch = 10
+
+                    max_batch = 32
 
                     def store_documents_batch():
                         all_ids = []

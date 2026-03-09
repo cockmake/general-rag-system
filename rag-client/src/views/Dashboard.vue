@@ -15,7 +15,8 @@ const stats = ref({
   kbCount: 0,
   documentCount: 0,
   sessionCount: 0,
-  todayTokenUsage: 0
+  todayTokenUsage: 0,
+  dailyMaxTokens: 0
 })
 
 const fetchStats = async () => {
@@ -135,11 +136,21 @@ onMounted(() => {
         </a-card>
       </a-col>
 
-      <a-col :xs="12" :sm="12" :md="6">
+      <a-col :xs="24" :sm="24" :md="6">
         <a-card>
           <div class="stat">
-            <div class="label">今日消耗Token</div>
-            <div class="value">{{ stats.todayTokenUsage }}</div>
+            <div class="label">今日消耗 Token</div>
+            <div class="value">{{ stats.todayTokenUsage.toLocaleString() }}</div>
+            <template v-if="stats.dailyMaxTokens && stats.dailyMaxTokens > 0">
+              <a-progress
+                :percent="Math.min(Math.round((stats.todayTokenUsage / stats.dailyMaxTokens) * 100), 100)"
+                :stroke-color="stats.todayTokenUsage >= stats.dailyMaxTokens ? '#ff4d4f' : '#1890ff'"
+                size="small"
+                style="margin-top: 8px;"
+              />
+              <div class="token-limit">上限 {{ stats.dailyMaxTokens.toLocaleString() }}</div>
+            </template>
+            <div v-else class="token-limit">无上限</div>
           </div>
         </a-card>
       </a-col>
@@ -193,6 +204,12 @@ onMounted(() => {
   font-size: 28px;
   font-weight: bold;
   margin-top: 8px;
+}
+
+.token-limit {
+  color: #aaa;
+  font-size: 12px;
+  margin-top: 4px;
 }
 
 @media screen and (max-width: 576px) {
