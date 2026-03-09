@@ -137,7 +137,7 @@ class RetrievalController:
             chunks_data = []
             for chunk in sorted_chunks:
                 retrieved_round = chunk.metadata.get("retrieved_round")
-                is_old = retrieved_round is not None and retrieved_round < current_round
+                is_old = retrieved_round is not None and retrieved_round < current_round - 1
                 content = (
                     RetrievalController._compress_old_content(chunk.page_content)
                     if is_old else chunk.page_content
@@ -163,7 +163,7 @@ class RetrievalController:
     @staticmethod
     def _format_tool_call_history(trace: List[Dict]) -> List[Dict]:
         """
-        格式化工具调用历史
+        格式化工具调用历史（包含 existing_info/missing_info 作为累积信息摘要）
         
         Args:
             trace: 执行轨迹列表
@@ -174,7 +174,9 @@ class RetrievalController:
                     "round": 1,
                     "tool": "search_by_multi_queries_in_database",
                     "params": {...},
-                    "result": "..." or {...}
+                    "result": "..." or {...},
+                    "existing_info": [...],
+                    "missing_info": [...]
                 }
             ]
         """
@@ -187,6 +189,8 @@ class RetrievalController:
                 "round": item.get("round"),
                 "tool": decision.get("tool"),
                 "params": decision.get("params", {}),
+                "existing_info": decision.get("existing_info", []),
+                "missing_info": decision.get("missing_info", []),
             }
 
             if result_data is None:
