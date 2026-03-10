@@ -38,7 +38,7 @@ class RetrievalDecision(BaseModel):
 
     existing_info: List[str] = Field(
         default_factory=list,
-        description="当前已检索到的有用信息（简要总结）"
+        description="当前已检索到的有用信息"
     )
     missing_info: List[str] = Field(
         default_factory=list,

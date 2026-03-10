@@ -97,10 +97,11 @@ class RetrievalController:
                         "fileName": str,
                         "documentId": int,
                         "maxChunkIndex": int,
-                        "chunk_count": int,
+                        "retrieved_chunk_count": int,
                         "chunks": [
                             {
                                 "chunkIndex": int,
+                                "retrieved_round": int,
                                 "content": str
                             }
                         ]
@@ -137,7 +138,7 @@ class RetrievalController:
                 "fileName": file_name,
                 "documentId": first_chunk.metadata.get("documentId"),
                 "maxChunkIndex": first_chunk.metadata.get("maxChunkIndex"),
-                "chunk_count": len(file_chunks),
+                "retrieved_chunk_count": len(file_chunks),
                 "chunks": chunks_data
             }
 
