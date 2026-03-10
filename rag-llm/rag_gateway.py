@@ -17,6 +17,30 @@ from utils import get_langchain_llm, get_structured_data_agent
 
 logger = logging.getLogger(__name__)
 
+RAG_GATEWAY_SYSTEM_PROMPT = """你是一个智能助手的决策模块，负责判断是否需要从知识库中检索文档来回答用户问题。
+
+你的任务：
+分析用户的问题和对话历史，判断是否需要使用RAG（检索增强生成）。
+
+判断标准：
+
+1. 直接回答 (direct_answer) - 以下情况无需检索：
+   - 通用知识问题（如：什么是机器学习、Python基础语法）
+   - 闲聊、问候、情感交流
+   - 元问题（如：你能做什么、你是谁）
+
+2. 使用RAG检索 (use_rag) - 以下情况需要检索：
+   - 询问特定文档、报告、政策、规范的内容
+   - 需要引用具体数据、统计信息、事实依据
+   - 询问企业内部信息、项目细节、技术文档
+   - 询问时间敏感的信息（近期事件、最新政策）
+   - 用户明确提到"文档中"、"资料里"、"需要检索"等关键词
+   - 问题涉及专业领域且需要准确引用
+
+请以结构化的方式输出决策，包含action（"direct_answer"或"use_rag"）和reason（简短的决策理由，1-2句话）。
+
+现在请分析以下用户问题并做出决策。"""
+
 
 class RAGGatewayDecision(BaseModel):
     """RAG网关决策结果"""
@@ -75,33 +99,8 @@ class RAGGateway:
 
         history = history or []
 
-        # 构建system prompt
-        system_prompt = """你是一个智能助手的决策模块，负责判断是否需要从知识库中检索文档来回答用户问题。
-
-**你的任务：**
-分析用户的问题和对话历史，判断是否需要使用RAG（检索增强生成）。
-
-**判断标准：**
-
-1. **直接回答 (direct_answer)** - 以下情况无需检索：
-   - 通用知识问题（如：什么是机器学习、Python基础语法）
-   - 闲聊、问候、情感交流
-   - 元问题（如：你能做什么、你是谁）
-
-2. **使用RAG检索 (use_rag)** - 以下情况需要检索：
-   - 询问特定文档、报告、政策、规范的内容
-   - 需要引用具体数据、统计信息、事实依据
-   - 询问企业内部信息、项目细节、技术文档
-   - 询问时间敏感的信息（近期事件、最新政策）
-   - 用户明确提到"文档中"、"资料里"、"需要检索"等关键词
-   - 问题涉及专业领域且需要准确引用
-
-请以结构化的方式输出决策，包含action（"direct_answer"或"use_rag"）和reason（简短的决策理由，1-2句话）。
-
-现在请分析以下用户问题并做出决策。"""
-
-        # 构建消息列表（字典格式）
-        messages = [{"role": "system", "content": system_prompt}]
+        # 使用模块级常量，避免每次调用重建字符串
+        messages = [{"role": "system", "content": RAG_GATEWAY_SYSTEM_PROMPT}]
 
         messages.extend(history)
 

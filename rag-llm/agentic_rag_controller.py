@@ -234,7 +234,10 @@ class RetrievalController:
         # system: 静态指令，可被缓存
         system_prompt = f"{CONTROLLER_SYSTEM_PROMPT}\n\n{TOOL_DEFINE_PROMPT}\n\n{TOOL_SELECT_PROMPT}"
 
-        # user: 动态数据，每轮不同
+        round_hint = f"## 当前轮次: {current_round}/{max_rounds}" + (
+            " ⚠️ 最后一轮，若信息仍不足请停止并基于现有内容作答" if current_round == max_rounds else ""
+        )
+
         user_prompt = f"""## 一、对话上下文
 
 {json.dumps(conversation_context, ensure_ascii=False, indent=2)}
@@ -249,7 +252,7 @@ class RetrievalController:
 
 ---
 
-## 当前轮次: {current_round}/{max_rounds}
+{round_hint}
 
 请基于以上三类信息和决策策略，输出结构化决策（仅JSON对象）。"""
 

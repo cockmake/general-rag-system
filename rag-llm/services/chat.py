@@ -11,7 +11,8 @@ from pydantic import BaseModel, Field
 from agentic_rag_utils import AgenticRAGService
 from rag_gateway import get_rag_gateway
 from rag_utils import rag_service
-from utils import get_official_llm, cut_history, get_token_count, unified_llm_stream, get_langchain_llm, get_structured_data_agent
+from utils import get_official_llm, cut_history, get_token_count, unified_llm_stream, get_langchain_llm, \
+    get_structured_data_agent
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,13 @@ class _SessionTitle(BaseModel):
     title: str = Field(..., description="会话标题")
 
 
+_SESSION_NAME_SYSTEM_PROMPT = (
+    "你是一个会话标题生成助手。"
+    "根据用户的输入内容，生成一个简短的概括性标题。"
+    "直接返回标题，不要包含引号或其他多余文字，不要回答用户内容。"
+)
+
+
 @chat_service.post("/session/name")
 async def get_session_name(body: dict = Body()):
     """根据用户第一条消息生成会话标题"""
@@ -32,15 +40,8 @@ async def get_session_name(body: dict = Body()):
         llm = get_langchain_llm(model)
         llm = get_structured_data_agent(llm, _SessionTitle)
         messages = [
-            {
-                "role": "user",
-                "content": (
-                    f"用户输入内容: {content}\n\n"
-                    "1. 请根据用户的输入内容，生成一个简短的标题。\n"
-                    "2. 直接返回标题，不要包含引号或其他多余文字。\n"
-                    "3. 注意不是回答用户内容，而是生成一个概括性的标题。\n"
-                ),
-            }
+            {"role": "system", "content": _SESSION_NAME_SYSTEM_PROMPT},
+            {"role": "user", "content": content},
         ]
         response = await llm.ainvoke({"messages": messages})
         title = response["structured_response"].title.strip()
@@ -320,7 +321,9 @@ async def chat_stream(
     kb_id = options.get('kbId')
     system_prompt = options.get('systemPrompt')
 
-    # 截断策略：保留最新用户问题，其余历史按(user, assistant)成组，总token数<20480
+    if model.get("provider") == "anthropic":
+        model["name"] = "claude-4.5-haiku"
+
     prompt_tokens = 0
     if history:
         history, prompt_tokens = cut_history(history, model)

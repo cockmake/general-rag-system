@@ -61,7 +61,8 @@ class RAGService:
                 for m in recent_history
             ])
 
-        system_prompt = f"""你是检索查询优化专家，负责将用户问题转换为多个高效检索查询。
+        # 静态指令部分 → SystemMessage（可被缓存）
+        system_instruction = """你是检索查询优化专家，负责将用户问题转换为多个高效检索查询。
 
 ## 任务要求
 
@@ -95,7 +96,7 @@ class RAGService:
 当前问题: 它的检索流程是怎样的？
 
 输出：
-{{
+{
   "queries": [
     "RAG系统的完整检索流程和步骤",
     "多查询生成和并行检索的实现机制",
@@ -107,7 +108,7 @@ class RAGService:
   ],
   "grade_query": "RAG系统的检索流程",
   "reasoning": "'它'指代RAG系统。生成了定义、实现、对比、技术术语查询，覆盖多查询、并行检索、rerank等关键概念。"
-}}
+}
 ```
 
 **示例2：继续类问题**
@@ -118,7 +119,7 @@ class RAGService:
 当前问题: 详细说说OCR部分
 
 输出：
-{{
+{
   "queries": [
     "PDF文件OCR识别的实现步骤和流程",
     "Tesseract OCR的配置参数和优化方法",
@@ -129,19 +130,19 @@ class RAGService:
   ],
   "grade_query": "PDF文件处理中OCR识别的实现细节",
   "reasoning": "用户聚焦OCR部分。生成了实现步骤、工具配置、优化方法、后处理查询，提取pytesseract、Tesseract等关键工具。"
-}}
+}
 ```
 
 ---
 
-## 当前任务
+请输出：严格JSON格式，包含 queries（6-10个）、grade_query、reasoning"""
 
-**对话历史**：
+        # 动态数据部分 → user 消息（每次不同）
+        user_message = f"""## 对话历史
 {history_context if history_context else '无对话历史'}
 
-**当前问题**：{question}
-
-**请输出**：严格JSON格式，包含 queries（6-10个）、grade_query、reasoning"""
+## 当前问题
+{question}"""
         model_info = {
             'name': 'qwen3-max-2026-01-23',
             'provider': 'other'
@@ -155,10 +156,10 @@ class RAGService:
         }
         llm = get_langchain_llm(model_info, **generate_config)
         structured_agent = get_structured_data_agent(llm, MultiQueryList)
-        # 使用异步调用
-        result = await structured_agent.ainvoke({"messages":
-                                                     [{"role": "user", "content": system_prompt}]
-                                                 })
+        result = await structured_agent.ainvoke({"messages": [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": user_message},
+        ]})
 
         logger.info(f"生成的多角度查询: {result['structured_response'].queries}")
         logger.info(f"生成的评分查询(grade_query): {result['structured_response'].grade_query}")
@@ -633,7 +634,7 @@ class RAGService:
             final_system_prompt = f"""你是一个专业的AI助手。基于提供的文档和对话历史回答用户问题。
 
 要求：
-1. 文档中的信息仅供参考
+1. 优先基于文档内容作答，文档是主要信息来源
 2. 如果文档不足以完整回答，结合对话历史进行推理或明确说明
 3. 文档中的信息为切片信息，可能语义并不连贯或存在错误，你需要抽取或推理相关信息
 
