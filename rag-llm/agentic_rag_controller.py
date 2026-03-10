@@ -15,6 +15,9 @@ from utils import get_langchain_llm
 logger = logging.getLogger(__name__)
 
 
+# logger.setLevel(logging.DEBUG)
+
+
 # ============= 决策控制器 =============
 class RetrievalController:
     """检索决策控制器 - 调用LLM但完全可控"""
@@ -169,6 +172,8 @@ class RetrievalController:
                 "round": item.get("round"),
                 "tool": decision.get("tool"),
                 "params": decision.get("params", {}),
+                "existing_info": decision.get("existing_info", []),
+                "missing_info": decision.get("missing_info", []),
             }
 
             if result_data is None:
@@ -252,8 +257,24 @@ class RetrievalController:
             HumanMessage(content=user_prompt),
         ]
 
+        logger.debug(
+            f"\n{'=' * 60}\n"
+            f"[Round {current_round}] decide_next_action INPUT\n"
+            f"{'=' * 60}\n"
+            f"[SYSTEM]\n{system_prompt}\n\n"
+            f"[USER]\n{user_prompt}\n"
+            f"{'=' * 60}"
+        )
+
         try:
             decision = await self.llm.ainvoke(messages)
+            logger.debug(
+                f"\n{'=' * 60}\n"
+                f"[Round {current_round}] decide_next_action OUTPUT\n"
+                f"{'=' * 60}\n"
+                f"{json.dumps(decision.model_dump(), ensure_ascii=False, indent=2)}\n"
+                f"{'=' * 60}"
+            )
             return decision
 
         except Exception as e:

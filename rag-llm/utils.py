@@ -496,7 +496,9 @@ def cut_history(history: list, model: dict):
             max_tokens = base_token * 4
 
     elif model_name.startswith("claude-"):
-        if "sonnet" in model_name.lower():
+        if "haiku" in model_name.lower():
+            max_tokens = base_token * 4
+        elif "sonnet" in model_name.lower():
             max_tokens = base_token * 3
 
     for i in range(n, 1, -2):
