@@ -378,7 +378,6 @@ const beforeUpload = (file, fileList) => {
       const pathName = f.webkitRelativePath || f.name;
       const base = pathName.split('/').pop() || pathName;
       const reasons = [];
-      if (base.length > 20) reasons.push('超过20个字符');
       if (base.includes(' ')) reasons.push('包含空格');
       if (reasons.length > 0) {
         invalidFiles.push({ name: base, reason: reasons.join('、') });

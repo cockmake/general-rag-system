@@ -104,7 +104,6 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
                         : originalFilename;
                 if (baseName != null) {
                     List<String> reasons = new java.util.ArrayList<>();
-                    if (baseName.length() > 20) reasons.add("超过20个字符");
                     if (baseName.contains(" ")) reasons.add("包含空格");
                     if (!reasons.isEmpty()) {
                         throw new BusinessException(400, "文件名 '" + baseName + "' 不符合规范：" + String.join("、", reasons));

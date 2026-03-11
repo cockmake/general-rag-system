@@ -66,7 +66,7 @@ class RerankRequest(BaseModel):
 class RerankResult(BaseModel):
     """单个Rerank结果"""
     index: int = Field(..., description="索引位置")
-    score: float = Field(..., description="相关性分数")
+    relevance_score: float = Field(..., description="相关性分数")
     query: str = Field(..., description="查询文本")
     document: str = Field(..., description="文档文本")
 
@@ -343,7 +343,7 @@ async def rerank(request: RerankRequest):
         results = [
             RerankResult(
                 index=i,
-                score=score,
+                relevance_score=score,
                 query=pair.query,
                 document=pair.document
             )
