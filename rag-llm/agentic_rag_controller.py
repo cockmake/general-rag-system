@@ -24,7 +24,8 @@ class RetrievalController:
 
     def __init__(self):
         model_info = {
-            "name": "qwen3-max-2026-01-23",
+            "name": "qwen3.5-397b-a17b",
+            # "name": "qwen3-max-2026-01-23",
             "provider": "other"
         }
         generate_config = {

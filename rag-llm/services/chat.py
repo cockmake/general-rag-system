@@ -302,20 +302,6 @@ async def chat_stream(
         options: dict = Body(default={})
 ):
     logger.info(f"Received chat stream request: model={model}, options={options}")
-    """
-    流式对话接口
-
-    支持两种模式：
-    1. 纯LLM模式：当options中没有kbId时，直接使用LLM生成回复
-    2. RAG模式：当options中有kbId时，执行多角度查询、并行检索、评分后生成回复
-
-    流程（RAG模式）：
-    1. 根据用户问题生成3-5个不同角度的查询（调用LLM）
-    2. 并行检索知识库获取相关文档
-    3. 并行评估文档相关性并打分
-    4. 合并连续的文档切片
-    5. 汇总相关文档并流式生成答案
-    """
     # 从options中提取参数
     user_id = options.get('userId')  # 注意这个userId是指知识库持有者的ID，不是当前提问用户的ID
     kb_id = options.get('kbId')

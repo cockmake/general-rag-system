@@ -353,7 +353,6 @@ def pdf_split(
             logger.warning("安装方法: pip install pytesseract")
             logger.warning("还需要安装Tesseract-OCR: https://github.com/tesseract-ocr/tesseract")
             return []
-
         try:
             text = _extract_text_with_ocr(file_path, ocr_language)
             logger.info(f"OCR识别完成，提取文本长度: {len(text)}")

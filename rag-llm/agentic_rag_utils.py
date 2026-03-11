@@ -49,7 +49,6 @@ class AgenticRAGService:
             "name": "text-embedding-v4",
             "provider": "qwen",
         }
-
         # 初始化状态
         self.vector_store = None
         self.toolkit = None
@@ -421,6 +420,7 @@ class AgenticRAGService:
                 reference_documents = retrieval_result.get("reference_documents", [])
                 trace = retrieval_result["trace"]
                 total_rounds = retrieval_result["total_rounds"]
+                all_docs_table = self._format_all_docs_table(all_documents)
                 logger.info(f"Agentic检索完成: {total_rounds}轮, {len(reference_documents)}个文档")
             else:
                 raise RuntimeError("Agentic检索流程未返回最终结果")
@@ -434,8 +434,6 @@ class AgenticRAGService:
                     f"[来源: {doc.metadata.get('fileName')}]: {doc.page_content}"
                     for i, doc in enumerate(merged_docs)
                 ])
-
-                all_docs_table = self._format_all_docs_table(all_documents)
 
                 # 构建merged_docs表格
                 merged_docs_table_lines = [
@@ -522,7 +520,6 @@ class AgenticRAGService:
 
 可能与问题有关的参考文档中的内容：
 {context}"""
-
         # 发送系统提示词用于token统计
         yield {
             "type": "system_prompt",
