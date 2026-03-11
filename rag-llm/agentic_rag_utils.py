@@ -210,7 +210,7 @@ class AgenticRAGService:
                 current_round=round_no,
                 max_rounds=max_rounds,
             )
-            logger.info(f"🤖 决策结果: {decision.model_dump()}")
+            logger.info(f"🤖 决策结果: {json.dumps(decision.model_dump(), ensure_ascii=False, indent=2)}")
 
             if decision.action == "stop":
                 logger.info(f"⏹️ 决策停止: {decision.reason}")

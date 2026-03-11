@@ -248,7 +248,7 @@ class RetrievalToolkit:
             queries: List[str],
             grade_query: str,
             top_k: int = 10,
-            grade_score_threshold: float = 0.4,
+            grade_score_threshold: float = 0.3,
             **kwargs
     ) -> Dict[str, Any]:
         """
@@ -258,7 +258,7 @@ class RetrievalToolkit:
             queries: 多语义查询列表（用于向量检索召回）
             grade_query: 专门用于Rerank评分的查询（通常是解除歧义后的用户原始问题）
             top_k: 最终返回条数（在rerank和动态过滤后）
-            grade_score_threshold: Rerank分数阈值（默认0.4），低于此分数的文档将被过滤
+            grade_score_threshold: Rerank分数阈值（默认0.3），低于此分数的文档将被过滤
                                    0.3=弱相关，0.5=一般相关，0.6=强相关，由大模型决定
             **kwargs: 额外参数（容错，忽略大模型可能传递的其他参数）
 
@@ -543,7 +543,7 @@ TOOL_DEFINE_PROMPT = """## Agentic RAG 检索工具定义
 [4] search_by_multi_queries_in_database
 ======================================================================
 用途：
-- 全库语义检索：多 query 并行召回 + rerank + 动态阈值过滤
+- 全库语义检索：多 query 并行召回 + rerank + 初步阈值过滤 + 动态阈值过滤
 
 适合：
 - 首轮概念性探索
@@ -559,7 +559,7 @@ TOOL_DEFINE_PROMPT = """## Agentic RAG 检索工具定义
 - queries: List[str]，必填，建议 3~6 条
 - grade_query: str，必填，用于 rerank 的核心问题
 - top_k: int，可选，默认 10
-- grade_score_threshold: float，可选，默认 0.4，建议 0.3~0.6
+- grade_score_threshold: float，可选，默认 0.3，建议 0.3~0.6，初步过滤阈值
 
 规则：
 - queries 必须从不同角度描述同一问题，避免同义重复
@@ -567,7 +567,7 @@ TOOL_DEFINE_PROMPT = """## Agentic RAG 检索工具定义
 - 这是高成本工具，不能在已知文件名/明确关键词时优先使用
 
 示例：
-{"tool": "search_by_multi_queries_in_database", "params": {"queries": ["检索决策结构", "agentic rag 工具选择", "RetrievalDecision 的作用"], "grade_query": "agentic rag 如何做检索决策", "top_k": 8, "grade_score_threshold": 0.4}}
+{"tool": "search_by_multi_queries_in_database", "params": {"queries": ["检索决策结构", "agentic rag 工具选择", "RetrievalDecision 的作用"], "grade_query": "agentic rag 如何做检索决策", "top_k": 8, "grade_score_threshold": 0.3}}
 
 ======================================================================
 [5] list_filename_by_like
