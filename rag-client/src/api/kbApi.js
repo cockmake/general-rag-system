@@ -44,11 +44,6 @@ export function deleteDocument(kbId, docId) {
     return commonApi.delete(`/kb/${kbId}/documents/${docId}`)
 }
 
-// 重命名文件
-export function renameDocument(kbId, docId, newName) {
-    return commonApi.put(`/kb/${kbId}/documents/${docId}/rename`, null, { params: { newName } })
-}
-
 // 邀请用户访问知识库
 export function inviteUserToKb(kbId, data) {
     return commonApi.post(`/kb/${kbId}/invite`, data)

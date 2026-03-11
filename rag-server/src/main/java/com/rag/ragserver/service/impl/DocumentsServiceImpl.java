@@ -98,6 +98,19 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
                     extension = originalFilename.substring(originalFilename.lastIndexOf("."));
                 }
 
+                // 校验文件名（取路径最后一段）
+                String baseName = (originalFilename != null && originalFilename.contains("/"))
+                        ? originalFilename.substring(originalFilename.lastIndexOf("/") + 1)
+                        : originalFilename;
+                if (baseName != null) {
+                    List<String> reasons = new java.util.ArrayList<>();
+                    if (baseName.length() > 20) reasons.add("超过20个字符");
+                    if (baseName.contains(" ")) reasons.add("包含空格");
+                    if (!reasons.isEmpty()) {
+                        throw new BusinessException(400, "文件名 '" + baseName + "' 不符合规范：" + String.join("、", reasons));
+                    }
+                }
+
                 // File organization: users/{groupId}/{kbId}/{uuid}{ext}
                 long groupId = userId % 1000;
                 String objectName = String.format("users/%d/%d/%s%s", groupId, kbId, UUID.randomUUID().toString(), extension);
@@ -186,27 +199,6 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
         }
 
         this.removeById(docId);
-    }
-
-    @Override
-    public void renameDocument(Long docId, String newName, Long userId) {
-        Documents document = this.getById(docId);
-        if (document == null) {
-            throw new BusinessException(404, "文档不存在");
-        }
-        if (newName == null || newName.trim().isEmpty()) {
-            throw new BusinessException(400, "文件名不能为空");
-        }
-
-        long count = this.count(new LambdaQueryWrapper<Documents>().eq(Documents::getKbId, document.getKbId()).eq(Documents::getFileName, newName).ne(Documents::getId, docId));
-
-        if (count > 0) {
-            throw new BusinessException(400, "文件 '" + newName + "' 已存在");
-        }
-
-        document.setFileName(newName);
-        // document.setUpdatedAt(new Date());
-        this.updateById(document);
     }
 
     @Override

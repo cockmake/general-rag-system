@@ -20,7 +20,5 @@ public interface DocumentsService extends IService<Documents> {
 
     void deleteDocument(Long docId, Long userId);
 
-    void renameDocument(Long docId, String newName, Long userId);
-
     void previewDocument(Long docId, Long userId, HttpServletResponse response);
 }

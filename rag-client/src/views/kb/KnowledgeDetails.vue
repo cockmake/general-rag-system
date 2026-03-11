@@ -1,5 +1,5 @@
 <script setup>
-import {onMounted, ref, computed, watch} from "vue";
+import {onMounted, ref, computed, watch, h} from "vue";
 import {onUnmounted} from "vue";
 import VuePdfEmbed from 'vue-pdf-embed';
 import 'vue-pdf-embed/dist/styles/annotationLayer.css';
@@ -21,7 +21,6 @@ import {
   previewDocument,
   listDocuments,
   uploadDocument,
-  renameDocument,
   listChunks,
   inviteUserToKb,
   getInvitedUsers,
@@ -177,7 +176,8 @@ const settingsModalVisible = ref(false);
 const settingsForm = ref({
   name: '',
   description: '',
-  systemPrompt: ''
+  systemPrompt: '',
+  visibility: 'private'
 });
 const settingsSubmitting = ref(false);
 
@@ -186,7 +186,8 @@ const openSettingsModal = () => {
     settingsForm.value = {
       name: currentKb.value.name,
       description: currentKb.value.description,
-      systemPrompt: currentKb.value.systemPrompt || ''
+      systemPrompt: currentKb.value.systemPrompt || '',
+      visibility: currentKb.value.visibility || 'private'
     };
     settingsModalVisible.value = true;
   }
@@ -218,11 +219,6 @@ const previewType = ref('text');
 const previewTitle = ref('预览');
 const pdfPage = ref(1);
 const pdfPageCount = ref(0);
-
-// Rename related refs
-const renameModalVisible = ref(false);
-const currentRenameRecord = ref(null);
-const newFileName = ref('');
 
 // Invite related refs
 const inviteModalVisible = ref(false);
@@ -291,7 +287,7 @@ watch(uploadProgressModalVisible, (val) => {
 const systemPromptPlaceholder = `你是一个专业的AI助手。基于提供的文档和对话历史回答用户问题。
 
 要求：
-1. 文档中的信息仅供参考
+1. 优先基于文档内容作答，文档是主要信息来源
 2. 如果文档不足以完整回答，结合对话历史进行推理或明确说明
 3. 文档中的信息为切片信息，可能语义并不连贯或存在错误，你需要抽取或推理相关信息`;
 
@@ -341,6 +337,7 @@ const fetchKbInfo = async () => {
 const folderUploadFileSet = ref(new Set());
 const folderUploadChecked = ref(false);
 const folderUploadBlocked = ref(false); // 标记本次文件夹上传是否已被阻止
+const batchNameBlocked = ref(false);   // 标记本次批次因文件名不合规而被整体拒绝
 const MAX_FOLDER_FILES = 300;
 
 // 自动排除的文件夹列表
@@ -370,32 +367,68 @@ const isFileExcluded = (filePath) => {
 };
 
 const beforeUpload = (file, fileList) => {
+  // ① 批次文件名校验 —— 仅在处理批次第一个文件时执行一次，统一校验全批次
+  if (!batchNameBlocked.value && fileList && fileList.length > 0 && fileList[0].uid === file.uid) {
+    // 对于文件夹上传，排除自动过滤的目录，只校验实际会上传的文件
+    const filesToCheck = fileList.filter(f =>
+      !f.webkitRelativePath || !isFileExcluded(f.webkitRelativePath)
+    );
+    const invalidFiles = [];
+    filesToCheck.forEach(f => {
+      const pathName = f.webkitRelativePath || f.name;
+      const base = pathName.split('/').pop() || pathName;
+      const reasons = [];
+      if (base.length > 20) reasons.push('超过20个字符');
+      if (base.includes(' ')) reasons.push('包含空格');
+      if (reasons.length > 0) {
+        invalidFiles.push({ name: base, reason: reasons.join('、') });
+      }
+    });
+    if (invalidFiles.length > 0) {
+      message.error({
+        content: h('div', [
+          h('div', { style: 'font-weight:500; margin-bottom:6px;' },
+            `整批次上传已取消，以下 ${invalidFiles.length} 个文件命名不规范：`
+          ),
+          h('ul', { style: 'margin:0; padding-left:18px;' },
+            invalidFiles.map(f => h('li', { style: 'color:#ff4d4f;' }, `"${f.name}"（${f.reason}）`))
+          )
+        ]),
+        duration: 8
+      });
+      batchNameBlocked.value = true;
+      setTimeout(() => { batchNameBlocked.value = false; }, 1000);
+      return false;
+    }
+  }
+
+  // 如果批次已因文件名校验失败被整体拒绝，拒绝后续每个文件（不再弹窗）
+  if (batchNameBlocked.value) return false;
+
+  // ② 文件类型校验（逐文件）
   const extension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
   const allowed = acceptExtensions.split(',');
   if (!allowed.includes(extension)) {
     message.error(`不支持的文件类型: ${file.name}`);
-    return false; // 阻止上传
+    return false;
   }
 
-  // 检测是否是文件夹上传（通过 webkitRelativePath 判断）
+  // ③ 文件夹上传逻辑
   if (file.webkitRelativePath) {
-    // 检查文件是否在排除列表中
+    // 自动排除开发环境目录
     if (isFileExcluded(file.webkitRelativePath)) {
-      return false; // 自动排除，不上传
+      return false;
     }
 
-    // 如果本次文件夹上传已被阻止，直接返回 false，不再弹窗
     if (folderUploadBlocked.value) {
       return false;
     }
 
-    // 首次检测到文件夹上传时，统计递归扫描的所有文件数量
+    // 首次检测到文件夹上传时，统计有效文件数量
     if (!folderUploadChecked.value) {
       folderUploadFileSet.value.clear();
 
-      // fileList 包含本次上传的所有文件（递归扫描文件夹及所有子文件夹）
       if (fileList && fileList.length > 0) {
-        // 统计所有有效文件（排除自动排除列表中的文件夹）
         let totalFiles = 0;
         let excludedFiles = 0;
 
@@ -412,20 +445,16 @@ const beforeUpload = (file, fileList) => {
 
         console.log(`文件夹递归扫描完成，有效文件数: ${totalFiles}，已排除文件数: ${excludedFiles}`);
 
-        // 如果排除了文件，提示用户
         if (excludedFiles > 0) {
           message.info(`已自动排除 ${excludedFiles} 个开发环境文件（如 node_modules、.git 等）`, 3);
         }
 
-        // 检查文件总数是否超过限制
         if (totalFiles > MAX_FOLDER_FILES) {
-          // 只弹出一次警告
           message.warning(`检测到有效文件数量为 ${totalFiles}，超过最大限制 ${MAX_FOLDER_FILES}。请检查是否包含不必要的大文件或文件夹，最大文件数量为 ${MAX_FOLDER_FILES}。`, 5);
           folderUploadChecked.value = false;
-          folderUploadBlocked.value = true; // 标记为已阻止
+          folderUploadBlocked.value = true;
           folderUploadFileSet.value.clear();
 
-          // 延迟重置阻止状态，为下次上传做准备
           setTimeout(() => {
             folderUploadBlocked.value = false;
           }, 1000);
@@ -437,7 +466,6 @@ const beforeUpload = (file, fileList) => {
       folderUploadChecked.value = true;
     }
 
-    // 所有文件检查通过后，在最后一个文件处理完后重置状态
     if (folderUploadFileSet.value.size > 0) {
       folderUploadFileSet.value.delete(file.uid);
       if (folderUploadFileSet.value.size === 0) {
@@ -445,7 +473,7 @@ const beforeUpload = (file, fileList) => {
       }
     }
   } else {
-    // 单文件上传，重置文件夹上传状态
+    // 普通文件上传，重置文件夹上传状态
     folderUploadChecked.value = false;
     folderUploadFileSet.value.clear();
     folderUploadBlocked.value = false;
@@ -601,29 +629,7 @@ const handleDelete = async (record) => {
   fetchDocuments();
 };
 
-// 4. 重命名逻辑
-const openRenameModal = (record) => {
-  currentRenameRecord.value = record;
-  newFileName.value = record.fileName;
-  renameModalVisible.value = true;
-};
-
-const handleRename = async () => {
-  if (!newFileName.value || !newFileName.value.trim()) {
-    message.warning('请输入文件名');
-    return;
-  }
-  try {
-    await renameDocument(kbId, currentRenameRecord.value.id, newFileName.value);
-    message.success('重命名成功');
-    renameModalVisible.value = false;
-    fetchDocuments();
-  } catch (e) {
-    console.error('Rename failed', e);
-  }
-};
-
-// 5. 下载逻辑
+// 4. 下载逻辑
 const handleDownload = async (record) => {
   downloadProgress.value = {visible: true, percent: 0, title: '正在准备下载...'};
   startSimulatedProgress();
@@ -886,7 +892,6 @@ onUnmounted(() => {
                   <a-menu-item @click="handlePreview(record)">预览</a-menu-item>
                   <a-menu-item @click="handleDownload(record)">下载</a-menu-item>
                   <a-menu-item @click="handlePreviewChunks(record)">预览切片</a-menu-item>
-                  <a-menu-item @click="openRenameModal(record)">重命名</a-menu-item>
                   <a-menu-item danger>
                     <a-popconfirm
                         title="确定要删除这个文件吗？"
@@ -917,9 +922,6 @@ onUnmounted(() => {
                         <a-menu-item @click="handleDownload(record)">
                             下载文件
                         </a-menu-item>
-                        <a-menu-item @click="openRenameModal(record)">
-                            重命名
-                        </a-menu-item>
                         <a-menu-item danger>
                             <a-popconfirm
                                 title="确定要删除这个文件吗？"
@@ -939,14 +941,6 @@ onUnmounted(() => {
       </template>
     </a-table>
 
-    <a-modal
-        v-model:visible="renameModalVisible"
-        title="重命名文件"
-        @ok="handleRename"
-    >
-      <a-input v-model:value="newFileName" placeholder="请输入新文件名"/>
-    </a-modal>
-
     <!-- 设置对话框 -->
     <a-modal
         v-model:visible="settingsModalVisible"
@@ -963,10 +957,19 @@ onUnmounted(() => {
           <a-textarea v-model:value="settingsForm.description" placeholder="请输入描述" :rows="2"/>
         </a-form-item>
         <a-form-item label="系统提示词">
-          <template #help>
-            设置该知识库在对话时的默认系统提示词，用于控制 AI 的回答风格和行为。
-          </template>
           <a-textarea v-model:value="settingsForm.systemPrompt" :placeholder="systemPromptPlaceholder" :rows="6"/>
+        </a-form-item>
+        <a-form-item label="可见性">
+          <template #help>
+            <span v-if="settingsForm.visibility === 'shared'">共享后，当前工作空间的所有成员均可访问此知识库。</span>
+            <span v-else-if="settingsForm.visibility === 'public'">公开后，所有用户均可访问此知识库。</span>
+            <span v-else>私有模式下，仅您本人可访问（被邀请用户除外）。</span>
+          </template>
+          <a-radio-group v-model:value="settingsForm.visibility" option-type="button">
+            <a-radio value="private">🔒 私有</a-radio>
+            <a-radio value="shared">🏢 工作空间共享</a-radio>
+            <a-radio value="public">🌍 公开</a-radio>
+          </a-radio-group>
         </a-form-item>
       </a-form>
     </a-modal>

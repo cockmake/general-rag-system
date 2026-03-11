@@ -1,6 +1,7 @@
 package com.rag.ragserver.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.rag.ragserver.common.R;
@@ -11,6 +12,7 @@ import com.rag.ragserver.domain.Users;
 import com.rag.ragserver.domain.kb.vo.KbShareUserVO;
 import com.rag.ragserver.dto.KbCreateDTO;
 import com.rag.ragserver.dto.KbInviteDTO;
+import com.rag.ragserver.domain.kb.KbVisibilityEnum;
 import com.rag.ragserver.dto.KbUpdateDTO;
 import com.rag.ragserver.exception.BusinessException;
 import com.rag.ragserver.service.DocumentChunksService;
@@ -77,6 +79,7 @@ public class KbController {
     @PutMapping("/{kbId}")
     public R<Void> updateKnowledgeBase(@PathVariable Long kbId, @RequestBody KbUpdateDTO kbUpdateDTO) {
         Long userId = (Long) request.getAttribute("userId");
+        Long workspaceId = (Long) request.getAttribute("workspaceId");
         KnowledgeBases kb = kbService.getById(kbId);
         if (kb == null) {
             throw new BusinessException(404, "知识库不存在");
@@ -94,8 +97,23 @@ public class KbController {
         if (kbUpdateDTO.getSystemPrompt() != null) {
             kb.setSystemPrompt(kbUpdateDTO.getSystemPrompt().trim());
         }
+        if (kbUpdateDTO.getVisibility() != null) {
+            KbVisibilityEnum visibility = kbUpdateDTO.getVisibility();
+            kb.setVisibility(visibility.name());
+            if (visibility == KbVisibilityEnum.SHARED) {
+                kb.setWorkspaceId(workspaceId);
+            }
+        }
         
         kbService.updateById(kb);
+
+        // updateById 默认跳过 null 值；切换到 private/public 时需显式将 workspaceId 置空
+        if (kbUpdateDTO.getVisibility() != null && kbUpdateDTO.getVisibility() != KbVisibilityEnum.SHARED) {
+            kbService.update(new LambdaUpdateWrapper<KnowledgeBases>()
+                    .eq(KnowledgeBases::getId, kbId)
+                    .set(KnowledgeBases::getWorkspaceId, null));
+        }
+
         return R.success();
     }
 
@@ -127,16 +145,6 @@ public class KbController {
             throw new BusinessException(403, "没有权限删除该文档");
         }
         documentsService.deleteDocument(docId, userId);
-        return R.success();
-    }
-
-    @PutMapping("/{kbId}/documents/{docId}/rename")
-    public R<Void> renameDocument(@PathVariable Long kbId, @PathVariable Long docId, @RequestParam String newName) {
-        Long userId = (Long) request.getAttribute("userId");
-        if (!kbPermissionService.canModifyDocument(docId, userId)) {
-            throw new BusinessException(403, "没有权限修改该文档");
-        }
-        documentsService.renameDocument(docId, newName, userId);
         return R.success();
     }
 
