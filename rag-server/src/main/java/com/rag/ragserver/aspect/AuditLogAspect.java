@@ -121,13 +121,14 @@ public class AuditLogAspect {
             case "deleteKnowledgeBase": return "删除了知识库";
             case "uploadDocuments": return "上传了文档";
             case "deleteDocument": return "删除了文档";
-            case "renameDocument": return "重命名了文档";
             case "inviteUserToKb": return "邀请用户加入知识库";
             case "removeUserFromKb": return "移除了知识库成员";
             case "createWorkspace": return "创建了工作空间";
             case "inviteUserToWorkspace": return "邀请用户加入工作空间";
             case "switchWorkspace": return "切换了工作空间";
             case "removeUserFromWorkspace": return "移除了工作空间成员";
+            case "startChat": return "新建了对话";
+            case "deleteSession": return "删除了对话";
             default: return action;
         }
     }

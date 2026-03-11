@@ -37,11 +37,12 @@ public class AuditLogsController {
             "deleteKnowledgeBase",   // 删除知识库
             "uploadDocuments",       // 上传文档
             "deleteDocument",        // 删除文档
-            "renameDocument",        // 重命名文档
             "inviteUserToKb",        // 邀请成员至知识库
             "createWorkspace",       // 创建工作空间
             "inviteUserToWorkspace", // 邀请成员至工作空间
-            "switchWorkspace"        // 切换工作空间
+            "switchWorkspace",       // 切换工作空间
+            "startChat",             // 新建对话
+            "deleteSession"          // 删除对话
         );
 
         Page<AuditLogs> page = new Page<>(1, limit);
