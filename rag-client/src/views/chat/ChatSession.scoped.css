@@ -194,6 +194,30 @@
 .kb-tool-item {
   height: 28px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 2px 4px 2px 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  transition: all 0.2s;
+}
+
+.kb-tool-item:hover {
+  border-color: #1890ff;
+}
+
+.kb-tool-item--active {
+  background: #e6f7ff;
+  border-color: #1890ff;
+}
+
+/* kb-tool-item 内部组件透明背景，融入外层边框 */
+.kb-tool-item :deep(.kb-select .ant-select-selector),
+.kb-tool-item :deep(.ant-segmented) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 /* 移动端选中知识库时，内部组件自动填满整行 */
