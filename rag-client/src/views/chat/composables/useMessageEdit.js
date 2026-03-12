@@ -1,7 +1,7 @@
 import {ref, reactive} from 'vue'
 import {message as antMessage} from 'ant-design-vue'
 import {editMessageStream, retryMessageStream} from '@/api/chatApi'
-import {ragMode} from '@/vars.js'
+import {ragMode, contextMultiplier} from '@/vars.js'
 
 export function useMessageEdit(
     messages,
@@ -100,6 +100,10 @@ export function useMessageEdit(
             }
         }
 
+        if (contextMultiplier.value !== null) {
+            options.contextMultiplier = contextMultiplier.value
+        }
+
         editMessageStream(
             userMsg.id,
             sessionId.value,
@@ -155,6 +159,10 @@ export function useMessageEdit(
             } else if (ragMode.value === 'fast') {
                 options.agenticRag = false
             }
+        }
+
+        if (contextMultiplier.value !== null) {
+            options.contextMultiplier = contextMultiplier.value
         }
 
         retryMessageStream(

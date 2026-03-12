@@ -177,6 +177,7 @@
 
 .sender-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-left: 8px;
 }
@@ -190,6 +191,23 @@
   width: 180px; /* Default desktop width */
 }
 
+.kb-tool-item {
+  height: 28px;
+  flex-shrink: 0;
+}
+
+/* 移动端选中知识库时，内部组件自动填满整行 */
+@media (max-width: 768px) {
+  .kb-tool-item--active :deep(.kb-selector-wrapper) {
+    width: 100%;
+  }
+
+  .kb-tool-item--active :deep(.kb-select) {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
 .sender-header-tools {
   padding: 8px 12px 4px;
 }
@@ -197,7 +215,13 @@
 .header-tools-wrapper {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  align-items: center;
+}
+
+.header-tools-wrapper::-webkit-scrollbar {
+  display: none;
 }
 
 .header-tool-item {
@@ -400,5 +424,48 @@
 
   .sender-config {
     flex-wrap: nowrap;
+  }
+
+  /* 移动端上下文按钮只显示图标，激活时带蓝色小圆点 */
+  .sender-actions .header-tool-item span:not([role="img"]) {
+    display: none;
+  }
+
+  .sender-actions .header-tool-item {
+    position: relative;
+    padding: 5px 7px;
+  }
+
+  .sender-actions .header-tool-item.active::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #1890ff;
+  }
+
+  /* 移动端功能栏允许换行，换行后每项最多占半行 */
+  .header-tools-wrapper {
+    flex-wrap: wrap;
+    overflow-x: unset;
+  }
+
+  .header-tools-wrapper .header-tool-item,
+  .header-tools-wrapper .kb-tool-item {
+    max-width: calc(50% - 4px);
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* 知识库选项：选中时独占整行，未选中时与其他工具项一致 */
+  .header-tools-wrapper .kb-tool-item--active {
+    flex-basis: 100%;
+    max-width: 100%;
   }
 }

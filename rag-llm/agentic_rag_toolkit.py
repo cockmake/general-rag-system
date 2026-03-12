@@ -136,7 +136,8 @@ class RetrievalToolkit:
         """
         if kwargs:
             logger.debug(f"⚠️ 工具1收到额外参数（已忽略）: {kwargs}")
-
+        if file_names:
+            file_names = [fn.replace(" ", "") for fn in file_names if fn.strip()]
         scope = "全库" if not file_names else f"{len(file_names)}个文件"
         logger.info(
             f"🔍 [1.grep检索] keywords={keywords}, type={match_type}, top_k={top_k}, scope={scope}, files={file_names}")
@@ -185,7 +186,7 @@ class RetrievalToolkit:
         """
         if kwargs:
             logger.debug(f"⚠️ 工具2收到额外参数（已忽略）: {kwargs}")
-
+        file_name = file_name.replace(" ", "")
         logger.info(f"🔍 [2.文件chunk范围] file='{file_name}', range=[{start_chunk_index}, {end_chunk_index}]")
 
         filter_expr = f'fileName == "{self._escape(file_name)}" and chunkIndex >= {start_chunk_index} and chunkIndex <= {end_chunk_index}'
@@ -230,7 +231,7 @@ class RetrievalToolkit:
         """
         if kwargs:
             logger.debug(f"⚠️ 工具3收到额外参数（已忽略）: {kwargs}")
-
+        file_name = file_name.replace(" ", "")
         logger.info(f"🔍 [3.扩展上下文] file='{file_name}', chunk_index={chunk_index}, window={window_size}")
 
         start_chunk_index = max(0, chunk_index - window_size)

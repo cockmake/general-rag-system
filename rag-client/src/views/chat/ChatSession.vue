@@ -10,11 +10,12 @@ import {
   AppstoreOutlined,
   BulbOutlined,
   CaretRightOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons-vue'
 import {Bubble, Sender, ThoughtChain} from 'ant-design-x-vue'
 import {useRoute} from 'vue-router'
 import {Typography, theme, Spin} from 'ant-design-vue'
-import {groupedModels, models, selectedKb, selectedModel} from '@/vars.js'
+import {groupedModels, models, selectedKb, selectedModel, contextMultiplier} from '@/vars.js'
 import KbSelector from '@/components/KbSelector.vue'
 import {useThemeStore} from '@/stores/theme'
 
@@ -167,6 +168,20 @@ const roles = computed(() => ({
     avatar: isMobile.value ? undefined : {icon: h(UserOutlined), style: assistantAvatar},
   },
 }));
+
+// 上下文长度控制
+const contextCustomInput = ref(null)
+const setContextMultiplier = (val) => {
+  contextMultiplier.value = val
+  contextCustomInput.value = null
+}
+const confirmContextCustom = () => {
+  const v = Number(contextCustomInput.value)
+  if (v >= 1) {
+    contextMultiplier.value = v
+    contextCustomInput.value = null
+  }
+}
 </script>
 
 <template>
@@ -334,7 +349,8 @@ const roles = computed(() => ({
         >
           <!-- 工具栏 (Header插槽) -->
           <template #header>
-            <div class="sender-header-tools" v-if="allKnownTools.length > 0 || currentModel?.metadata?.thinking">
+            <div class="sender-header-tools"
+                 v-if="allKnownTools.some(k => availableTools.includes(k)) || currentModel?.metadata?.thinking || isKbSupported">
               <div class="header-tools-wrapper">
                 <!-- 思考模型开关 -->
                 <div
@@ -367,6 +383,13 @@ const roles = computed(() => ({
                     <CheckOutlined v-if="selectedTools.includes(toolKey)" style="font-size: 10px; margin-left: 2px;"/>
                   </div>
                 </template>
+
+                <!-- 知识库选择 -->
+                <a-tooltip v-if="isKbSupported"
+                           title="请在您需要检索知识库中信息时选用"
+                           placement="topLeft">
+                  <KbSelector :class="['kb-tool-item', { 'kb-tool-item--active': selectedKb }]" :bordered="false" size="small" width="150px"/>
+                </a-tooltip>
               </div>
             </div>
           </template>
@@ -394,21 +417,64 @@ const roles = computed(() => ({
                     </a-select-option>
                   </a-select-opt-group>
                 </a-select>
-
-                <a-divider type="vertical" style="height: 16px; margin: 0 4px; border-left-color: rgba(0,0,0,0.1)"/>
-
-                <div class="kb-wrapper">
-                  <a-tooltip :title="!isKbSupported ? '当前模型不支持知识库功能' : '请在您需要检索知识库中信息时选用'"
-                             placement="topLeft">
-                    <div style="width: 100%">
-                      <KbSelector class="kb-select-footer" :disabled="!isKbSupported" :bordered="false" size="small"
-                                  width="180px"/>
-                    </div>
-                  </a-tooltip>
-                </div>
-
               </div>
               <div class="sender-actions">
+                <!-- 上下文长度控制 -->
+                <a-popover
+                    trigger="click"
+                    placement="topRight"
+                    :arrow="false"
+                    overlay-class-name="context-multiplier-popover"
+                >
+                  <div
+                      class="header-tool-item"
+                      :class="{ active: contextMultiplier !== null }"
+                  >
+                    <HistoryOutlined/>
+                    <span>上下文{{ contextMultiplier !== null ? `：${contextMultiplier}x` : '' }}</span>
+                  </div>
+                  <template #content>
+                    <div class="context-multiplier-panel">
+                      <div class="ctx-hint">
+                        仅在翻译、润色等无需长上下文的任务时限制，以节省token使用量。其他情况建议使用模型默认最大上下文长度。
+                      </div>
+                      <div class="ctx-divider"/>
+                      <div
+                          class="ctx-option"
+                          :class="{ 'ctx-option-active': contextMultiplier === null }"
+                          @click="setContextMultiplier(null)"
+                      >默认（跟随模型）
+                      </div>
+                      <div class="ctx-divider"/>
+                      <div class="ctx-list">
+                        <div
+                            v-for="n in 5"
+                            :key="n"
+                            class="ctx-option"
+                            :class="{ 'ctx-option-active': contextMultiplier === n }"
+                            @click="setContextMultiplier(n)"
+                        >
+                          <span>{{ n }}x</span>
+                          <span class="ctx-token-hint">≈ {{ (n * 10240 / 1024).toFixed(0) }}k tokens</span>
+                        </div>
+                      </div>
+                      <div class="ctx-divider"/>
+                      <div class="ctx-custom-row">
+                        <a-input-number
+                            v-model:value="contextCustomInput"
+                            :min="1"
+                            :precision="0"
+                            placeholder="自定义倍率"
+                            size="small"
+                            style="flex:1"
+                            @pressEnter="confirmContextCustom"
+                        />
+                        <a-button size="small" type="primary" @click="confirmContextCustom">确认</a-button>
+                      </div>
+                    </div>
+                  </template>
+                </a-popover>
+
                 <component :is="(loading || isGenerating || isLastUserMsgGenerating) ? LoadingButton : SendButton"
                            type="primary" :disabled="loading || isGenerating || isLastUserMsgGenerating || !question"
                            @click="!loading && !isGenerating && !isLastUserMsgGenerating && onSend(question)"/>

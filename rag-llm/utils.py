@@ -461,7 +461,7 @@ def get_token_count(text: str, encoding_name: str = "cl100k_base") -> int:
     return len(encoding.encode(text))
 
 
-def cut_history(history: list, model: dict):
+def cut_history(history: list, model: dict, context_multiplier: int = None):
     current_msg = history[-1]
     previous_msgs = history[:-1]
 
@@ -472,21 +472,29 @@ def cut_history(history: list, model: dict):
 
     base_token = 10240  # 10k
 
-    max_tokens = base_token * 6
+    # 按模型计算默认上限
+    default_max_tokens = base_token * 6
     if model_name.startswith("gpt-"):
-        max_tokens = base_token * 4
+        default_max_tokens = base_token * 4
 
     elif model_name.startswith("gemini-"):
         if "flash" in model_name.lower():
-            max_tokens = base_token * 6
+            default_max_tokens = base_token * 6
         elif "pro" in model_name.lower():
-            max_tokens = base_token * 4
+            default_max_tokens = base_token * 4
 
     elif model_name.startswith("claude-"):
         if "haiku" in model_name.lower():
-            max_tokens = base_token * 4
+            default_max_tokens = base_token * 4
         elif "sonnet" in model_name.lower():
-            max_tokens = base_token * 3
+            default_max_tokens = base_token * 3
+
+    # 用户手动设置时，取用户值与模型默认值中的较小值，避免超出模型能力
+    if context_multiplier is not None:
+        user_max_tokens = base_token * context_multiplier
+        max_tokens = min(user_max_tokens, default_max_tokens)
+    else:
+        max_tokens = default_max_tokens
 
     for i in range(n, 1, -2):
         pair = previous_msgs[i - 2: i]

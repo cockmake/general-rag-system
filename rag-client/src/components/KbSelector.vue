@@ -32,7 +32,7 @@ const filterKbOption = (input, option) => {
         :style="{ width }"
         :size="size"
         :disabled="disabled"
-        placeholder="选择知识库（可选）"
+        placeholder="知识库（可选）"
         allowClear
         show-search
         :filter-option="filterKbOption"
@@ -73,7 +73,6 @@ const filterKbOption = (input, option) => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .kb-select {
@@ -120,33 +119,10 @@ const filterKbOption = (input, option) => {
   box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
 }
 
-/* 移动端适配 */
+/* 移动端适配：kb-selector-wrapper 始终横排，由父容器决定换行 */
 @media (max-width: 768px) {
-  .kb-selector-wrapper {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-    width: 100%;
-  }
-  
-  .kb-select {
-    width: 100% !important;
-  }
-  
-  .rag-mode-toggle {
-    width: 100%;
-    align-self: center;
-  }
-  
-  .rag-mode-toggle :deep(.ant-segmented) {
-    display: flex;
-    width: 100%;
-  }
-  
   .rag-mode-toggle :deep(.ant-segmented-item) {
-    flex: 1;
-    justify-content: center;
-    text-align: center;
+    font-size: 12px;
   }
 }
 

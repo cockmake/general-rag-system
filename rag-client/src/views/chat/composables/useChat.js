@@ -5,7 +5,7 @@ import {
     fetchSessionMessages,
     startChatStream
 } from '@/api/chatApi'
-import {models, selectedModel, selectedKb, ragMode, findKbById, loadKbs} from '@/vars.js'
+import {models, selectedModel, selectedKb, ragMode, contextMultiplier, findKbById, loadKbs} from '@/vars.js'
 
 export function useChat(
     sessionId,
@@ -210,6 +210,8 @@ export function useChat(
                 thinkingEnabled.value = false
             }
 
+            contextMultiplier.value = opts.contextMultiplier !== undefined ? opts.contextMultiplier : null
+
             if (currentModel.value?.metadata?.thinking?.editable === false) {
                 thinkingEnabled.value = currentModel.value.metadata.thinking.default
             }
@@ -308,6 +310,10 @@ export function useChat(
             } else if (ragMode.value === 'fast') {
                 options.agenticRag = false  // Fast RAG 模式
             }
+        }
+
+        if (contextMultiplier.value !== null) {
+            options.contextMultiplier = contextMultiplier.value
         }
 
         startChatStream(sessionId.value, selectedModel.value, text, isKbSupported.value ? (selectedKb.value || undefined) : undefined, options, onOpen, onMessage, onError, onClose)

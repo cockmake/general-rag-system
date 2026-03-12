@@ -207,7 +207,7 @@ const onSend = async (text) => {
           <div class="config-item">
             <div class="config-label">
               <RobotOutlined class="config-icon"/>
-              <span>选择模型</span>
+              <span>模型</span>
             </div>
             <a-select
                 v-model:value="selectedModel"
@@ -233,7 +233,7 @@ const onSend = async (text) => {
           <div class="config-item">
             <div class="config-label">
               <ToolOutlined class="config-icon"/>
-              <span>功能选择</span>
+              <span>功能</span>
             </div>
 
             <div class="tools-container">
@@ -278,7 +278,7 @@ const onSend = async (text) => {
           <div class="config-item">
             <div class="config-label">
               <DatabaseOutlined class="config-icon"/>
-              <span>选择知识库</span>
+              <span>知识库</span>
               <span
                   style="font-size: 12px; color: #999; margin-left: 8px; font-weight: normal;">请在您需要检索知识库中信息时选用</span>
             </div>

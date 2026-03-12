@@ -306,13 +306,19 @@ async def chat_stream(
     user_id = options.get('userId')  # 注意这个userId是指知识库持有者的ID，不是当前提问用户的ID
     kb_id = options.get('kbId')
     system_prompt = options.get('systemPrompt')
+    context_multiplier = options.get('contextMultiplier')
+    if context_multiplier is not None:
+        try:
+            context_multiplier = int(context_multiplier)
+        except (ValueError, TypeError):
+            context_multiplier = None
 
     if model.get("provider") == "anthropic":
         model["name"] = "claude-4.5-haiku"
 
     prompt_tokens = 0
     if history:
-        history, prompt_tokens = cut_history(history, model)
+        history, prompt_tokens = cut_history(history, model, context_multiplier)
 
     logger.info(f"保留历史对话消息数: {len(history) // 2} + 1，输入Token数: {prompt_tokens}")
     # 构建LangChain消息列表（不包含最后一条用户消息）
