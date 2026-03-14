@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import md5 from 'crypto-js/md5'
@@ -159,29 +159,55 @@ const goToLogin = () => {
 <style scoped>
 .register-wrapper {
   width: 100%;
-  max-width: 400px;
+  max-width: 416px;
   padding: 0 24px;
 }
 
 .auth-header {
-  margin-bottom: 24px;
+  margin-bottom: 22px;
   text-align: center;
 }
 
 .title {
-  font-size: 28px;
-  font-weight: bold;
+  font-size: 30px;
+  font-weight: 700;
   margin-bottom: 8px;
-  color: #333;
+  color: #14223b;
+  line-height: 1.2;
 }
 
 .subtitle {
-  color: #666;
+  color: #627089;
   font-size: 14px;
+  line-height: 1.6;
 }
 
 .auth-form {
-  margin-bottom: 24px;
+  margin-bottom: 14px;
+}
+
+.auth-form :deep(.ant-form-item-label > label) {
+  font-size: 13px;
+  color: #42526b;
+  font-weight: 600;
+}
+
+.auth-form :deep(.ant-input-affix-wrapper),
+.auth-form :deep(.ant-input) {
+  border-radius: 12px;
+  border-color: #d7deec;
+}
+
+.auth-form :deep(.ant-input-affix-wrapper:hover),
+.auth-form :deep(.ant-input:hover) {
+  border-color: #8fb3ff;
+}
+
+.auth-form :deep(.ant-btn-primary) {
+  height: 44px;
+  border-radius: 12px;
+  font-weight: 600;
+  box-shadow: 0 8px 18px rgba(22, 119, 255, 0.28);
 }
 
 .code-container {
@@ -199,8 +225,53 @@ const goToLogin = () => {
   font-size: 14px;
 }
 
+.footer-actions a {
+  color: #1677ff;
+  font-weight: 600;
+}
+
 .text-gray {
   color: #999;
   margin-right: 8px;
+}
+
+@media (max-width: 768px) {
+  .register-wrapper {
+    max-width: 100%;
+    padding: 26px 18px 20px;
+  }
+
+  .title {
+    font-size: 26px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+  }
+
+  .code-btn {
+    width: 112px;
+    flex-shrink: 0;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 420px) {
+  .register-wrapper {
+    padding: 24px 14px 16px;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .code-container {
+    gap: 6px;
+  }
+
+  .code-btn {
+    width: 104px;
+  }
 }
 </style>
