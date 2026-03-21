@@ -107,6 +107,10 @@ const onLogin = async () => {
         <span class="text-gray">还没有账号？</span>
         <a style="cursor: pointer" @click="router.push('/register')">立即注册</a>
       </div>
+
+      <div class="footer-actions">
+        <a style="cursor: pointer" @click="router.push('/forgot-password')">忘记密码？</a>
+      </div>
       
       <div class="github-link">
         <a href="https://github.com/cockmake/general-rag-system" target="_blank">

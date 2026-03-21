@@ -16,6 +16,11 @@ const routes = [
         meta: {public: true}
     },
     {
+        path: '/forgot-password',
+        component: () => import('@/views/ForgotPassword.vue'),
+        meta: {public: true}
+    },
+    {
         path: '/',
         component: MainLayout,
         meta: {requiresAuth: true},

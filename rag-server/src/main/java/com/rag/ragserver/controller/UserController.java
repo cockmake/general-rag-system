@@ -6,6 +6,7 @@ import com.rag.ragserver.domain.Roles;
 import com.rag.ragserver.domain.Users;
 import com.rag.ragserver.domain.Workspaces;
 import com.rag.ragserver.dto.LoginRequest;
+import com.rag.ragserver.dto.ResetPasswordRequest;
 import com.rag.ragserver.exception.BusinessException;
 import com.rag.ragserver.service.RolesService;
 import com.rag.ragserver.service.UsersService;
@@ -26,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.rag.ragserver.dto.RegisterRequest;
 import com.rag.ragserver.dto.SendCodeRequest;
+import com.rag.ragserver.dto.SendResetCodeRequest;
 import com.rag.ragserver.service.EmailService;
 
 import javax.validation.Valid;
@@ -110,6 +112,43 @@ public class UserController {
         redisTemplate.delete("register:code:" + email);
 
         return R.success("注册成功");
+    }
+
+    @PostMapping("/send-reset-code")
+    public R<String> sendResetCode(@RequestBody @Valid SendResetCodeRequest request) {
+        String email = request.getEmail();
+        Users user = usersService.lambdaQuery().eq(Users::getEmail, email).one();
+        if (user == null) {
+            throw new BusinessException(400, "该邮箱未注册");
+        }
+
+        String code = String.valueOf((int) ((Math.random() * 9 + 1) * 100000));
+        redisTemplate.opsForValue().set("reset:code:" + email, code, 5, TimeUnit.MINUTES);
+
+        emailService.sendVerificationCode(email, code);
+        return R.success("重置验证码已发送");
+    }
+
+    @PostMapping("/reset-password")
+    public R<String> resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
+        String email = request.getEmail();
+        String code = request.getCode();
+
+        String cacheCode = redisTemplate.opsForValue().get("reset:code:" + email);
+        if (cacheCode == null || !cacheCode.equals(code)) {
+            throw new BusinessException(400, "验证码错误或已失效");
+        }
+
+        Users user = usersService.lambdaQuery().eq(Users::getEmail, email).one();
+        if (user == null) {
+            throw new BusinessException(400, "该邮箱未注册");
+        }
+
+        user.setPwd(request.getNewPassword());
+        usersService.updateById(user);
+
+        redisTemplate.delete("reset:code:" + email);
+        return R.success("密码重置成功");
     }
 
     @PostMapping("/login")
