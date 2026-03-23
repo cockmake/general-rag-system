@@ -118,21 +118,21 @@ class RAGService:
 ```
 历史：
 用户: PDF是如何处理的？
-助手: PDF分文本型和图片型...用PyMuPDF和Tesseract...
-当前问题: 详细说说OCR部分
+助手: PDF通过PyMuPDF做文本提取处理...
+当前问题: 图片型PDF该怎么处理
 
 输出：
 {
   "queries": [
-    "PDF文件OCR识别的实现步骤和流程",
-    "Tesseract OCR的配置参数和优化方法",
+    "图片型PDF预处理与识别流程",
+    "OCR服务的部署与调用方式",
     "图片型PDF识别准确率提升技巧",
     "OCR识别后的文本清理和预处理",
-    "pytesseract Tesseract OCR DPI",
-    "chi_sim+eng language configuration"
+    "OCR DPI preprocessing",
+    "multi-language OCR language configuration"
   ],
-  "grade_query": "PDF文件处理中OCR识别的实现细节",
-  "reasoning": "用户聚焦OCR部分。生成了实现步骤、工具配置、优化方法、后处理查询，提取pytesseract、Tesseract等关键工具。"
+  "grade_query": "图片型PDF处理中的OCR实现细节",
+  "reasoning": "用户聚焦OCR部分。生成了实现步骤、服务调用、优化方法和后处理查询，覆盖关键实现点。"
 }
 ```
 

@@ -1,5 +1,4 @@
 import base64
-import io
 import json
 import logging
 import os
@@ -7,10 +6,8 @@ import re
 from functools import lru_cache
 from typing import List
 
-import fitz
 import numpy as np
 import tiktoken
-from PIL import Image
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langchain.embeddings import init_embeddings
@@ -27,14 +24,6 @@ from sklearn.cluster import KMeans
 
 from gemini_utils import GeminiInstance
 from openai_utils import OpenAIInstance
-
-# 尝试导入pytesseract，如果不存在则标记为不可用
-try:
-    import pytesseract
-
-    TESSERACT_AVAILABLE = True
-except ImportError:
-    TESSERACT_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -282,85 +271,30 @@ def plain_text_split(
     return text_splitter.split_text(plain_text)
 
 
-def _extract_text_with_ocr(pdf_path: str, language: str = 'chi_sim+eng'):
-    """
-    使用OCR从图片型PDF中提取文本
-
-    Args:
-        pdf_path: PDF文件路径
-        language: OCR识别语言，默认中英文 (chi_sim+eng)
-
-    Returns:
-        提取的文本内容
-    """
-    if not TESSERACT_AVAILABLE:
-        raise ImportError("pytesseract not installed. Install with: pip install pytesseract")
-
-    doc = fitz.open(pdf_path)
-    all_text = []
-
-    for page_num in range(len(doc)):
-        page = doc[page_num]
-
-        # 将页面转换为图片（使用较高DPI以提高OCR准确率）
-        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2倍放大
-        img_data = pix.tobytes("png")
-        img = Image.open(io.BytesIO(img_data))
-
-        # 使用pytesseract进行OCR识别
-        text = pytesseract.image_to_string(img, lang=language)
-        all_text.append(text)
-
-        logger.info(f"OCR处理进度: {page_num + 1}/{len(doc)}")
-
-    doc.close()
-    return "".join(all_text)
-
-
 def pdf_split(
         file_path: str,
         chunk_size: int = 1024,
         chunk_overlap: int = 100,
-        text_threshold: int = 20,
-        ocr_language: str = 'chi_sim+eng',
 ):
     """
     对PDF进行完美划分：全文合并后切分，解决跨页段落问题。
-    自动检测图片型PDF并使用OCR提取文本。
+    仅使用PyMuPDF提取文本，不做OCR兜底。
 
     Args:
         file_path: PDF文件路径
         chunk_size: 文本块大小
         chunk_overlap: 文本块重叠大小
-        text_threshold: 文本长度阈值，低于此值则认为是图片型PDF
-        ocr_language: OCR识别语言，默认中英文 (chi_sim+eng)
     Returns:
         切分后的文本块列表
     """
-    # 首先尝试常规文本提取
+    # 仅使用PyMuPDF进行文本提取
     loader = PyMuPDFLoader(file_path)
     docs = loader.load()
     logger.info(f"PDF加载完成，页数：{len(docs)}")
 
     # 合并所有页面的文本
     text = "".join([doc.page_content for doc in docs])
-
-    # 检测是否为图片型PDF（文本内容过少）
-    if len(text.strip()) < text_threshold:
-        logger.info(f"检测到图片型PDF（文本长度: {len(text)}），启动OCR识别...")
-        if not TESSERACT_AVAILABLE:
-            logger.warning("警告: pytesseract未安装，无法进行OCR识别")
-            logger.warning("安装方法: pip install pytesseract")
-            logger.warning("还需要安装Tesseract-OCR: https://github.com/tesseract-ocr/tesseract")
-            return []
-        try:
-            text = _extract_text_with_ocr(file_path, ocr_language)
-            logger.info(f"OCR识别完成，提取文本长度: {len(text)}")
-        except Exception as e:
-            logger.error(f"OCR识别失败: {str(e)}")
-            return []
-    else:
-        logger.info(f"文本型PDF，直接提取文本（长度: {len(text)}）")
+    logger.info(f"PyMuPDF提取文本完成（长度: {len(text)}）")
 
     # 切分文本
     return plain_text_split(
